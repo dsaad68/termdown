@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:termdown}",
+            "name": "Debug termdown",
+            "target": "termdown",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug termdown"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:termdown}",
+            "name": "Release termdown",
+            "target": "termdown",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release termdown"
+        }
+    ]
+}

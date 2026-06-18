@@ -1,0 +1,20 @@
+[2m# [0m[1;38;5;183mIndex[0m
+[38;5;183m════════════════════════════════════════════════════════════════════════════════[0m
+
+A tiny page for trying out [1mlink[0m [1mnavigation[0m. Press [38;5;218mTab[0m to move between the links
+below, then [38;5;218mEnter[0m (or [38;5;218mo[0m) to follow one. Relative links open in-app — use
+[38;5;218mBackspace[0m to come back here.
+
+[2m## [0m[1;38;5;111mLocal[0m [1;38;5;111mdocuments[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;5;117m•[0m ]8;;showcase.md\[4;38;5;117mFeature[0m]8;;\ ]8;;showcase.md\[4;38;5;117mshowcase[0m]8;;\
+[38;5;117m•[0m ]8;;stress.md\[4;38;5;117mStress[0m]8;;\ ]8;;stress.md\[4;38;5;117mtest[0m]8;;\
+
+[2m## [0m[1;38;5;111mExternal[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;5;117m•[0m ]8;;https://example.com\[4;38;5;117mExample[0m]8;;\ ]8;;https://example.com\[4;38;5;117mwebsite[0m]8;;\ [38;5;117m↗[0m
+[38;5;117m•[0m ]8;;https://github.com/apple/swift-markdown\[4;38;5;117mswift-markdown[0m]8;;\ ]8;;https://github.com/apple/swift-markdown\[4;38;5;117mon[0m]8;;\ ]8;;https://github.com/apple/swift-markdown\[4;38;5;117mGitHub[0m]8;;\ [38;5;117m↗[0m
+
+

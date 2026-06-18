@@ -1,0 +1,14 @@
+# SwiftFormat configuration for termdown.
+# Run `just format` to apply, `just format-check` to verify (used in CI).
+#
+# termdown deliberately uses a compact style (single-line function bodies,
+# hand-aligned tables, `&&` in conditions). We therefore run an explicit
+# allowlist of *hygiene-only* rules and let nothing else reshape the code.
+
+--swiftversion 5.9
+--exclude .build,Tests/Fixtures,Release
+
+--rules trailingSpace,consecutiveBlankLines,linebreakAtEndOfFile,duplicateImports,emptyBraces,spaceInsideBraces,spaceInsideBrackets,spaceInsideParens,redundantBreak,redundantNilInit,trailingCommas
+
+--trimwhitespace always
+--emptybraces no-space
