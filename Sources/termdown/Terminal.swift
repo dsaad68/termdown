@@ -71,16 +71,28 @@ enum Terminal {
 
     /// Switch to the alternate screen buffer (like `less`/`vim`) so the user's
     /// scrollback is preserved and restored on exit.
+    ///
+    /// We also disable autowrap (DECAWM, `?7l`). The full-screen UI positions
+    /// every cell explicitly and draws exactly `size.rows` lines per frame; if a
+    /// row's computed width is ever one column over the terminal width — e.g. an
+    /// emoji like ✅ (U+2705) that a terminal renders double-width but Unicode
+    /// tables call single-width — autowrap would push that row onto a second
+    /// physical line, scroll the screen, and desync every later `\e[H` redraw.
+    /// That showed up as scrolling "breaking" inside a tmux popup (its 90% width
+    /// lands on the off-by-one boundary). With autowrap off the overflow is
+    /// clipped at the right margin instead and the frame stays aligned. This also
+    /// avoids the classic scroll glitch from writing the bottom-right cell.
     static func enterAltScreen() {
         if altScreenActive { return }
-        write("\u{1B}[?1049h")
+        write("\u{1B}[?1049h\u{1B}[?7l")
         altScreenActive = true
     }
 
-    /// Return to the primary screen buffer, restoring the user's prior contents.
+    /// Return to the primary screen buffer, restoring the user's prior contents
+    /// and re-enabling autowrap.
     static func exitAltScreen() {
         if !altScreenActive { return }
-        write("\u{1B}[?1049l")
+        write("\u{1B}[?7h\u{1B}[?1049l")
         altScreenActive = false
     }
 

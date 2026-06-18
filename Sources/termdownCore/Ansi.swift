@@ -251,8 +251,11 @@ public enum Ansi {
     private static func scalarWidth(_ s: Unicode.Scalar) -> Int {
         let v = s.value
         if v == 0 { return 0 }
-        // Zero-width
-        if (0x0300...0x036F).contains(v) || (0x200B...0x200F).contains(v) || v == 0xFEFF {
+        // Zero-width: combining marks, zero-width spaces/joiners, BOM, and the
+        // variation selectors (incl. U+FE0F, which selects emoji presentation but
+        // adds no column of its own).
+        if (0x0300...0x036F).contains(v) || (0x200B...0x200F).contains(v) ||
+           (0xFE00...0xFE0F).contains(v) || v == 0xFEFF {
             return 0
         }
         // Wide (CJK, Hangul, fullwidth, common emoji blocks)
@@ -265,6 +268,24 @@ public enum Ansi {
            (0xFFE0...0xFFE6).contains(v) ||
            (0x1F300...0x1FAFF).contains(v) ||    // emoji / symbols
            (0x20000...0x3FFFD).contains(v) {     // CJK extensions
+            return 2
+        }
+        // Emoji_Presentation=Yes code points that live below U+1F300, which
+        // terminals render double-width even though legacy wcwidth tables call
+        // them single-width. Miscounting these by one column overflows a padded
+        // row and corrupts the full-screen redraw (e.g. ✅ U+2705, ⭐ U+2B50).
+        if (0x231A...0x231B).contains(v) || (0x23E9...0x23EC).contains(v) ||
+           v == 0x23F0 || v == 0x23F3 || (0x25FD...0x25FE).contains(v) ||
+           (0x2614...0x2615).contains(v) || (0x2648...0x2653).contains(v) ||
+           v == 0x267F || v == 0x2693 || v == 0x26A1 ||
+           (0x26AA...0x26AB).contains(v) || (0x26BD...0x26BE).contains(v) ||
+           (0x26C4...0x26C5).contains(v) || v == 0x26CE || v == 0x26D4 ||
+           v == 0x26EA || (0x26F2...0x26F3).contains(v) || v == 0x26F5 ||
+           v == 0x26FA || v == 0x26FD || v == 0x2705 ||
+           (0x270A...0x270B).contains(v) || v == 0x2728 || v == 0x274C ||
+           v == 0x274E || (0x2753...0x2755).contains(v) || v == 0x2757 ||
+           (0x2795...0x2797).contains(v) || v == 0x27B0 || v == 0x27BF ||
+           (0x2B1B...0x2B1C).contains(v) || v == 0x2B50 || v == 0x2B55 {
             return 2
         }
         return 1

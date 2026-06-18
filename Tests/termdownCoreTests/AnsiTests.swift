@@ -18,6 +18,18 @@ final class AnsiTests: XCTestCase {
         XCTAssertEqual(Ansi.width("🎉"), 2)
     }
 
+    /// Emoji below U+1F300 that terminals render double-width. Miscounting these
+    /// as a single column overflows a padded row and corrupts the pager redraw,
+    /// which is why a line with ✅ broke scrolling. The variation selector U+FE0F
+    /// must add no width of its own.
+    func testWidthEmojiBelowSMP() {
+        XCTAssertEqual(Ansi.width("✅"), 2) // U+2705 white heavy check mark
+        XCTAssertEqual(Ansi.width("⭐"), 2) // U+2B50 star
+        XCTAssertEqual(Ansi.width("✨"), 2) // U+2728 sparkles
+        XCTAssertEqual(Ansi.width("tests pass ✅"), 13) // 11 + 2, not 12
+        XCTAssertEqual(Ansi.width("\u{2728}\u{FE0F}"), 2) // base 2 + VS16 0
+    }
+
     func testWidthMixed() {
         XCTAssertEqual(Ansi.width("Hello你好"), 9) // 5 + 4 (each CJK char is 2)
         XCTAssertEqual(Ansi.width("A😀B"), 4) // 1 + 2 + 1 (emoji is 2)
