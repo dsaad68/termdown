@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # 1) The git tag is the source of truth — fail fast if Version.swift disagrees.
+  verify-version:
+    name: Verify tag matches appVersion
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare tag to Sources/termdown/Version.swift
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          src=$(grep -oE 'let appVersion = "[^"]+"' Sources/termdown/Version.swift | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "tag=$tag  source=$src"
+          if [ "$tag" != "$src" ]; then
+            echo "::error::Tag v$tag does not match appVersion \"$src\" in Sources/termdown/Version.swift"
+            exit 1
+          fi
+
+  # 2) Build the release binaries (universal macOS + Linux x86_64).
+  build:
+    name: Build · ${{ matrix.name }}
+    needs: verify-version
+    runs-on: ${{ matrix.runs-on }}
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: macOS (universal)
+            runs-on: macos-latest
+            container: ''
+            suffix: macos
+            build: swift build -c release --arch arm64 --arch x86_64
+          - name: Linux x86_64
+            runs-on: ubuntu-latest
+            container: swift:6.2
+            suffix: linux-x86_64
+            build: swift build -c release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest-stable Xcode (macOS)
+        if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build
+        run: ${{ matrix.build }}
+
+      - name: Package
+        run: |
+          bindir="$(${{ matrix.build }} --show-bin-path)"
+          strip "$bindir/termdown" 2>/dev/null || true
+          tar -czf "termdown-${GITHUB_REF_NAME}-${{ matrix.suffix }}.tar.gz" -C "$bindir" termdown
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.suffix }}
+          path: termdown-*.tar.gz
+
+  # 3) Publish the GitHub Release and bump the Homebrew tap formula.
+  release:
+    name: Publish & update tap
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the GitHub Release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Compute checksums
+        id: sums
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mac="dist/termdown-${GITHUB_REF_NAME}-macos.tar.gz"
+          linux="dist/termdown-${GITHUB_REF_NAME}-linux-x86_64.tar.gz"
+          mac_sha=$(sha256sum "$mac" | cut -d' ' -f1)
+          linux_sha=$(sha256sum "$linux" | cut -d' ' -f1)
+          for f in dist/*.tar.gz; do sha256sum "$f" > "$f.sha256"; done
+          {
+            echo "version=$version"
+            echo "mac_sha=$mac_sha"
+            echo "linux_sha=$linux_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Automated release for $GITHUB_REF_NAME. See CHANGELOG.md for details." \
+            dist/*.tar.gz dist/*.sha256
+
+      - name: Update Homebrew tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.sums.outputs.version }}
+          MAC_SHA: ${{ steps.sums.outputs.mac_sha }}
+          LINUX_SHA: ${{ steps.sums.outputs.linux_sha }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN secret is not set — skipping tap update."
+            exit 0
+          fi
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/dsaad68/homebrew-termdown.git" tap
+          mkdir -p tap/Formula
+          sed -e "s/__VERSION__/${VERSION}/g" \
+              -e "s/__MAC_SHA__/${MAC_SHA}/g" \
+              -e "s/__LINUX_SHA__/${LINUX_SHA}/g" \
+              .github/homebrew/termdown.rb.template > tap/Formula/termdown.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/termdown.rb
+          git commit -m "termdown ${VERSION}" || { echo "No formula change."; exit 0; }
+          git push

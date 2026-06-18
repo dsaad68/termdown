@@ -1,0 +1,62 @@
+# SwiftLint configuration for termdown.
+# Run `just lint` locally; CI runs `swiftlint --strict` (warnings fail the build).
+#
+# SwiftFormat owns pure formatting, so formatting rules that would conflict with it
+# (or with termdown's deliberately compact style — single-letter locals, aligned
+# palette tables, dense numeric literals, vertical else branches) are disabled here.
+# What remains are correctness / smell rules tuned to the codebase.
+
+excluded:
+  - .build
+  - Tests/Fixtures
+  - Release
+
+disabled_rules:
+  - trailing_comma          # SwiftFormat owns trailing commas (mandatory)
+  - opening_brace           # brace placement owned by SwiftFormat
+  - todo                    # TODO/FIXME notes are allowed
+  - blanket_disable_command
+  - colon                   # palette tables are colon-aligned on purpose
+  - comma                   # dense numeric/tuple tables (e.g. the 256-color cube)
+  - statement_position      # vertical `} \n else if` branch layout is intentional
+  - function_parameter_count # draw helpers pass render state as many params by design
+
+identifier_name:
+  min_length:
+    warning: 1              # x, y, r, g, b, fg, bg … are intentional
+    error: 1
+  max_length:
+    warning: 50
+    error: 60
+  validates_start_with_lowercase: off   # allow the `P` (= Ansi.Pastel) alias
+
+type_name:
+  min_length:
+    warning: 2
+    error: 1
+
+line_length:
+  warning: 200
+  error: 280
+  ignores_comments: true
+  ignores_urls: true
+
+file_length:
+  warning: 400
+  error: 600
+
+type_body_length:
+  warning: 400
+  error: 600
+
+function_body_length:
+  warning: 200
+  error: 320
+
+cyclomatic_complexity:
+  warning: 80
+  error: 120
+
+large_tuple:
+  warning: 6
+  error: 7

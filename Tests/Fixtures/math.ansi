@@ -1,0 +1,23 @@
+[2m# [0m[1;38;5;183mMath[0m [1;38;5;183mrendering[0m
+[38;5;183m════════════════════════════════════════════════════════════════════════════════[0m
+
+Inline math like [3;38;5;152mα[0m [3;38;5;152m+[0m [3;38;5;152mβ[0m [3;38;5;152m=[0m [3;38;5;152mγ[0m flows with the prose, and so does a fraction [3;38;5;152ma/b[0m and
+a root [3;38;5;152m√(x²[0m [3;38;5;152m+[0m [3;38;5;152my²)[0m.
+
+Currency such as $5 and $10 must not be treated as math.
+
+Superscripts and subscripts: [3;38;5;152mx²[0m, [3;38;5;152maᵢ[0m, [3;38;5;152mxⁿ⁺¹[0m, [3;38;5;152ma_(i,j)[0m.
+
+Greek and operators: [3;38;5;152m∑ᵢ₌₁ⁿ[0m [3;38;5;152mi[0m, [3;38;5;152m∫₀¹[0m [3;38;5;152mf(x),dx[0m, [3;38;5;152m∇[0m [3;38;5;152m·[0m [3;38;5;152mF[0m.
+
+Display math on its own line:
+
+                              [3m[38;5;152m(∂ u)/(∂ t) = α ∇² u[0m[0m                              
+
+Nested fraction:
+
+                                    [3m[38;5;152m(a/b)/c[0m[0m                                     
+
+A wrapper with blackboard letters: [3;38;5;152mℝⁿ[0m [3;38;5;152m⊂[0m [3;38;5;152mℂ[0m.
+
+

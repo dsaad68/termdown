@@ -1,0 +1,31 @@
+[2m# [0m[1;38;5;183mNested[0m [1;38;5;183mlists[0m
+[38;5;183m════════════════════════════════════════════════════════════════════════════════[0m
+
+[38;5;117m•[0m top level one
+  [38;5;117m◦[0m second level a
+  [38;5;117m◦[0m second level b
+    [38;5;117m1.[0m ordered inside unordered
+    [38;5;117m2.[0m another ordered item
+       [38;5;117m•[0m back to bullets, depth 3
+[38;5;117m•[0m top level two
+  [38;5;117m1.[0m first
+  [38;5;117m2.[0m second
+     [38;5;117m▪[0m mixed indent child
+
+[2m## [0m[1;38;5;111mTask[0m [1;38;5;111mlists[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[2m☐[0m unchecked task
+[38;5;151m☑[0m checked task
+  [2m☐[0m nested unchecked
+[38;5;151m☑[0m checked uppercase
+
+[2m## [0m[1;38;5;111mLoose[0m [1;38;5;111mlist[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;5;117m•[0m first item with a longer paragraph that should wrap onto a second line at this
+  width
+
+[38;5;117m•[0m second item after a blank line, making the list loose rather than tight
+
+

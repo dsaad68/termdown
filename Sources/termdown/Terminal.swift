@@ -1,0 +1,128 @@
+import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
+
+/// Low-level terminal control: raw mode, mouse tracking, the alternate screen,
+/// cleanup hooks and window-size queries. Key reading, drawing primitives,
+/// overlays, animations and help text live in the `Terminal+*` extensions.
+enum Terminal {
+
+    // MARK: - Raw mode
+
+    private static var savedTermios: termios?
+
+    /// Set by the `SIGWINCH` handler; the UI loops poll this to reflow on resize.
+    static var didResize = false
+
+    private static var altScreenActive = false
+
+    /// Switch the terminal into raw (cbreak) mode: no echo, no line buffering.
+    /// `ISIG` is left enabled so Ctrl-C still works; we restore on exit via a
+    /// signal handler installed in `installCleanup()`.
+    static func enableRawMode() {
+        var raw = termios()
+        guard tcgetattr(STDIN_FILENO, &raw) == 0 else { return }
+        if savedTermios == nil { savedTermios = raw }
+
+        raw.c_lflag &= ~tcflag_t(ECHO | ICANON)
+        raw.c_iflag &= ~tcflag_t(ICRNL | IXON)
+
+        // VMIN = 1, VTIME = 0 -> blocking read of at least one byte.
+        withUnsafeMutablePointer(to: &raw.c_cc) { ptr in
+            ptr.withMemoryRebound(to: cc_t.self, capacity: Int(NCCS)) { cc in
+                cc[Int(VMIN)] = 1
+                cc[Int(VTIME)] = 0
+            }
+        }
+        _ = tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw)
+    }
+
+    /// Restore the terminal to the mode captured before `enableRawMode()`.
+    static func disableRawMode() {
+        guard var saved = savedTermios else { return }
+        _ = tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved)
+        disableMouseTracking()
+    }
+
+    // MARK: - Mouse tracking
+
+    private static var mouseTrackingEnabled = false
+
+    /// Enable mouse tracking for scroll events (SGR mode).
+    static func enableMouseTracking() {
+        if mouseTrackingEnabled { return }
+        write("\u{1B}[?1000h") // Enable mouse tracking
+        write("\u{1B}[?1006h") // Enable SGR mode for better coordinates
+        mouseTrackingEnabled = true
+    }
+
+    /// Disable mouse tracking.
+    static func disableMouseTracking() {
+        if !mouseTrackingEnabled { return }
+        write("\u{1B}[?1006l") // Disable SGR mode
+        write("\u{1B}[?1000l") // Disable mouse tracking
+        mouseTrackingEnabled = false
+    }
+
+    // MARK: - Alternate screen
+
+    /// Switch to the alternate screen buffer (like `less`/`vim`) so the user's
+    /// scrollback is preserved and restored on exit.
+    static func enterAltScreen() {
+        if altScreenActive { return }
+        write("\u{1B}[?1049h")
+        altScreenActive = true
+    }
+
+    /// Return to the primary screen buffer, restoring the user's prior contents.
+    static func exitAltScreen() {
+        if !altScreenActive { return }
+        write("\u{1B}[?1049l")
+        altScreenActive = false
+    }
+
+    /// Install signal handlers / atexit hooks so the terminal is always restored
+    /// and the cursor made visible, even on Ctrl-C or abnormal exit.
+    static func installCleanup() {
+        atexit {
+            Terminal.showCursor()
+            Terminal.exitAltScreen()
+            Terminal.disableRawMode()
+        }
+        for sig in [SIGINT, SIGTERM] {
+            signal(sig) { _ in
+                Terminal.showCursor()
+                Terminal.exitAltScreen()
+                Terminal.disableRawMode()
+                _exit(0)
+            }
+        }
+        // Note when the window is resized so UI loops can reflow.
+        signal(SIGWINCH) { _ in Terminal.didResize = true }
+    }
+
+    // MARK: - Size
+
+    struct Size {
+        var rows: Int
+        var cols: Int
+        var widthPx: Int
+        var heightPx: Int
+    }
+
+    /// Query the terminal window size in cells and (when available) pixels.
+    static func size() -> Size {
+        var ws = winsize()
+        let ok = ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &ws) == 0
+        var rows = ok ? Int(ws.ws_row) : 0
+        var cols = ok ? Int(ws.ws_col) : 0
+        if rows <= 0 { rows = 24 }
+        if cols <= 0 { cols = 80 }
+        let widthPx = Int(ws.ws_xpixel)
+        let heightPx = Int(ws.ws_ypixel)
+        return Size(rows: rows, cols: cols, widthPx: widthPx, heightPx: heightPx)
+    }
+}
