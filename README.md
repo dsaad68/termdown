@@ -9,6 +9,12 @@ A minimal terminal Markdown browser written in **pure Swift**. It lists every
 Markdown file under the current directory, lets you pick one with the arrow keys,
 and renders it **natively in the terminal** as styled ANSI text.
 
+<p align="center">
+  <video src="https://github.com/dsaad68/termdown/raw/main/examples/demo.mp4" width="800" controls muted>
+    <a href="https://github.com/dsaad68/termdown/raw/main/examples/demo.mp4">Watch the termdown demo</a>
+  </video>
+</p>
+
 ## Install
 
 ### Homebrew (macOS and Linux)
