@@ -43,17 +43,36 @@ extension Terminal {
     static func clearLine() { write("\u{1B}[2K") }
 
     /// Paint a full frame without the flash of a screen clear: move the cursor
-    /// home, overwrite each row (clearing to end-of-line as we go), then clear
-    /// anything left below. `rows` must already be styled/truncated to width.
-    /// This is what makes redraws flicker-free compared to `clearScreen()`.
+    /// home, clear each line *before* overwriting it, then clear anything left
+    /// below. `rows` must already be styled/truncated to width. This is what makes
+    /// redraws flicker-free compared to `clearScreen()`.
+    ///
+    /// Both clears are positioned so they can never erase a cell of the frame —
+    /// which matters because autowrap is disabled (`\e[?7l`) and so the cursor
+    /// parks *on* the last column after a full-width row instead of advancing past
+    /// it. So:
+    ///   - The per-line clear (`\e[2K`) runs at the *start* of each line, never
+    ///     after the row text; a trailing `\e[K` would erase that last column.
+    ///   - The clear-below (`\e[J`) runs only when the frame is shorter than the
+    ///     screen, after stepping onto the first blank line. When the frame fills
+    ///     the screen the cursor would be on the bottom-right cell and `\e[J` would
+    ///     erase it — dropping the corner of the border.
+    /// tmux honors these edges strictly (borders vanished under tmux while iTerm2
+    /// was forgiving), so getting them right is what keeps the frame sealed.
     static func render(_ rows: [String]) {
+        write(frameSequence(rows, screenRows: size().rows))
+    }
+
+    /// Build the escape-sequence stream `render` writes. Pure (no I/O / size query)
+    /// so the cursor/clear placement that keeps the frame sealed can be unit-tested.
+    static func frameSequence(_ rows: [String], screenRows: Int) -> String {
         var buf = "\u{1B}[H"
         for (i, row) in rows.enumerated() {
-            buf += row + "\u{1B}[K"
+            buf += "\u{1B}[2K" + row
             if i < rows.count - 1 { buf += "\r\n" }
         }
-        buf += "\u{1B}[J"
-        write(buf)
+        if rows.count < screenRows { buf += "\r\n\u{1B}[J" }
+        return buf
     }
 
     // SGR styling
