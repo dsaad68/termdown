@@ -6,17 +6,17 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
-### Added
-- Linux support: the executable now builds and runs on Linux (Glibc) as well as
-  macOS (Darwin).
-- Version shown in the file-list window header, alongside the existing
-  `termdown --version` / `-V` output.
-- SwiftLint + SwiftFormat configuration and `just` recipes (`format`, `format-check`,
-  `lint`, `lint-fix`, `check`).
-- CI now builds and tests on macOS **and** Linux, with a dedicated lint job.
-- MIT `LICENSE`, `CONTRIBUTING.md`, and this `CHANGELOG.md`.
-- Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
-  updates the Homebrew tap.
+## [0.1.1] - 2026-06-19
+
+### Fixed
+- Full-screen redraw no longer corrupts while scrolling past lines containing
+  wide emoji. Emoji below U+1F300 that terminals render double-width (e.g. ✅
+  U+2705) were counted as a single column, so a line containing one overflowed
+  its padded row; the terminal then wrapped that row and scrolled the view out
+  of sync — most visible inside a tmux `display-popup`. Autowrap is now disabled
+  on the alternate screen (a robust guard against any width miscount) and the
+  width table covers these code points, with variation selectors counted as
+  zero-width.
 
 ## [0.1.0] - 2026-06-18
 
@@ -33,6 +33,17 @@ Initial release.
 - 17 color themes with a live-preview in-app selector, 24-bit truecolor when the
   terminal supports it, emoji shortcodes, and heading banners.
 - `.termdown.yaml` configuration (global + project-local) with rebindable keys.
+- Linux support: the executable builds and runs on Linux (Glibc) as well as
+  macOS (Darwin).
+- Version shown in the file-list window header, alongside the `termdown --version`
+  / `-V` output.
+- SwiftLint + SwiftFormat configuration and `just` recipes (`format`, `format-check`,
+  `lint`, `lint-fix`, `check`).
+- CI builds and tests on macOS **and** Linux, with a dedicated lint job.
+- MIT `LICENSE`, `CONTRIBUTING.md`, and this `CHANGELOG.md`.
+- Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
+  updates the Homebrew tap.
 
-[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/dsaad68/termdown/releases/tag/v0.1.1
 [0.1.0]: https://github.com/dsaad68/termdown/releases/tag/v0.1.0
