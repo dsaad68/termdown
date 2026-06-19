@@ -6,6 +6,18 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-06-19
+
+### Fixed
+- Right border of the file finder (and the outer frame) no longer disappears
+  under tmux. The full-screen renderer cleared each line *after* drawing it
+  (`ESC[K`) and erased below after the last row (`ESC[J`); with autowrap disabled
+  the cursor parks on the last column of a full-width row, so those erases deleted
+  the right-border column and the bottom-right corner. tmux honored this strictly
+  while iTerm2 was forgiving, so it only showed under tmux. Lines are now cleared
+  *before* their content, and the clear-below runs only when the frame is shorter
+  than the screen.
+
 ## [0.1.1] - 2026-06-19
 
 ### Fixed
@@ -44,6 +56,7 @@ Initial release.
 - Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
   updates the Homebrew tap.
 
-[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/dsaad68/termdown/releases/tag/v0.1.2
 [0.1.1]: https://github.com/dsaad68/termdown/releases/tag/v0.1.1
 [0.1.0]: https://github.com/dsaad68/termdown/releases/tag/v0.1.0
