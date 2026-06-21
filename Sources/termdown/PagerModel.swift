@@ -23,6 +23,7 @@ extension Pager {
         var linkFocus: Int?
         var foldedHeadings: Set<Int>
         var lastModDate: Date?
+        var cursorLine: Int
     }
 
     /// A code block addressable for copy-to-clipboard: its line range in the
@@ -30,5 +31,15 @@ extension Pager {
     struct CodeBlockInfo {
         let range: Range<Int>
         let text: String
+    }
+
+    /// A document-leaving action deferred behind the unsaved-changes prompt, so it
+    /// can be carried out once the user chooses Save or Discard.
+    enum DirtyAction: Equatable {
+        case leaveViewer
+        case switchTab(Int)
+        case closeTab
+        case navigate(URL, String?)
+        case goBack
     }
 }

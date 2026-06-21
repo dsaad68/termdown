@@ -16,6 +16,8 @@ final class HelpTests: XCTestCase {
         XCTAssertTrue(all.contains("Theme selector"), all)
         XCTAssertTrue(all.contains("Heading banners"), all)
         XCTAssertTrue(all.contains("Wikilink"), all)
+        XCTAssertTrue(all.contains("Edit the block under the cursor"), all)
+        XCTAssertTrue(all.contains("Show/hide the line cursor"), all)
     }
 
     func testMenuHelpIsGroupedAndComplete() {

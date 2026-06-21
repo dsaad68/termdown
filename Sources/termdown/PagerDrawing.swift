@@ -31,7 +31,12 @@ extension Pager {
                     searchQuery: String, searchMatches: [(lineIndex: Int, range: Range<Int>)],
                     currentMatchIndex: Int, searchMode: Bool, gotoMode: Bool, gotoInput: String,
                     linkFocus: Int?, copyFlash: String?, tabStrip: String? = nil) -> [String] {
-        let total = lines.count
+        // While editing, the block under the cursor is replaced by the editable
+        // raw-markdown field; everything else stays rendered.
+        let view = editMode ? editFrameLines() : lines
+        let total = view.count
+        let fieldStart = editDisplayStart
+        let fieldEnd = editDisplayStart + editBuffer.count
         let scrollable = maxTop > 0
 
         var thumbStart = 0
@@ -53,29 +58,40 @@ extension Pager {
 
         let P = Ansi.Pastel.self
         let divider = Ansi.color("\u{2502}", P.borderDim)
+        let selection = (!editMode && cursorVisible) ? selectionRange() : nil
 
         var rows: [String] = []
 
         for vi in 0..<contentRows {
             let lineIdx = top + vi
+            let inField = editMode && lineIdx >= fieldStart && lineIdx < fieldEnd
+            let isCursor = !editMode && cursorVisible && lineIdx == cursorLine && lineIdx < total
+            let inSelection = selection?.contains(lineIdx) ?? false
             var cell = ""
             if lineIdx < total {
-                var display = lines[lineIdx]
-                if !searchQuery.isEmpty {
+                var display = view[lineIdx]
+                if !editMode, !searchQuery.isEmpty {
                     display = highlightLine(display, lineIndex: lineIdx, matches: searchMatches, currentMatchIndex: currentMatchIndex)
-                } else if wrapOn, let lf = linkFocus, lf < links.count,
+                } else if !editMode, wrapOn, let lf = linkFocus, lf < links.count,
                           links[lf].lineIndex == lineIdx, links[lf].length > 0 {
                     display = highlightColumns(display, start: links[lf].column, length: links[lf].length)
                 }
                 cell = wrapOn ? Ansi.truncate(display, to: available)
                               : Ansi.horizontalSlice(display, start: hscroll, width: available)
+                // Current-line cursor / selection / edit field: a full-width matte
+                // highlight across the content column (degrades to the gutter
+                // marker under --no-color).
+                if inField { cell = Ansi.bgRow(cell, bg: P.outlineSelBg, cols: available) }
+                else if isCursor || inSelection { cell = Ansi.bgRow(cell, bg: P.selectBg, cols: available) }
             }
 
             var row: String
             if sidebarActive {
                 row = sidebar[vi] + divider + " " + cell
             } else {
-                row = String(repeating: " ", count: Pager.leftMargin) + cell
+                let gutter = (isCursor || inField) ? Ansi.bar(P.accent) + " "
+                                                   : String(repeating: " ", count: Pager.leftMargin)
+                row = gutter + cell
             }
             row = Ansi.pad(row, to: max(0, cols - 1))
             if scrollable {
@@ -127,6 +143,18 @@ extension Pager {
         }
         let dot = Ansi.color("  \u{00B7}  ", P.borderDim)
 
+        if savePromptMode {
+            let left = Ansi.bar(P.peach) + Ansi.color(" UNSAVED CHANGES ", P.headerFg)
+            let right = Ansi.color("[s]", P.green) + Ansi.color("ave", P.textDim) + dot
+                + Ansi.color("[d]", P.peach) + Ansi.color("iscard", P.textDim) + dot
+                + Ansi.color("[c]", P.blue) + Ansi.color("ancel ", P.textDim)
+            return twoTone(left: left + " ", right: right)
+        }
+        if editMode {
+            let lineLabel = editFileSpan.map { $0.start == $0.end ? "L\($0.start)" : "L\($0.start)-\($0.end)" } ?? ""
+            let left = Ansi.bar(P.accent) + Ansi.color(" EDIT ", P.headerFg) + Ansi.color(lineLabel, P.accentDim)
+            return twoTone(left: left + " ", right: Ansi.color("\u{21B5} save to buffer", P.textDim) + dot + Ansi.color("Esc cancel ", P.textDim))
+        }
         if searchMode {
             let count = searchMatches.isEmpty
                 ? Ansi.color("no matches", P.peach)
@@ -147,8 +175,17 @@ extension Pager {
         // Normal status bar — accent "tab" on the left, position + help on the right.
         // With 2+ tabs the file name is replaced by the tab strip.
         var left = Ansi.bar(P.accent) + " " + (tabStrip ?? Ansi.color(title, P.headerFg))
+        if isDirty    { left += Ansi.color("  \u{00B7} \u{25CF} unsaved", P.peach) }   // ●
         if !wrapOn    { left += Ansi.color("  \u{00B7} NOWRAP", P.peach) }
         if followMode { left += Ansi.color("  \u{00B7} FOLLOW", P.green) }
+        // Cursor mode: selection size, else the current source line (`e`-editable).
+        if cursorVisible {
+            if let r = selectionRange(), r.count > 1 {
+                left += Ansi.color("  \u{00B7} \(r.count) selected", P.accent)
+            } else if cursorLine < dispSourceSpans.count, let s = dispSourceSpans[cursorLine] {
+                left += Ansi.color("  \u{00B7} L\(s.start)", P.textDim)
+            }
+        }
         if let lf = linkFocus, lf < links.count {
             left += Ansi.color("  \u{00B7} link \(lf + 1)/\(links.count)", P.blue)
         }

@@ -90,6 +90,15 @@ swift run termdown ~/notes    # scan a specific directory
   - `w` toggles line wrapping (chop long lines; `←`/`→` scroll horizontally)
   - `+`/`-` adjust the text column width for comfortable reading
   - `F` toggles **follow mode** (`tail -f`-style auto-scroll to the bottom on reload)
+- **Cursor mode, selection & inline editing**: press `v` to toggle a **line
+  cursor** (off by default — `j`/`k` scroll as usual until then). With it shown,
+  `j`/`k` move the highlighted line (its source line shows as `L42`), and
+  `Shift+↑/↓` (or `Shift+J`/`Shift+K`) **select multiple lines** — `y` copies the
+  selection as raw markdown, `Y` as rendered text. Press `e` to **edit** the block
+  under the cursor (paragraph, heading, list item, table row, …) as its raw
+  markdown **in place** while the rest stays rendered. `Enter` commits the edit to
+  the buffer and marks the document **unsaved (●)**; `Ctrl-S` writes it to disk,
+  and quitting with unsaved changes prompts to **Save / Discard / Cancel**.
 - **Live reload**: automatically reloads when file changes
 - **Color themes** (17): dark, light, mono; popular ports (catppuccin, rose-pine,
   nord, tokyo-night, gruvbox, dracula); and custom true-color pastels across matte,
@@ -146,6 +155,10 @@ swift run termdown ~/notes    # scan a specific directory
 | Viewer (pager) | `z`                          | fold / unfold current section  |
 | Viewer (pager) | `Z`                          | fold all / unfold all sections |
 | Viewer (pager) | `]` / `[`                    | next / previous heading         |
+| Viewer (pager) | `v`                          | show/hide the line cursor (cursor mode) |
+| Viewer (pager) | `Shift-↑`/`↓`, `J`/`K`       | select lines (cursor mode); `y` copies as markdown, `Y` as rendered text |
+| Viewer (pager) | `e`                          | edit the block under the cursor (raw markdown); `Enter` commits to buffer, `Esc` cancels |
+| Viewer (pager) | `Ctrl-S`                     | save unsaved edits to the file |
 | Viewer (pager) | `w`                          | toggle line wrap               |
 | Viewer (pager) | `+` / `-`                    | widen / narrow text column     |
 | Viewer (pager) | `F`                          | toggle follow mode (tail)      |
@@ -214,7 +227,7 @@ key-theme: _           # open the theme selector with '_'
 Rebindable actions: `scroll-down`, `scroll-up`, `page-down`, `page-up`,
 `half-down`, `half-up`, `top`, `bottom`, `search`, `next-match`, `prev-match`,
 `project-search`, `open-link`, `new-tab`, `theme`, `sidebar`, `wrap`, `follow`,
-`banner`, `fold`, `fold-all`, `next-heading`, `prev-heading`, `contents`, `help`, `quit`.
+`banner`, `fold`, `fold-all`, `next-heading`, `prev-heading`, `edit`, `cursor`, `contents`, `help`, `quit`.
 
 Booleans accept `true`/`yes`/`on`/`1` as true. The config reader is **flat**:
 `key: value` lines only, so `ignore-patterns` must be inline (`[...]` or a

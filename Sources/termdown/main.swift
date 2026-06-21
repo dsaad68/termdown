@@ -261,6 +261,11 @@ let renderFile: (URL, Int) -> RenderedDocument? = { url, w in
     return AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners).render(src)
 }
 
+// Render arbitrary markdown text (used to re-render unsaved in-memory edits).
+let renderText: (String, Int) -> RenderedDocument = { src, w in
+    AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners).render(src)
+}
+
 // Resolve a [[wikilink]] page name to one of the discovered files — matching by
 // filename (with or without extension) or relative path, case-insensitively.
 let resolveWikilink: (String) -> URL? = { name in
@@ -283,6 +288,7 @@ func viewFile(_ url: URL, query: String?) {
     pager.mouseEnabled = mouseEnabled
     pager.initialQuery = query
     pager.renderFile = renderFile
+    pager.renderText = renderText
     pager.resolveWikilink = resolveWikilink
     pager.keyTranslation = keyTranslation
     pager.onProjectSearch = { liveGrep.run() }

@@ -39,7 +39,7 @@ extension Pager {
             if !gotoInput.isEmpty { gotoInput.removeLast() }
         case .enter:
             if let n = Int(gotoInput), n >= 1 {
-                top = max(0, min(n - 1, maxTop))
+                setCursor(max(0, min(n - 1, lines.count - 1)))
             }
             gotoMode = false; gotoInput = ""
         case .char(let c) where c.isNumber:
@@ -161,36 +161,49 @@ extension Pager {
         }
         switch key {
         case .up, .char("k"):
-            top = max(0, top - 1)
+            navUp(1)
         case .down, .char("j"):
-            top = min(maxTop, top + 1)
+            navDown(1)
+        case .shiftUp, .char("K"):
+            extendSelection(by: -1)
+        case .shiftDown, .char("J"):
+            extendSelection(by: 1)
+        case .char("v"):
+            cursorVisible.toggle()
+            if !cursorVisible { clearSelection() }
         case .left, .char("h"):
             hscroll = max(0, hscroll - Pager.hStep)
         case .right, .char("l"):
             hscroll = min(maxHscroll, hscroll + Pager.hStep)
         case .mouseScroll(let delta):
-            top = max(0, min(maxTop, top + delta))
+            top = max(0, min(maxTop, top + delta))   // cursor follows via clampCursorToView()
         case .mouseClick(let x, let y):
             handleClick(x: x, y: y)
         case .pageDown, .char(" "), .char("f"):
-            top = min(maxTop, top + contentRows)
+            navDown(contentRows)
         case .pageUp, .char("b"):
-            top = max(0, top - contentRows)
+            navUp(contentRows)
         case .char("d"):
-            top = min(maxTop, top + contentRows / 2)
+            navDown(contentRows / 2)
         case .char("u"):
-            top = max(0, top - contentRows / 2)
+            navUp(contentRows / 2)
         case .home, .char("g"):
-            top = 0
+            navTop()
         case .end, .char("G"):
-            top = maxTop
+            navBottom()
+        case .ctrlS:
+            _ = saveToDisk()
         case .char("q"), .char("Q"), .char("c"), .escape:
-            // Peel back one layer at a time: outline sidebar → extra tab →
-            // leave the viewer for the file list.
-            if sidebarOn {
+            // Peel back one layer at a time: cursor/selection mode → outline
+            // sidebar → extra tab → leave the viewer for the file list.
+            if cursorVisible {
+                cursorVisible = false; clearSelection()
+            } else if sidebarOn {
                 sidebarOn = false; sidebarFocus = false
                 currentRenderWidth = -1   // sidebar gone -> content reflows wider
-            } else if !closeActiveTab() {
+            } else if tabs.count > 1 {
+                if guardDirty(.closeTab) { _ = closeActiveTab() }
+            } else if guardDirty(.leaveViewer) {
                 return true
             }
         case .char("/"):
@@ -237,13 +250,17 @@ extension Pager {
             }
         case .char(let d) where d >= "1" && d <= "9":
             let idx = Int(String(d))! - 1
-            if idx < tabs.count, idx != activeTab { snapshot(); activate(idx) }
+            if idx < tabs.count, idx != activeTab, guardDirty(.switchTab(idx)) { snapshot(); activate(idx) }
         case .char("}"):
-            if tabs.count > 1 { snapshot(); activate((activeTab + 1) % tabs.count) }
+            if tabs.count > 1, guardDirty(.switchTab((activeTab + 1) % tabs.count)) {
+                snapshot(); activate((activeTab + 1) % tabs.count)
+            }
         case .char("{"):
-            if tabs.count > 1 { snapshot(); activate((activeTab - 1 + tabs.count) % tabs.count) }
+            if tabs.count > 1, guardDirty(.switchTab((activeTab - 1 + tabs.count) % tabs.count)) {
+                snapshot(); activate((activeTab - 1 + tabs.count) % tabs.count)
+            }
         case .char("x"):
-            _ = closeActiveTab()
+            if guardDirty(.closeTab) { _ = closeActiveTab() }
         case .char("s"), .char("S"):
             if sidebarOn && !sidebarFocus && sidebarActive {
                 // Sidebar already visible → enter focus mode, seed cursor to current section.
@@ -291,34 +308,46 @@ extension Pager {
         case .char("t"):
             handleContentsOverlay()
         case .char("]"):
-            if let h = headings.first(where: { $0.lineIndex - Pager.scrolloff > top }) {
-                top = max(0, h.lineIndex - Pager.scrolloff)
+            if let h = headings.first(where: { $0.lineIndex > cursorLine }) {
+                setCursor(h.lineIndex)
             }
         case .char("["):
-            if let h = headings.last(where: { $0.lineIndex - Pager.scrolloff < top }) {
-                top = max(0, h.lineIndex - Pager.scrolloff)
+            if let h = headings.last(where: { $0.lineIndex < cursorLine }) {
+                setCursor(h.lineIndex)
             }
         case .char("y"):
-            if let block = nearestCodeBlock(codeBlocks, top: top, rows: contentRows), !block.text.isEmpty {
+            // With a live selection, `y` copies it as raw markdown; otherwise it
+            // falls back to copying the nearest code block.
+            if cursorVisible, let sel = selectionRange() {
+                copySelection(sel, asMarkdown: true)
+            } else if let block = nearestCodeBlock(codeBlocks, top: top, rows: contentRows), !block.text.isEmpty {
                 Terminal.copyToClipboard(block.text)
                 let n = block.text.split(separator: "\n", omittingEmptySubsequences: false).count
                 copyFlashMsg = "copied code · \(n) line\(n == 1 ? "" : "s")"
+                copyFlashUntil = Date().addingTimeInterval(1.5)
             } else {
                 copyFlashMsg = "no code block in view"
+                copyFlashUntil = Date().addingTimeInterval(1.5)
             }
-            copyFlashUntil = Date().addingTimeInterval(1.5)
         case .char("Y"):
-            if let i = linkFocus ?? firstVisibleLink(top: top, rows: contentRows), i < links.count {
+            // With a live selection, `Y` copies it as rendered text; otherwise it
+            // falls back to copying the focused / nearest link URL.
+            if cursorVisible, let sel = selectionRange() {
+                copySelection(sel, asMarkdown: false)
+            } else if let i = linkFocus ?? firstVisibleLink(top: top, rows: contentRows), i < links.count {
                 Terminal.copyToClipboard(links[i].url)
                 copyFlashMsg = "copied link · \(Ansi.truncate(links[i].url, to: 40))"
+                copyFlashUntil = Date().addingTimeInterval(1.5)
             } else {
                 copyFlashMsg = "no link in view"
+                copyFlashUntil = Date().addingTimeInterval(1.5)
             }
-            copyFlashUntil = Date().addingTimeInterval(1.5)
         case .char("z"):
             foldCurrentSection()
         case .char("Z"):
             foldAllToggle()
+        case .char("e"):
+            beginEdit()
         default:
             break
         }

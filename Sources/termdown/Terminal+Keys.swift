@@ -10,6 +10,7 @@ extension Terminal {
 
     enum Key: Equatable {
         case up, down, left, right
+        case shiftUp, shiftDown   // Shift+Arrow (modified-arrow CSI; extends a selection)
         case pageUp, pageDown, home, end
         case enter
         case shiftEnter     // Shift+Enter (only on terminals that report it distinctly)
@@ -18,6 +19,7 @@ extension Terminal {
         case tab, backTab
         case char(Character)
         case ctrlL          // force redraw
+        case ctrlS          // save
         case mouseScroll(Int) // positive = down, negative = up
         case mouseClick(x: Int, y: Int) // left-button press at 1-based (col, row)
         case other
@@ -118,6 +120,17 @@ extension Terminal {
                         }
                         return .other
                     }
+                    // Modified arrows: ESC [ 1 ; <mod> A/B/C/D  (mod 2 = Shift).
+                    if params.count >= 2, params[0] == 1 {
+                        let shift = params[1] == 2
+                        switch finalByte {
+                        case 0x41: return shift ? .shiftUp : .up
+                        case 0x42: return shift ? .shiftDown : .down
+                        case 0x43: return .right
+                        case 0x44: return .left
+                        default: break
+                        }
+                    }
                     return .other
                 default: return .other
                 }
@@ -130,6 +143,7 @@ extension Terminal {
         case 0x09: return .tab
         case 0x03: return .char("c") // Ctrl-C arrives here only if ISIG disabled; treat as quit upstream
         case 0x0C: return .ctrlL     // Ctrl-L
+        case 0x13: return .ctrlS     // Ctrl-S (IXON is disabled, so this reaches us)
         case 0x7F, 0x08: return .backspace
         default:
             if b0 >= 0x20 && b0 < 0x7F {

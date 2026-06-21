@@ -10,7 +10,8 @@ final class PagerDrawingTests: XCTestCase {
         Pager.TabState(url: nil, navStack: [], title: title, top: 0, hscroll: 0,
                        wrapOn: true, widthOverride: nil, followMode: false,
                        sidebarOn: false, sidebarFocus: false, sidebarCursor: 0,
-                       searchQuery: "", linkFocus: nil, foldedHeadings: [], lastModDate: nil)
+                       searchQuery: "", linkFocus: nil, foldedHeadings: [], lastModDate: nil,
+                       cursorLine: 0)
     }
 
     // MARK: - Status bar

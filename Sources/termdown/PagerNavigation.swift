@@ -10,6 +10,8 @@ extension Pager {
     }
 
     func renderCurrent(_ width: Int) -> RenderedDocument? {
+        // Unsaved edits render from the in-memory source, not the file on disk.
+        if isDirty, let rt = renderText { return rt(rawSource, width) }
         if let url = currentURL, let rf = renderFile { return rf(url, width) }
         if let rs = renderSource { return rs(width) }
         return nil
@@ -23,6 +25,8 @@ extension Pager {
             baseLines = doc.lines
             baseHeadings = doc.headings
             baseLinks = doc.links
+            baseSourceSpans = doc.sourceSpans
+            rawSource = doc.source
             foldedHeadings = foldedHeadings.filter { $0 < baseHeadings.count }
             reapplyFolds()
             if let lf = linkFocus, lf >= links.count { linkFocus = links.isEmpty ? nil : links.count - 1 }
@@ -55,14 +59,18 @@ extension Pager {
         needsRedraw = true
     }
 
-    /// Live-reload: reload when the current file's mtime advances.
+    /// Live-reload: reload when the current file's mtime advances. Suppressed while
+    /// editing or holding unsaved changes so an external write can't clobber them.
     mutating func pollReload() {
+        guard !editMode, !isDirty else { return }
         guard let url = currentURL, let lastMod = lastModDate,
               let newModDate = mtime(url), newModDate > lastMod else { return }
         if let doc = renderCurrent(currentRenderWidth) {
             baseLines = doc.lines
             baseHeadings = doc.headings
             baseLinks = doc.links
+            baseSourceSpans = doc.sourceSpans
+            rawSource = doc.source
             foldedHeadings.removeAll()   // heading indices may shift on edit
             reapplyFolds()
             if !searchQuery.isEmpty { performSearch() }
@@ -105,6 +113,113 @@ extension Pager {
         }
     }
 
+    // MARK: - Line cursor
+
+    /// Move the line cursor by `delta` display rows.
+    mutating func moveCursor(by delta: Int) { setCursor(cursorLine + delta) }
+
+    /// Place the line cursor at `line`, scrolling the viewport to keep it visible
+    /// with a scrolloff margin. At the scroll limits (short docs / the document
+    /// ends) the cursor keeps moving inside the visible window, so every line stays
+    /// reachable — this is the "anchor tracks scroll" model.
+    mutating func setCursor(_ line: Int) {
+        let last = max(0, lines.count - 1)
+        cursorLine = max(0, min(last, line))
+        let viewport = max(1, contentRows)
+        let maxTopLocal = max(0, lines.count - viewport)
+        let so = min(Pager.scrolloff, max(0, (viewport - 1) / 2))
+        if cursorLine < top + so {
+            top = cursorLine - so
+        } else if cursorLine > top + viewport - 1 - so {
+            top = cursorLine - viewport + 1 + so
+        }
+        top = max(0, min(top, maxTopLocal))
+    }
+
+    /// Clamp the line cursor into the current visible window. Called each frame so
+    /// jumps that move `top` (search, heading nav, mouse scroll) pull the cursor
+    /// along, and reflow/fold changes never leave it off-screen.
+    mutating func clampCursorToView() {
+        let last = max(0, lines.count - 1)
+        cursorLine = max(0, min(cursorLine, last))
+        if cursorLine < top { cursorLine = top }
+        let lastVisible = min(top + contentRows - 1, last)
+        if cursorLine > lastVisible { cursorLine = max(top, lastVisible) }
+    }
+
+    // MARK: - Cursor / selection mode
+
+    /// Movement keys scroll the viewport while the cursor is hidden, and move the
+    /// line cursor (clearing any selection) once it's shown.
+    mutating func navDown(_ n: Int) {
+        if cursorVisible { clearSelection(); moveCursor(by: n) } else { top = min(maxTop, top + n) }
+    }
+
+    mutating func navUp(_ n: Int) {
+        if cursorVisible { clearSelection(); moveCursor(by: -n) } else { top = max(0, top - n) }
+    }
+
+    mutating func navTop() {
+        if cursorVisible { clearSelection(); setCursor(0) } else { top = 0 }
+    }
+
+    mutating func navBottom() {
+        if cursorVisible { clearSelection(); setCursor(max(0, lines.count - 1)) } else { top = maxTop }
+    }
+
+    mutating func clearSelection() { selectionAnchor = nil }
+
+    /// Extend (or start) a line selection. Auto-enters cursor mode so Shift+arrows
+    /// work straight from the scrolling view.
+    mutating func extendSelection(by delta: Int) {
+        cursorVisible = true
+        if selectionAnchor == nil { selectionAnchor = cursorLine }
+        moveCursor(by: delta)
+    }
+
+    /// The inclusive display-row range currently selected (the cursor's own line
+    /// when there's no explicit anchor), or nil when the cursor is hidden.
+    func selectionRange() -> ClosedRange<Int>? {
+        guard cursorVisible else { return nil }
+        let anchor = selectionAnchor ?? cursorLine
+        let lo = min(anchor, cursorLine)
+        let hi = max(anchor, cursorLine)
+        guard lo >= 0, hi < lines.count else { return nil }
+        return lo...hi
+    }
+
+    /// Copy the selected display rows — as raw markdown source, or as the rendered
+    /// (ANSI-stripped) text — to the clipboard.
+    mutating func copySelection(_ range: ClosedRange<Int>, asMarkdown: Bool) {
+        let text = asMarkdown
+            ? selectedMarkdown(range)
+            : range.compactMap { $0 < plainLines.count ? plainLines[$0] : nil }.joined(separator: "\n")
+        guard !text.isEmpty else { flash("nothing to copy"); return }
+        Terminal.copyToClipboard(text)
+        let n = range.count
+        flash("copied \(n) line\(n == 1 ? "" : "s") · \(asMarkdown ? "markdown" : "text")")
+        clearSelection()
+    }
+
+    /// The raw markdown source spanning a selected display range (the contiguous
+    /// source lines its rows map to). Falls back to rendered text when the rows
+    /// carry no source span (synthetic rows).
+    func selectedMarkdown(_ range: ClosedRange<Int>) -> String {
+        var lo = Int.max
+        var hi = Int.min
+        for d in range where d < dispSourceSpans.count {
+            if let s = dispSourceSpans[d] { lo = min(lo, s.start); hi = max(hi, s.end) }
+        }
+        guard lo <= hi else {
+            return range.compactMap { $0 < plainLines.count ? plainLines[$0] : nil }.joined(separator: "\n")
+        }
+        let srcLines = rawSource.components(separatedBy: "\n")
+        let a = max(0, lo - 1)
+        let b = min(srcLines.count - 1, hi - 1)
+        guard a <= b else { return "" }
+        return srcLines[a...b].joined(separator: "\n")
+    }
+
     mutating func runIncremental(viewport: Int) {
         performSearch()
         guard !searchMatches.isEmpty else { return }
@@ -129,11 +244,12 @@ extension Pager {
     // MARK: - In-document navigation
 
     mutating func navigate(to url: URL, query: String?) {
+        guard guardDirty(.navigate(url, query)) else { return }
         if let cur = currentURL { navStack.append(cur) }
         currentURL = url
         titleText = url.lastPathComponent
         currentRenderWidth = -1     // force reflow of the new document
-        top = 0; hscroll = 0; linkFocus = nil
+        top = 0; hscroll = 0; linkFocus = nil; cursorLine = 0; cancelEdit()
         searchQuery = ""; searchMatches = []; currentMatchIndex = 0
         foldedHeadings.removeAll()
         lastModDate = mtime(url)
@@ -142,11 +258,13 @@ extension Pager {
     }
 
     mutating func goBack() {
-        guard let prev = navStack.popLast() else { return }
+        guard let prev = navStack.last else { return }
+        guard guardDirty(.goBack) else { return }
+        navStack.removeLast()
         currentURL = prev
         titleText = prev.lastPathComponent
         currentRenderWidth = -1
-        top = 0; hscroll = 0; linkFocus = nil
+        top = 0; hscroll = 0; linkFocus = nil; cursorLine = 0; cancelEdit()
         searchQuery = ""; searchMatches = []; currentMatchIndex = 0
         foldedHeadings.removeAll()
         lastModDate = mtime(prev)
@@ -163,7 +281,7 @@ extension Pager {
             wrapOn: wrapOn, widthOverride: widthOverride, followMode: followMode,
             sidebarOn: sidebarOn, sidebarFocus: sidebarFocus, sidebarCursor: sidebarCursor,
             searchQuery: searchQuery, linkFocus: linkFocus, foldedHeadings: foldedHeadings,
-            lastModDate: lastModDate)
+            lastModDate: lastModDate, cursorLine: cursorLine)
     }
 
     mutating func snapshot() {
@@ -179,7 +297,8 @@ extension Pager {
         sidebarOn = t.sidebarOn; sidebarFocus = t.sidebarFocus; sidebarCursor = t.sidebarCursor
         searchQuery = t.searchQuery; searchMatches = []; currentMatchIndex = 0
         linkFocus = t.linkFocus; foldedHeadings = t.foldedHeadings; lastModDate = t.lastModDate
-        searchMode = false; gotoMode = false
+        cursorLine = t.cursorLine
+        searchMode = false; gotoMode = false; cancelEdit()
         currentRenderWidth = -1   // force reflow of the activated tab's document
         pendingApplied = true     // don't replay the initial query
     }
@@ -192,7 +311,8 @@ extension Pager {
             url: url, navStack: [], title: url.lastPathComponent, top: 0, hscroll: 0,
             wrapOn: wrapOn, widthOverride: widthOverride, followMode: false,
             sidebarOn: sidebarOn, sidebarFocus: false, sidebarCursor: 0,
-            searchQuery: "", linkFocus: nil, foldedHeadings: [], lastModDate: mtime(url)))
+            searchQuery: "", linkFocus: nil, foldedHeadings: [], lastModDate: mtime(url),
+            cursorLine: 0))
         activate(tabs.count - 1)
     }
 

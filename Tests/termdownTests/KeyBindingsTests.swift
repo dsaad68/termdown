@@ -40,13 +40,14 @@ final class KeyBindingsTests: XCTestCase {
     }
 
     func testRemappedKeyDispatchesToCanonicalAction() {
-        // 'e' bound to scroll-down should scroll like 'j'.
+        // '_' bound to scroll-down should scroll like 'j' (cursor hidden by default).
         var p = Pager(title: "t", lines: Array(repeating: "x", count: 100))
+        p.lines = Array(repeating: "x", count: 100)
         p.contentRows = 10
         p.maxTop = 90
-        p.keyTranslation = KeyBindings.translation(from: ["scroll-down": "e"])
+        p.keyTranslation = KeyBindings.translation(from: ["scroll-down": "_"])
         XCTAssertEqual(p.top, 0)
-        _ = p.handleKey(.char("e"))
-        XCTAssertEqual(p.top, 1)   // moved down one line, as 'j' would
+        _ = p.handleKey(.char("_"))
+        XCTAssertEqual(p.top, 1)   // scrolled down one line, as 'j' would
     }
 }
