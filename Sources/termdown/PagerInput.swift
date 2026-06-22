@@ -184,7 +184,7 @@ extension Pager {
             top = 0
         case .end, .char("G"):
             top = maxTop
-        case .char("q"), .char("Q"), .char("c"), .escape:
+        case .char("q"), .char("Q"), .escape:
             // Peel back one layer at a time: outline sidebar → extra tab →
             // leave the viewer for the file list.
             if sidebarOn {

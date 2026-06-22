@@ -53,7 +53,7 @@ extension TerminalMenu {
     /// header so the finder doesn't read as the whole app relaunching. Returns the
     /// styled rows; the caller renders (or slides) them.
     func draw(selected: Int, top: Int, viewport: Int, rows: Int, cols: Int,
-              query: String, filteredItems: [(item: String, indices: [Int])],
+              query: String, searching: Bool, filteredItems: [(item: String, indices: [Int])],
               detailFor: [String: String], context: String? = nil) -> [String] {
         let P = Ansi.Pastel.self
         let bv = Ansi.color("\u{2502}", P.borderDim)
@@ -104,9 +104,12 @@ extension TerminalMenu {
         // ── Breathing room ──
         out.append(bv + String(repeating: " ", count: inner) + bv)
 
-        // ── Search field — its own rounded box with a "find" legend ──
+        // ── Search field — its own rounded box with a "find" legend. The frame
+        // brightens and a block cursor appears only while the box is focused
+        // (after `/`); otherwise it shows the active filter, or a hint to press
+        // `/` to start searching. ──
         let sboxW = max(12, inner - 4)
-        let bcol = P.accentDim                       // soft lavender frame
+        let bcol = searching ? P.accent : P.accentDim   // brighten the frame when focused
         let innerSearch = sboxW - 2
 
         let legend = Ansi.wrap(" find ", [1] + Ansi.fg(P.accent))
@@ -116,12 +119,21 @@ extension TerminalMenu {
 
         let caret  = Ansi.wrap("\u{276F} ", [1] + Ansi.fg(P.selectorFg))  // ❯
         let cursor = Ansi.color("\u{2588}", P.accent)
-        let typed  = query.isEmpty
-            ? cursor + Ansi.color(" Search files\u{2026}", P.borderDim)
-            : Ansi.color(query, P.headerFg) + cursor
-        let hint = Ansi.color("\u{2191}\u{2193} move", P.textDim) + Ansi.color("  \u{00B7}  ", P.borderDim)
-                 + Ansi.color("\u{21B5} open", P.textDim) + Ansi.color("  \u{00B7}  ", P.borderDim)
-                 + Ansi.color("? help", P.textDim)
+        let sep    = Ansi.color("  \u{00B7}  ", P.borderDim)
+        let typed: String
+        if searching {
+            typed = query.isEmpty
+                ? cursor + Ansi.color(" Type to filter\u{2026}", P.borderDim)
+                : Ansi.color(query, P.headerFg) + cursor
+        } else {
+            typed = query.isEmpty
+                ? Ansi.color("Press / to search files\u{2026}", P.borderDim)
+                : Ansi.color(query, P.headerFg)
+        }
+        let hint = searching
+            ? Ansi.color("\u{21B5} open", P.textDim) + sep + Ansi.color("Esc done", P.textDim)
+            : Ansi.color("/ search", P.textDim) + sep + Ansi.color("\u{2191}\u{2193} move", P.textDim)
+                + sep + Ansi.color("\u{21B5} open", P.textDim) + sep + Ansi.color("? help", P.textDim)
         let leftPart = " " + caret + typed
         let sgap = max(1, innerSearch - Ansi.width(leftPart) - Ansi.width(hint) - 1)
         let midContent = leftPart + String(repeating: " ", count: sgap) + hint + " "

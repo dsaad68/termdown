@@ -37,6 +37,16 @@ final class KeyParserTests: XCTestCase {
         XCTAssertEqual(decode([0x0C]), .ctrlL)
     }
 
+    /// Ctrl-C (0x03) must NOT decode to the letter "c" — otherwise a typed "c"
+    /// and Ctrl-C would be indistinguishable, which made "c" quit the file
+    /// finder. Real Ctrl-C is delivered as SIGINT, so the byte just falls to
+    /// `.other` and the literal "c" stays a normal character.
+    func testCtrlCIsNotLetterC() {
+        XCTAssertEqual(decode([0x03]), .other)
+        XCTAssertEqual(decode([UInt8(ascii: "c")]), .char("c"))
+        XCTAssertEqual(decode([UInt8(ascii: "q")]), .char("q"))
+    }
+
     func testPrintableChar() {
         XCTAssertEqual(decode([UInt8(ascii: "a")]), .char("a"))
         XCTAssertEqual(decode([UInt8(ascii: "Z")]), .char("Z"))
