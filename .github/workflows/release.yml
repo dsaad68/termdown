@@ -33,7 +33,7 @@ jobs:
       matrix:
         include:
           - name: macOS (universal)
-            runs-on: macos-latest
+            runs-on: [self-hosted, macOS, ARM64, macos-arm64]
             container: ''
             suffix: macos
             build: swift build -c release --arch arm64 --arch x86_64
