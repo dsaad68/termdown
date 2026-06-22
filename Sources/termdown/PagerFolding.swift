@@ -49,10 +49,12 @@ extension Pager {
     /// heading of equal-or-higher level — and gains a `▸ N lines` marker.
     mutating func reapplyFolds() {
         let t = Pager.foldTransform(baseLines: baseLines, baseHeadings: baseHeadings,
-                                    baseLinks: baseLinks, folded: foldedHeadings)
+                                    baseLinks: baseLinks, baseSourceSpans: baseSourceSpans,
+                                    folded: foldedHeadings)
         lines = t.lines
         headings = t.headings
         links = t.links
+        dispSourceSpans = t.dispSourceSpans
         plainLines = t.lines.map { Ansi.strip($0) }
         maxLineWidth = plainLines.map { Ansi.width($0) }.max() ?? 0
         baseToDisp = t.baseToDisp
@@ -61,11 +63,21 @@ extension Pager {
         foldHiddenCount = t.foldHiddenCount
     }
 
+    /// The folded display view derived from the base document.
+    struct FoldResult {
+        var lines: [String]
+        var headings: [HeadingInfo]
+        var links: [LinkInfo]
+        var dispSourceSpans: [SourceSpan?]
+        var baseToDisp: [Int]
+        var dispHeadingBaseIndex: [Int]
+        var foldHiddenCount: [Int: Int]
+    }
+
     /// Pure fold transform: maps the base document to a folded display view.
     static func foldTransform(baseLines: [String], baseHeadings: [HeadingInfo],
-                              baseLinks: [LinkInfo], folded: Set<Int>)
-        -> (lines: [String], headings: [HeadingInfo], links: [LinkInfo],
-            baseToDisp: [Int], dispHeadingBaseIndex: [Int], foldHiddenCount: [Int: Int]) {
+                              baseLinks: [LinkInfo], baseSourceSpans: [SourceSpan?] = [],
+                              folded: Set<Int>) -> FoldResult {
 
         // Mark hidden base lines + record each fold's hidden-line count.
         var hidden = [Bool](repeating: false, count: baseLines.count)
@@ -88,12 +100,14 @@ extension Pager {
             hiddenCount[k] = max(0, end - bodyStart)
         }
 
-        // Build base→display line map and the visible line list.
+        // Build base→display line map and the visible line list (carrying spans).
         var baseToDisp = [Int](repeating: -1, count: baseLines.count)
         var dispLines: [String] = []
+        var dispSourceSpans: [SourceSpan?] = []
         for i in 0..<baseLines.count where !hidden[i] {
             baseToDisp[i] = dispLines.count
             dispLines.append(baseLines[i])
+            dispSourceSpans.append(i < baseSourceSpans.count ? baseSourceSpans[i] : nil)
         }
 
         // Remap headings, appending fold markers to collapsed ones.
@@ -121,6 +135,8 @@ extension Pager {
             dispLinks.append(LinkInfo(lineIndex: d, url: l.url, text: l.text, column: l.column, length: l.length))
         }
 
-        return (dispLines, dispHeadings, dispLinks, baseToDisp, dispHeadingBaseIndex, hiddenCount)
+        return FoldResult(lines: dispLines, headings: dispHeadings, links: dispLinks,
+                          dispSourceSpans: dispSourceSpans, baseToDisp: baseToDisp,
+                          dispHeadingBaseIndex: dispHeadingBaseIndex, foldHiddenCount: hiddenCount)
     }
 }

@@ -6,6 +6,8 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-06-22
+
 ### Added
 - **Mermaid diagrams**: ` ```mermaid ` fenced blocks now render as ASCII/Unicode
   art instead of plain source. Supports flowcharts (`graph`/`flowchart` TD/LR
@@ -22,6 +24,29 @@ All notable changes to termdown are documented here. The format is based on
   box** — a labelled top rule, full-height left **and right** borders, and a
   closing floor — spanning the full text column, instead of the previous
   open left-bar card. The box grows to fit content wider than the column.
+
+### Fixed
+- **File finder**: typing a filter that contains `q`, `Q` or `c` no longer quits
+  the app (and `j`/`k`/`g`/`G` no longer move the selection instead of typing).
+  Filtering is now modal — press `/` to focus the search box, where every
+  printable key types into the query; the list/navigation keys work outside it.
+  Relatedly, Ctrl-C is no longer mis-decoded as a literal `c` (it is delivered as
+  `SIGINT`).
+
+## [0.1.4] - 2026-06-22
+
+### Added
+- **Cursor mode**: press `v` to toggle a line cursor (off by default — `j`/`k`
+  scroll until then). With it shown, `j`/`k` move the highlighted line and its
+  source line is reported as `L42`.
+- **Line selection & copy**: `Shift+↑/↓` (or `Shift+J`/`Shift+K`) select multiple
+  lines; `y` copies the selection as raw markdown and `Y` as rendered text.
+- **Inline editing**: press `e` to edit the block under the cursor (paragraph,
+  heading, list item, table row, …) as raw markdown in place while the rest stays
+  rendered. `Enter` commits to the buffer and marks the document unsaved (●),
+  `Esc` cancels, `Ctrl-S` writes to disk, and quitting with unsaved changes
+  prompts to Save / Discard / Cancel.
+- New rebindable actions `edit` (`e`) and `cursor` (`v`).
 
 ## [0.1.2] - 2026-06-19
 
@@ -73,7 +98,9 @@ Initial release.
 - Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
   updates the Homebrew tap.
 
-[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/dsaad68/termdown/releases/tag/v0.1.5
+[0.1.4]: https://github.com/dsaad68/termdown/releases/tag/v0.1.4
 [0.1.2]: https://github.com/dsaad68/termdown/releases/tag/v0.1.2
 [0.1.1]: https://github.com/dsaad68/termdown/releases/tag/v0.1.1
 [0.1.0]: https://github.com/dsaad68/termdown/releases/tag/v0.1.0

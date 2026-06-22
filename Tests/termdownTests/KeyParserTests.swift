@@ -9,7 +9,7 @@ final class KeyParserTests: XCTestCase {
     /// Decode a full byte sequence: the first byte seeds `decodeKey`, the rest are
     /// served in order by `next` (returning nil once exhausted, like a timeout).
     private func decode(_ bytes: [UInt8]) -> Terminal.Key {
-        var rest = Array(bytes.dropFirst())
+        let rest = Array(bytes.dropFirst())
         var i = 0
         return Terminal.decodeKey(first: bytes[0]) { _ in
             guard i < rest.count else { return nil }
@@ -45,6 +45,19 @@ final class KeyParserTests: XCTestCase {
         XCTAssertEqual(decode([0x03]), .other)
         XCTAssertEqual(decode([UInt8(ascii: "c")]), .char("c"))
         XCTAssertEqual(decode([UInt8(ascii: "q")]), .char("q"))
+    }
+
+    func testCtrlS() {
+        XCTAssertEqual(decode([0x13]), .ctrlS)
+    }
+
+    func testShiftArrows() {
+        // Modified arrows: ESC [ 1 ; 2 A/B  (modifier 2 = Shift)
+        XCTAssertEqual(decode(csi("1;2A")), .shiftUp)
+        XCTAssertEqual(decode(csi("1;2B")), .shiftDown)
+        // Other modifiers fall back to the plain arrow.
+        XCTAssertEqual(decode(csi("1;5A")), .up)
+        XCTAssertEqual(decode(csi("1;2C")), .right)
     }
 
     func testPrintableChar() {

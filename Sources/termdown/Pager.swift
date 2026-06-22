@@ -25,6 +25,10 @@ struct Pager {
     /// Render fixed source (stdin) at a width, when there is no backing file.
     var renderSource: ((Int) -> RenderedDocument)?
 
+    /// Render arbitrary markdown text at a width. Used to re-render in-memory
+    /// (unsaved) edits without reading the file back from disk.
+    var renderText: ((String, Int) -> RenderedDocument)?
+
     /// Launch the project-wide live-grep UI; returns a chosen file + query.
     var onProjectSearch: (() -> (url: URL, query: String)?)?
 
@@ -118,11 +122,48 @@ struct Pager {
     var baseLines: [String] = []
     var baseHeadings: [HeadingInfo] = []
     var baseLinks: [LinkInfo] = []
+    // Source-line mapping. `baseSourceSpans` is parallel to `baseLines`;
+    // `dispSourceSpans` is parallel to the folded `lines`. `rawSource` is the exact
+    // source string that produced the current view (used by the inline editor).
+    var baseSourceSpans: [SourceSpan?] = []
+    var dispSourceSpans: [SourceSpan?] = []
+    var rawSource = ""
     var foldedHeadings = Set<Int>()        // folded heading indices (base space)
     var baseToDisp: [Int] = []             // base line → display line (-1 if hidden)
     var dispHeadingBaseIndex: [Int] = []   // display heading idx → base heading idx
     var codeBlocks: [CodeBlockInfo] = []   // yank-addressable code blocks (display space)
     var foldHiddenCount: [Int: Int] = [:]  // base heading idx → hidden line count
+
+    // Line cursor: a highlighted "current line" (display-line index). Hidden by
+    // default — `v` toggles cursor/selection mode; while shown, j/k move the
+    // cursor (instead of scrolling) and it anchors selection and the editor.
+    var cursorVisible = false
+    var cursorLine = 0
+    // Multi-line selection: when set, the selection spans the inclusive display
+    // range between this anchor and `cursorLine`. Shift+arrows / Shift+J/K extend
+    // it; a plain motion clears it.
+    var selectionAnchor: Int?
+
+    // Inline edit mode (activated by `e`): the cursor's block becomes an editable
+    // raw-markdown field while the rest of the document stays rendered. On Enter
+    // the change is written to the file; Esc cancels.
+    var editMode = false
+    var editFileSpan: SourceSpan?       // file-line range under edit (1-indexed, inclusive)
+    var editDisplayStart = 0            // display row where the field is spliced in
+    var editDisplayCount = 0            // number of display rows the field replaces
+    var editBuffer: [String] = []       // raw source lines being edited
+    var editCaretRow = 0                // caret line within editBuffer
+    var editCaretCol = 0                // caret column within editBuffer[editCaretRow]
+    // After a save re-renders the document, move the cursor back onto the block at
+    // this 1-indexed source line (applied once the reflow lands).
+    var pendingCursorSource: Int?
+
+    // Unsaved-edit state. Inline edits update `rawSource` in memory and set
+    // `isDirty`; the document then renders from memory until written with Ctrl-S.
+    var isDirty = false
+    // Save-confirmation prompt shown when leaving a document with unsaved changes.
+    var savePromptMode = false
+    var savePromptAction: DirtyAction?
 
     // Clipboard "copied" toast.
     var copyFlashUntil: Date?
@@ -190,12 +231,14 @@ struct Pager {
             }
 
             reflowIfNeeded(renderWidth: renderWidth)
+            applyPendingCursor()
             applyPendingQuery()
 
             maxTop = max(0, lines.count - contentRows)
             if top > maxTop { top = maxTop; needsRedraw = true }
             maxHscroll = wrapOn ? 0 : max(0, maxLineWidth - available)
             if hscroll > maxHscroll { hscroll = maxHscroll; needsRedraw = true }
+            clampCursorToView()   // keep the line cursor on-screen as scroll/fold change
 
             let now = Date()
             if let until = reloadFlashUntil, now >= until { reloadFlashUntil = nil; needsRedraw = true }
@@ -226,6 +269,8 @@ struct Pager {
             guard let key = Terminal.readKey(timeoutMs: 100) else { continue }
             needsRedraw = true
 
+            if editMode { handleEditMode(key); continue }
+            if savePromptMode { if handleSavePrompt(key) { return }; continue }
             if searchMode { handleSearchMode(key); continue }
             if gotoMode { handleGotoMode(key); continue }
             if themePickerMode { handleThemePicker(key); continue }

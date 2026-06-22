@@ -50,6 +50,12 @@ lint-fix:
 # Run every check the way CI does: formatting, lint, tests
 check: format-check lint test
 
+# Build & test the Linux version in a Swift 6.2 container. The build dir lives in
+# a named volume (termdown-linux-build) so rebuilds stay incremental. Requires Docker.
+linux-build:
+    docker run --rm -v "$PWD":/src -w /src -v termdown-linux-build:/build \
+      swift:6.2 bash -c "swift build --build-path /build && swift test --build-path /build"
+
 # Clean build artifacts
 clean:
     swift package clean
