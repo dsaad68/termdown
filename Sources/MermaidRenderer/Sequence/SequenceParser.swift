@@ -102,7 +102,10 @@ private func removeComments(_ lines: [String]) -> [String] {
 }
 
 func parseSequence(_ input: String) throws -> ParsedSequence {
-    let trimmedInput = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    let normalized = input
+        .replacingOccurrences(of: "\r\n", with: "\n")
+        .replacingOccurrences(of: "\r", with: "\n")
+    let trimmedInput = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
     if trimmedInput.isEmpty { throw MermaidError.parseFailure("empty input") }
 
     let lines = removeComments(splitDiagramLines(trimmedInput))

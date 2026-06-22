@@ -64,6 +64,20 @@ final class MermaidRenderTests: XCTestCase {
         XCTAssertTrue(out.contains("pie title Pets"), "unsupported diagram should fall back to source")
     }
 
+    func testMalformedFlowchartFallsBackToSource() {
+        // `style`/`class` statements aren't supported; rather than render a
+        // bogus node the block must fall back to the highlighted source.
+        let out = render("""
+        ```mermaid
+        graph LR
+        A --> B
+        style A fill:#fff
+        ```
+        """)
+        XCTAssertTrue(out.contains("style A fill:#fff"), "unsupported syntax should fall back to source")
+        XCTAssertFalse(out.contains("►"), "nothing should have been rendered as a diagram")
+    }
+
     func testDisabledShowsSource() {
         let out = render(flowchart, enabled: false)
         XCTAssertTrue(out.contains("graph LR"), "with mermaid disabled the source should render as code")

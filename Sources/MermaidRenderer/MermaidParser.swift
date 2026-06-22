@@ -24,6 +24,59 @@ func regexGroups(_ pattern: String, _ s: String, dotAll: Bool = true) -> [String
     return groups
 }
 
+/// Like `regexGroups`, but match against `masked` — which shares `original`'s
+/// exact UTF-16 layout but has nested operators neutralized (see `maskNested`)
+/// — and return the captured groups taken from `original`. This lets the edge
+/// and grouping regexes split only on *top-level* operators, never ones inside
+/// `[...]` labels or `"..."` strings.
+private func regexGroupsNested(_ pattern: String, _ original: String, _ masked: String) -> [String]? {
+    guard let re = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else {
+        return nil
+    }
+    let ns = masked as NSString
+    guard let m = re.firstMatch(in: masked, options: [], range: NSRange(location: 0, length: ns.length)) else {
+        return nil
+    }
+    let src = original as NSString
+    var groups: [String] = []
+    for i in 0..<m.numberOfRanges {
+        let r = m.range(at: i)
+        groups.append(r.location == NSNotFound ? "" : src.substring(with: r))
+    }
+    return groups
+}
+
+/// Replace the edge / grouping operator characters (`-`, `>`, `&`, `|`) that
+/// occur inside `[...]` brackets or `"..."` quotes with a neutral placeholder,
+/// leaving the string's UTF-16 layout unchanged (each ASCII operator maps to a
+/// single ASCII placeholder). The operator regexes then only see top-level
+/// operators, so `A["foo & bar"]` and `A["x --> y"]` are treated as labels
+/// rather than syntax.
+private func maskNested(_ line: String) -> String {
+    var out = String.UnicodeScalarView()
+    var depth = 0
+    var inQuotes = false
+    let neutral = Unicode.Scalar(1)! // SOH — never a meaningful character here
+    for scalar in line.unicodeScalars {
+        switch scalar {
+        case "\"":
+            inQuotes.toggle()
+            out.append(scalar)
+        case "[" where !inQuotes:
+            depth += 1
+            out.append(scalar)
+        case "]" where !inQuotes:
+            if depth > 0 { depth -= 1 }
+            out.append(scalar)
+        case "-", ">", "&", "|":
+            out.append(depth > 0 || inQuotes ? neutral : scalar)
+        default:
+            out.append(scalar)
+        }
+    }
+    return String(out)
+}
+
 private func trimQuotes(_ s: String) -> String {
     var sub = Substring(s)
     while sub.first == "\"" { sub = sub.dropFirst() }
@@ -106,7 +159,13 @@ func parseStyleClass(name: String, styles: String) -> StyleClass {
     var styleMap: [String: String] = [:]
     for style in styles.components(separatedBy: ",") {
         let kv = style.components(separatedBy: ":")
-        if kv.count >= 2 { styleMap[kv[0]] = kv[1] }
+        if kv.count >= 2 {
+            // Trim so spaced lists like `fill:#fff, color:#f00` key on
+            // "color", not " color".
+            let key = kv[0].trimmingCharacters(in: .whitespaces)
+            let value = kv[1].trimmingCharacters(in: .whitespaces)
+            styleMap[key] = value
+        }
     }
     return StyleClass(name: name, styles: styleMap)
 }
@@ -115,22 +174,28 @@ extension GraphProperties {
     /// Parse a single line into nodes, or nil if no pattern matches.
     func parseString(_ line: String) -> [TextNode]? {
         if regexGroups(#"^\s*$"#, line) != nil { return [] }
-        if let m = regexGroups(#"^(.+)\s*-->\s*\|(.+)\|\s*(.+)$"#, line) {
+        // Operators inside `[...]` labels or `"..."` strings are masked out so
+        // they aren't mistaken for edge / grouping syntax.
+        let masked = maskNested(line)
+        if let m = regexGroupsNested(#"^(.+)\s*-->\s*\|(.+)\|\s*(.+)$"#, line, masked) {
             let lhs = parseString(m[1]) ?? [parseNode(m[1])]
             let rhs = parseString(m[3]) ?? [parseNode(m[3])]
             return setArrowWithLabel(lhs, rhs, label: m[2])
         }
-        if let m = regexGroups(#"^(.+)\s*-->\s*(.+)$"#, line) {
+        if let m = regexGroupsNested(#"^(.+)\s*-->\s*(.+)$"#, line, masked) {
             let lhs = parseString(m[1]) ?? [parseNode(m[1])]
             let rhs = parseString(m[2]) ?? [parseNode(m[2])]
             return setArrow(lhs, rhs)
         }
-        if let m = regexGroups(#"^classDef\s+(.+)\s+(.+)$"#, line) {
+        // Name is the first token; everything after is the (possibly
+        // space-separated) style list — so a greedy split must not pull part of
+        // the styles into the name.
+        if let m = regexGroups(#"^classDef\s+(\S+)\s+(.+)$"#, line) {
             let s = parseStyleClass(name: m[1], styles: m[2])
             styleClasses[s.name] = s
             return []
         }
-        if let m = regexGroups(#"^(.+) & (.+)$"#, line) {
+        if let m = regexGroupsNested(#"^(.+) & (.+)$"#, line, masked) {
             let lhs = parseString(m[1]) ?? [parseNode(m[1])]
             let rhs = parseString(m[2]) ?? [parseNode(m[2])]
             return lhs + rhs
@@ -182,7 +247,10 @@ extension GraphProperties {
 
 /// mermaid-ascii `mermaidFileToMap`. Defaults: borderPadding 1, paddingX/Y 5.
 func mermaidFileToMap(_ mermaid: String, styleType: String) throws -> GraphProperties {
-    let rawLines = splitGraphLines(mermaid)
+    let normalized = mermaid
+        .replacingOccurrences(of: "\r\n", with: "\n")
+        .replacingOccurrences(of: "\r", with: "\n")
+    let rawLines = splitGraphLines(normalized)
 
     var lines: [String] = []
     for var line in rawLines {
@@ -246,7 +314,16 @@ func mermaidFileToMap(_ mermaid: String, styleType: String) throws -> GraphPrope
         if let nodes = properties.parseString(line) {
             for node in nodes { properties.addNode(node) }
         } else {
-            properties.addNode(parseNode(line))
+            let node = parseNode(line)
+            // A line that is not an edge, grouping, classDef or subgraph must be
+            // a bare node declaration; a real node id has no internal whitespace.
+            // Anything else (`style A …`, `class A …`, a typo) is unsupported
+            // syntax — bail so the caller falls back to the raw source rather
+            // than rendering a bogus box.
+            if node.name.contains(where: { $0 == " " || $0 == "\t" }) {
+                throw MermaidError.unsupportedSyntax(trimmedLine)
+            }
+            properties.addNode(node)
         }
 
         if !subgraphStack.isEmpty {

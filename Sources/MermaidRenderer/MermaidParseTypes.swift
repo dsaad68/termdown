@@ -85,6 +85,7 @@ final class GraphProperties {
 
 enum MermaidError: Error {
     case unsupportedGraphType(String)
+    case unsupportedSyntax(String)
     case missingGraphDefinition
     case parseFailure(String)
     case notADiagram

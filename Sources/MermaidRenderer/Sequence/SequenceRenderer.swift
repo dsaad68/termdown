@@ -50,19 +50,36 @@ private func calculateLayout(_ sd: ParsedSequence) -> SequenceLayout {
         messageSpacing: defaultMessageSpacing, selfMessageWidth: defaultSelfMessageWidth)
 }
 
-private func trimRight(_ chars: [Character]) -> String {
-    var end = chars.count
-    while end > 0, chars[end - 1] == " " { end -= 1 }
-    return String(chars[0..<end])
+// Rows are arrays of one-cell strings indexed by *display* column. A wide glyph
+// occupies one cell and blanks the next with "" (as the flowchart Canvas does),
+// so lifelines and arrows stay column-aligned under multibyte labels. For
+// single-width (ASCII) content every cell is one character and this is identical
+// to a plain `[Character]` row.
+private func trimRight(_ cells: [String]) -> String {
+    var end = cells.count
+    while end > 0, cells[end - 1] == " " || cells[end - 1].isEmpty { end -= 1 }
+    return cells[0..<end].joined()
 }
 
 /// Working row pre-filled with spaces and lifeline verticals.
-private func lifelineCells(_ layout: SequenceLayout, _ chars: SequenceBoxChars, minLen: Int = 0) -> [Character] {
+private func lifelineCells(_ layout: SequenceLayout, _ chars: SequenceBoxChars, minLen: Int = 0) -> [String] {
     let n = max(layout.totalWidth + 1, minLen)
-    var line = [Character](repeating: " ", count: n)
-    let vertical = Character(chars.vertical)
-    for c in layout.participantCenters where c >= 0 && c < n { line[c] = vertical }
+    var line = [String](repeating: " ", count: n)
+    for c in layout.participantCenters where c >= 0 && c < n { line[c] = chars.vertical }
     return line
+}
+
+/// Write `label` into `line` starting at display column `start`, advancing by
+/// each scalar's display width and blanking the trailing cells of wide glyphs.
+private func writeLabel(_ line: inout [String], _ label: String, at start: Int) {
+    var col = start
+    for scalar in label.unicodeScalars where col >= 0 && col < line.count {
+        let w = max(DisplayWidth.scalarWidth(scalar), 1)
+        line[col] = String(scalar)
+        var k = 1
+        while k < w, col + k < line.count { line[col + k] = ""; k += 1 }
+        col += w
+    }
 }
 
 private func buildLifeline(_ layout: SequenceLayout, _ chars: SequenceBoxChars) -> String {
@@ -74,7 +91,7 @@ private func buildLine(_ sd: ParsedSequence, _ layout: SequenceLayout, _ draw: (
     for i in sd.participants.indices {
         let boxWidth = layout.participantWidths[i] + boxBorderWidth
         let left = layout.participantCenters[i] - boxWidth / 2
-        let needed = left - sb.unicodeScalars.count
+        let needed = left - DisplayWidth.stringWidth(sb)
         if needed > 0 { sb += String(repeating: " ", count: needed) }
         sb += draw(i)
     }
@@ -94,28 +111,24 @@ private func renderMessage(_ msg: SequenceMessage, _ layout: SequenceLayout, _ c
         let labelWidth = DisplayWidth.stringWidth(label)
         let w = max(layout.totalWidth, start + labelWidth) + labelBufferSpace
         var line = lifelineCells(layout, chars, minLen: w)
-        var col = start
-        for scalar in label.unicodeScalars where col < line.count {
-            line[col] = Character(scalar)
-            col += 1
-        }
+        writeLabel(&line, label, at: start)
         lines.append(trimRight(line))
     }
 
     var line = lifelineCells(layout, chars, minLen: max(from, to) + 2)
     let style = msg.arrowType == .dotted ? chars.dottedLine : chars.solidLine
     if from < to {
-        line[from] = Character(chars.teeRight)
+        line[from] = chars.teeRight
         var i = from + 1
-        while i < to { line[i] = Character(style); i += 1 }
-        line[to - 1] = Character(chars.arrowRight)
-        line[to] = Character(chars.vertical)
+        while i < to { line[i] = style; i += 1 }
+        line[to - 1] = chars.arrowRight
+        line[to] = chars.vertical
     } else {
-        line[to] = Character(chars.vertical)
-        line[to + 1] = Character(chars.arrowLeft)
+        line[to] = chars.vertical
+        line[to + 1] = chars.arrowLeft
         var i = to + 2
-        while i < from { line[i] = Character(style); i += 1 }
-        line[from] = Character(chars.teeLeft)
+        while i < from { line[i] = style; i += 1 }
+        line[from] = chars.teeLeft
     }
     lines.append(trimRight(line))
     return lines
@@ -127,7 +140,7 @@ private func renderSelfMessage(_ msg: SequenceMessage, _ layout: SequenceLayout,
     let width = layout.selfMessageWidth
     let target = layout.totalWidth + width + 1
 
-    func ensure(_ minLen: Int) -> [Character] {
+    func ensure(_ minLen: Int) -> [String] {
         lifelineCells(layout, chars, minLen: max(target, minLen))
     }
 
@@ -139,31 +152,27 @@ private func renderSelfMessage(_ msg: SequenceMessage, _ layout: SequenceLayout,
         let labelWidth = DisplayWidth.stringWidth(label)
         let needed = start + labelWidth + labelBufferSpace
         var line = ensure(needed)
-        var col = start
-        for scalar in label.unicodeScalars where col < line.count {
-            line[col] = Character(scalar)
-            col += 1
-        }
+        writeLabel(&line, label, at: start)
         lines.append(trimRight(line))
     }
 
     var l1 = ensure(0)
-    l1[center] = Character(chars.teeRight)
+    l1[center] = chars.teeRight
     var i = 1
-    while i < width { l1[center + i] = Character(chars.horizontal); i += 1 }
-    l1[center + width - 1] = Character(chars.selfTopRight)
+    while i < width { l1[center + i] = chars.horizontal; i += 1 }
+    l1[center + width - 1] = chars.selfTopRight
     lines.append(trimRight(l1))
 
     var l2 = ensure(0)
-    l2[center + width - 1] = Character(chars.vertical)
+    l2[center + width - 1] = chars.vertical
     lines.append(trimRight(l2))
 
     var l3 = ensure(0)
-    l3[center] = Character(chars.vertical)
-    l3[center + 1] = Character(chars.arrowLeft)
+    l3[center] = chars.vertical
+    l3[center + 1] = chars.arrowLeft
     var k = 2
-    while k < width - 1 { l3[center + k] = Character(chars.horizontal); k += 1 }
-    l3[center + width - 1] = Character(chars.selfBottom)
+    while k < width - 1 { l3[center + k] = chars.horizontal; k += 1 }
+    l3[center + width - 1] = chars.selfBottom
     lines.append(trimRight(l3))
 
     return lines
