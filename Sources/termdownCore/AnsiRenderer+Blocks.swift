@@ -6,13 +6,13 @@ extension AnsiRenderer {
     // MARK: - Block rendering
 
     func renderBlocks(_ blocks: [Markup], width: Int, listDepth: Int,
-                      footnoteMap: [String: [String]] = [:]) -> [String] {
-        var out: [String] = []
+                      footnoteMap: [String: [String]] = [:]) -> [RenderedRow] {
+        var out: [RenderedRow] = []
         var first = true
         for block in blocks {
             let rendered = renderBlock(block, width: width, listDepth: listDepth, footnoteMap: footnoteMap)
             if rendered.isEmpty { continue }
-            if !first { out.append("") }
+            if !first { out.append(RenderedRow("")) }
             out.append(contentsOf: rendered)
             first = false
         }
@@ -20,14 +20,15 @@ extension AnsiRenderer {
     }
 
     func renderBlock(_ block: Markup, width: Int, listDepth: Int,
-                     footnoteMap: [String: [String]] = [:]) -> [String] {
+                     footnoteMap: [String: [String]] = [:]) -> [RenderedRow] {
+        let span = sourceSpan(of: block)
         switch block {
         case let heading as Heading:
-            return renderHeading(heading, width: width)
+            return tag(renderHeading(heading, width: width), span)
         case let paragraph as Paragraph:
             // Skip footnote definition paragraphs — they're rendered in the footnote section.
             if isFootnoteDefinition(paragraph) { return [] }
-            return renderParagraph(paragraph, width: width, footnoteMap: footnoteMap)
+            return tag(renderParagraph(paragraph, width: width, footnoteMap: footnoteMap), span)
         case let quote as BlockQuote:
             return renderQuote(quote, width: width, listDepth: listDepth, footnoteMap: footnoteMap)
         case let list as UnorderedList:
@@ -35,21 +36,26 @@ extension AnsiRenderer {
         case let list as OrderedList:
             return renderOrderedList(list, width: width, listDepth: listDepth, footnoteMap: footnoteMap)
         case let code as CodeBlock:
-            return renderCodeBlock(code, width: width)
+            return tag(renderCodeBlock(code, width: width), span)
         case is ThematicBreak:
-            return [Ansi.color(String(repeating: "\u{2500}", count: width), theme.rule)]
+            return tag([Ansi.color(String(repeating: "\u{2500}", count: width), theme.rule)], span)
         case let table as Table:
             return renderTable(table, width: width)
         case let html as HTMLBlock:
-            return html.rawHTML
+            return tag(html.rawHTML
                 .split(separator: "\n", omittingEmptySubsequences: false)
-                .map { Ansi.dim(String($0)) }
+                .map { Ansi.dim(String($0)) }, span)
         default:
             // Fall back to rendering children.
             let children = Array(block.children)
             if children.isEmpty { return [] }
             return renderBlocks(children, width: width, listDepth: listDepth, footnoteMap: footnoteMap)
         }
+    }
+
+    /// Pair plain rendered lines with a single source span.
+    func tag(_ lines: [String], _ span: SourceSpan?) -> [RenderedRow] {
+        lines.map { RenderedRow($0, span) }
     }
 
     private func renderHeading(_ heading: Heading, width: Int) -> [String] {
@@ -138,7 +144,7 @@ extension AnsiRenderer {
     }
 
     private func renderQuote(_ quote: BlockQuote, width: Int, listDepth: Int,
-                             footnoteMap: [String: [String]] = [:]) -> [String] {
+                             footnoteMap: [String: [String]] = [:]) -> [RenderedRow] {
         // Check for GitHub alerts: > [!NOTE], > [!TIP], etc.
         var alertType: String?
         var alertColor: Ansi.Color?
@@ -165,15 +171,17 @@ extension AnsiRenderer {
             }
         }
 
+        let quoteSpan = sourceSpan(of: quote)
+
         // Render as alert if detected
         if let alertType = alertType, let alertColor = alertColor {
             let bar = Ansi.color("\u{2503}", alertColor) + " " // ┃
             let title = Ansi.color("● \(alertType)", alertColor)
-            var out: [String] = [bar + title]
+            var out: [RenderedRow] = [RenderedRow(bar + title, quoteSpan)]
 
             let inner = renderBlocks(children, width: width - 2, listDepth: listDepth, footnoteMap: footnoteMap)
-            for line in inner where !line.isEmpty {
-                out.append(bar + line)
+            for row in inner where !row.text.isEmpty {
+                out.append(RenderedRow(bar + row.text, row.span ?? quoteSpan))
             }
             return out
         }
@@ -181,8 +189,10 @@ extension AnsiRenderer {
         // Default quote rendering
         let bar = Ansi.color("\u{2503}", theme.quoteBar) + " " // ┃
         let inner = renderBlocks(Array(quote.children), width: width - 2, listDepth: listDepth, footnoteMap: footnoteMap)
-        return inner.map { line in
-            line.isEmpty ? Ansi.color("\u{2503}", theme.quoteBar) : bar + line
+        return inner.map { row in
+            row.text.isEmpty
+                ? RenderedRow(Ansi.color("\u{2503}", theme.quoteBar), row.span ?? quoteSpan)
+                : RenderedRow(bar + row.text, row.span ?? quoteSpan)
         }
     }
 

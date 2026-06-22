@@ -21,6 +21,7 @@ enum KeyBindings {
         "sidebar": "s", "wrap": "w", "follow": "F", "banner": "B",
         "fold": "z", "fold-all": "Z",
         "next-heading": "]", "prev-heading": "[",
+        "edit": "e", "cursor": "v",
         "contents": "t", "help": "?", "quit": "q",
     ]
 

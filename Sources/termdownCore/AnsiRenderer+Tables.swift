@@ -4,7 +4,7 @@ extension AnsiRenderer {
 
     // MARK: - Tables
 
-    func renderTable(_ table: Table, width: Int) -> [String] {
+    func renderTable(_ table: Table, width: Int) -> [RenderedRow] {
         // Collect rows of styled cell strings AND their Flat representation for
         // wrapping — so bold/italic/code are preserved when a cell overflows.
         var headerCells: [String] = []
@@ -17,8 +17,10 @@ extension AnsiRenderer {
                 headerFlats.append(flat)
             }
         }
+        let headerSpan = sourceSpan(of: table.head)
         var bodyRows: [[String]] = []
         var bodyFlats: [[Flat]] = []
+        var bodyRowSpans: [SourceSpan?] = []
         for rowMarkup in table.body.children {
             guard let row = rowMarkup as? Table.Row else { continue }
             var cells: [String] = []
@@ -33,6 +35,7 @@ extension AnsiRenderer {
             }
             bodyRows.append(cells)
             bodyFlats.append(flats)
+            bodyRowSpans.append(sourceSpan(of: row))
         }
 
         let columnCount = max(headerCells.count, bodyRows.map { $0.count }.max() ?? 0)
@@ -132,14 +135,15 @@ extension AnsiRenderer {
             return Ansi.color(s, theme.tableBorder)
         }
 
-        var out: [String] = []
-        out.append(rule("\u{250C}", "\u{252C}", "\u{2510}")) // ┌┬┐
-        out.append(contentsOf: renderRow(headerCells, flats: headerFlats))
-        out.append(rule("\u{251C}", "\u{253C}", "\u{2524}")) // ├┼┤
-        for (row, flats) in zip(bodyRows, bodyFlats) {
-            out.append(contentsOf: renderRow(row, flats: flats))
+        var out: [RenderedRow] = []
+        out.append(RenderedRow(rule("\u{250C}", "\u{252C}", "\u{2510}"))) // ┌┬┐
+        out.append(contentsOf: renderRow(headerCells, flats: headerFlats).map { RenderedRow($0, headerSpan) })
+        out.append(RenderedRow(rule("\u{251C}", "\u{253C}", "\u{2524}"))) // ├┼┤
+        for (i, (row, flats)) in zip(bodyRows, bodyFlats).enumerated() {
+            let span = i < bodyRowSpans.count ? bodyRowSpans[i] : nil
+            out.append(contentsOf: renderRow(row, flats: flats).map { RenderedRow($0, span) })
         }
-        out.append(rule("\u{2514}", "\u{2534}", "\u{2518}")) // └┴┘
+        out.append(RenderedRow(rule("\u{2514}", "\u{2534}", "\u{2518}"))) // └┴┘
         return out
     }
 }

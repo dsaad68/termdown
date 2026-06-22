@@ -30,8 +30,11 @@ public struct AnsiRenderer {
 
     /// Parse and render markdown source into ANSI-styled lines.
     public func render(_ source: String) -> RenderedDocument {
-        // Extract and handle YAML frontmatter
-        let (frontmatter, markdownSource) = extractFrontmatter(from: source)
+        // Extract and handle YAML frontmatter. `frontmatterOffset` is the number
+        // of leading source lines swift-markdown never sees (its line numbers are
+        // relative to the frontmatter-stripped body); add it to every block range
+        // so spans address the real file.
+        let (frontmatter, markdownSource, frontmatterOffset) = extractFrontmatter(from: source)
 
         let document = Document(parsing: markdownSource)
 
@@ -40,47 +43,62 @@ public struct AnsiRenderer {
         //   • referenced inline as superscripts
         let footnoteMap = parseFootnoteDefinitions(from: document)
 
-        var lines = renderBlocks(Array(document.children), width: width, listDepth: 0,
-                                 footnoteMap: footnoteMap)
+        var rows = renderBlocks(Array(document.children), width: width, listDepth: 0,
+                                footnoteMap: footnoteMap)
 
-        // Collect headings and links from the rendered lines
-        var headings: [HeadingInfo] = []
-        var links: [LinkInfo] = []
-        collectMetadataFromLines(lines: lines, intoHeadings: &headings, intoLinks: &links)
-
-        // Add frontmatter if present
+        // Add frontmatter panel if present (synthetic rows, no source span).
         if !frontmatter.isEmpty {
-            let frontmatterLines = renderFrontmatter(frontmatter)
-            lines.insert(contentsOf: frontmatterLines, at: 0)
-            // Re-collect metadata after frontmatter insertion
-            headings = []
-            links = []
-            collectMetadataFromLines(lines: lines, intoHeadings: &headings, intoLinks: &links)
+            let frontmatterRows = renderFrontmatter(frontmatter).map { RenderedRow($0) }
+            rows.insert(contentsOf: frontmatterRows, at: 0)
         }
 
-        // Render footnote section if any definitions were found.
+        // Render footnote section if any definitions were found (synthetic rows).
         if !footnoteMap.isEmpty {
             // Sort by key (label) for stable output.
             let sorted = footnoteMap.sorted { $0.key < $1.key }
-            lines.append("")
-            lines.append(Ansi.dim(String(repeating: "─", count: width)))
-            lines.append(Ansi.bold("Footnotes"))
+            rows.append(RenderedRow(""))
+            rows.append(RenderedRow(Ansi.dim(String(repeating: "─", count: width))))
+            rows.append(RenderedRow(Ansi.bold("Footnotes")))
             for (label, body) in sorted {
                 let marker = Ansi.color("[\(label)]", theme.link)
                 // body is already rendered as styled ANSI lines; join for the entry.
                 let bodyText = body.joined(separator: " ")
-                lines.append(marker + " " + bodyText)
+                rows.append(RenderedRow(marker + " " + bodyText))
             }
         }
 
         // Trim leading/trailing blank lines.
-        while lines.first?.isEmpty == true { lines.removeFirst() }
-        while lines.last?.isEmpty == true { lines.removeLast() }
+        while rows.first?.text.isEmpty == true { rows.removeFirst() }
+        while rows.last?.text.isEmpty == true { rows.removeLast() }
         // Add 2 empty lines at the end.
-        lines.append("")
-        lines.append("")
+        rows.append(RenderedRow(""))
+        rows.append(RenderedRow(""))
 
-        return RenderedDocument(lines: lines, headings: headings, links: links)
+        let lines = rows.map { $0.text }
+        // Shift block source spans to absolute file lines (past any frontmatter).
+        let sourceSpans: [SourceSpan?] = rows.map { row in
+            row.span.map { SourceSpan(start: $0.start + frontmatterOffset, end: $0.end + frontmatterOffset) }
+        }
+
+        // Collect headings and links from the final rendered lines.
+        var headings: [HeadingInfo] = []
+        var links: [LinkInfo] = []
+        collectMetadataFromLines(lines: lines, intoHeadings: &headings, intoLinks: &links)
+
+        return RenderedDocument(lines: lines, headings: headings, links: links,
+                                sourceSpans: sourceSpans, source: source)
+    }
+
+    /// Source span (1-indexed, inclusive) for a block, in frontmatter-stripped
+    /// coordinates. `render` shifts these to absolute file lines. cmark often sets
+    /// a block's upper bound to column 1 of the *following* line; treat that as the
+    /// previous line so the span covers only the block's own content lines.
+    func sourceSpan(of markup: Markup) -> SourceSpan? {
+        guard let r = markup.range else { return nil }
+        let start = r.lowerBound.line
+        var end = r.upperBound.line
+        if r.upperBound.column <= 1 && end > start { end -= 1 }
+        return SourceSpan(start: start, end: max(start, end))
     }
 
     /// Collect headings and links from rendered lines by scanning for patterns
@@ -175,18 +193,20 @@ public struct AnsiRenderer {
         }
     }
 
-    /// Extract YAML frontmatter from the source
-    private func extractFrontmatter(from source: String) -> (String, String) {
+    /// Extract YAML frontmatter from the source. Returns the frontmatter body, the
+    /// markdown source with frontmatter stripped, and the number of leading source
+    /// lines that were removed (so block ranges can be mapped back to the file).
+    private func extractFrontmatter(from source: String) -> (frontmatter: String, body: String, offset: Int) {
         let lines = source.split(separator: "\n", omittingEmptySubsequences: false)
         guard lines.count >= 3,
               lines[0] == "---",
               let endIndex = lines.dropFirst().firstIndex(of: "---") else {
-            return ("", source)
+            return ("", source, 0)
         }
 
         let frontmatter = lines[1..<endIndex].joined(separator: "\n")
         let markdownSource = lines[(endIndex + 1)...].joined(separator: "\n")
-        return (frontmatter, markdownSource)
+        return (frontmatter, markdownSource, endIndex + 1)
     }
 
     /// Render frontmatter as a metadata panel

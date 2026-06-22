@@ -37,6 +37,19 @@ final class KeyParserTests: XCTestCase {
         XCTAssertEqual(decode([0x0C]), .ctrlL)
     }
 
+    func testCtrlS() {
+        XCTAssertEqual(decode([0x13]), .ctrlS)
+    }
+
+    func testShiftArrows() {
+        // Modified arrows: ESC [ 1 ; 2 A/B  (modifier 2 = Shift)
+        XCTAssertEqual(decode(csi("1;2A")), .shiftUp)
+        XCTAssertEqual(decode(csi("1;2B")), .shiftDown)
+        // Other modifiers fall back to the plain arrow.
+        XCTAssertEqual(decode(csi("1;5A")), .up)
+        XCTAssertEqual(decode(csi("1;2C")), .right)
+    }
+
     func testPrintableChar() {
         XCTAssertEqual(decode([UInt8(ascii: "a")]), .char("a"))
         XCTAssertEqual(decode([UInt8(ascii: "Z")]), .char("Z"))

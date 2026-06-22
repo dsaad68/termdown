@@ -6,14 +6,14 @@ extension AnsiRenderer {
     // MARK: - List rendering
 
     func renderUnorderedList(_ list: UnorderedList, width: Int, listDepth: Int,
-                             footnoteMap: [String: [String]] = [:]) -> [String] {
+                             footnoteMap: [String: [String]] = [:]) -> [RenderedRow] {
         let bullets = ["\u{2022}", "\u{25E6}", "\u{25AA}"] // • ◦ ▪
         let bullet = bullets[listDepth % bullets.count]
-        var out: [String] = []
+        var out: [RenderedRow] = []
         let items = Array(list.listItems)
         let tight = listIsTight(items)
         for (i, item) in items.enumerated() {
-            if i > 0 && !tight { out.append("") }
+            if i > 0 && !tight { out.append(RenderedRow("")) }
             let marker: String
             if let checkbox = item.checkbox {
                 marker = checkbox == .checked
@@ -29,15 +29,15 @@ extension AnsiRenderer {
     }
 
     func renderOrderedList(_ list: OrderedList, width: Int, listDepth: Int,
-                           footnoteMap: [String: [String]] = [:]) -> [String] {
-        var out: [String] = []
+                           footnoteMap: [String: [String]] = [:]) -> [RenderedRow] {
+        var out: [RenderedRow] = []
         let items = Array(list.listItems)
         let tight = listIsTight(items)
         let start = Int(list.startIndex)
         let maxNum = start + items.count - 1
         let numWidth = String(maxNum).count
         for (i, item) in items.enumerated() {
-            if i > 0 && !tight { out.append("") }
+            if i > 0 && !tight { out.append(RenderedRow("")) }
             let label = String(start + i) + "."
             let padded = label.padding(toLength: numWidth + 1, withPad: " ", startingAt: 0)
             let marker = Ansi.color(padded, theme.link) + " "
@@ -70,22 +70,26 @@ extension AnsiRenderer {
 
     private func renderListItem(_ item: ListItem, width: Int, marker: String, markerWidth: Int,
                                 listDepth: Int, tight: Bool,
-                                footnoteMap: [String: [String]] = [:]) -> [String] {
+                                footnoteMap: [String: [String]] = [:]) -> [RenderedRow] {
         let contentWidth = max(4, width - markerWidth)
         let contPrefix = String(repeating: " ", count: markerWidth)
         let blocks = Array(item.children)
-        var rendered: [String] = []
+        var rendered: [RenderedRow] = []
         for (i, block) in blocks.enumerated() {
-            if i > 0 && !tight { rendered.append("") }
+            if i > 0 && !tight { rendered.append(RenderedRow("")) }
             rendered.append(contentsOf: renderBlock(block, width: contentWidth, listDepth: listDepth + 1,
                                                     footnoteMap: footnoteMap))
         }
-        var out: [String] = []
-        for (j, line) in rendered.enumerated() {
+        // Fall back to the item's own range for rows whose block lacked a span
+        // (so the marker row always maps to the item's source line).
+        let itemSpan = sourceSpan(of: item)
+        var out: [RenderedRow] = []
+        for (j, row) in rendered.enumerated() {
+            let span = row.span ?? itemSpan
             if j == 0 {
-                out.append(marker + line)
+                out.append(RenderedRow(marker + row.text, span))
             } else {
-                out.append(line.isEmpty ? "" : contPrefix + line)
+                out.append(RenderedRow(row.text.isEmpty ? "" : contPrefix + row.text, span))
             }
         }
         return out

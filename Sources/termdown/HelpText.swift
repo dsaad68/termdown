@@ -26,13 +26,20 @@ extension Terminal {
     /// Viewer (pager) help, grouped by function for the tabbed `?` overlay.
     static let pagerHelpGroups: [(name: String, items: [String])] = [
         ("Move", [
-            "↑/↓ or j/k       Scroll one line",
-            "Space/PgDn, b    Scroll one page",
-            "d / u            Scroll half a page",
+            "↑/↓ or j/k       Scroll (move the cursor in cursor mode)",
+            "Space/PgDn, b    Page down / up",
+            "d / u            Half page down / up",
             "←/→ or h/l       Scroll horizontally (no-wrap)",
             "g/Home, G/End    Top / bottom",
             ":N               Jump to line N",
             "] / [            Next / previous heading",
+        ]),
+        ("Cursor", [
+            "v                Show/hide the line cursor (cursor mode)",
+            "Shift+↑/↓, J/K   Select lines (auto-enters cursor mode)",
+            "y                Copy selection as raw markdown",
+            "Y                Copy selection as rendered text",
+            "Esc              Exit cursor mode / clear selection",
         ]),
         ("Search", [
             "/                Search (incremental)",
@@ -67,6 +74,12 @@ extension Terminal {
             "z                Fold / unfold current section",
             "Z                Fold all / unfold all sections",
             "t                Contents / Open Tabs overlay (t switches panes)",
+        ]),
+        ("Edit", [
+            "e                Edit the block under the cursor (raw markdown)",
+            "↵                Commit the edit to the buffer (marks unsaved)",
+            "Ctrl-S           Save the file to disk",
+            "Esc              Cancel the edit",
         ]),
         ("Misc", [
             "y                Copy code block nearest cursor",
