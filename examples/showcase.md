@@ -35,7 +35,7 @@ and an autolink: https://github.com.
 |----------------|:---------:|------------------------|
 | Tables         |    yes    | box-drawing borders    |
 | Emphasis       |    yes    | bold/italic/strike     |
-| Code blocks    |    yes    | left-bar styling       |
+| Code blocks    |    yes    | framed-box styling     |
 | Links          |    yes    | OSC 8 clickable        |
 | Math           |    yes    | LaTeX → Unicode        |
 

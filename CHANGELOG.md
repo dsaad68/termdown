@@ -17,6 +17,12 @@ All notable changes to termdown are documented here. The format is based on
   fall back to the previous highlighted code block. Configurable via the new
   `mermaid` (on/off) and `mermaid-charset` (`unicode`/`ascii`) settings.
 
+### Changed
+- Fenced code blocks (and mermaid diagram cards) now render as a **complete
+  box** — a labelled top rule, full-height left **and right** borders, and a
+  closing floor — spanning the full text column, instead of the previous
+  open left-bar card. The box grows to fit content wider than the column.
+
 ## [0.1.2] - 2026-06-19
 
 ### Fixed
