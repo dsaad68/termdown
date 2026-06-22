@@ -51,6 +51,10 @@ swift run termdown ~/notes    # scan a specific directory
   - Bullet / ordered / nested lists and `- [ ]` task lists
   - Fenced code blocks with **syntax highlighting** across ~35 languages
     (via [Chroma]), drawn as a framed card and mapped onto the matte palette
+  - **Mermaid diagrams**: ` ```mermaid ` blocks render as ASCII/Unicode art
+    (flowcharts and sequence diagrams) via a native Swift port of
+    [mermaid-ascii] — no external tools. Falls back to a highlighted code block
+    for unsupported diagram types
   - GFM tables drawn with box-drawing borders and column alignment
   - Block quotes (including nested)
   - **GitHub alerts**: `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, etc. as colored callouts
@@ -196,6 +200,8 @@ mouse: false      # true to enable mouse scroll
 | `no-color` | bool | `true`/`false` | Disables all ANSI color |
 | `mouse` | bool | `true`/`false` | Mouse scroll in the finder and pager |
 | `ignore-patterns` | list | `[a, b, c]` | Extra path patterns to skip during file discovery (beyond the built-in `.git`/`node_modules`/`.build` skips) |
+| `mermaid` | bool | `true`/`false` | Render ` ```mermaid ` blocks as diagrams (default `true`; falls back to a code block on parse failure) |
+| `mermaid-charset` | string | `unicode`/`ascii` | Box-drawing character set for diagrams (default `unicode`) |
 
 **Themes:** `dark`, `light`, `mono`; ports: `catppuccin`, `rose-pine`, `nord`,
 `tokyo-night`, `gruvbox`, `dracula`; custom pastels: matte (`matte-rose`,
@@ -312,5 +318,14 @@ TD_UPDATE_SNAPSHOTS=1 swift test
 
 Review the resulting diff before committing.
 
+## Credits
+
+- **Mermaid rendering** is a native Swift port of
+  [mermaid-ascii](https://github.com/AlexanderGrooff/mermaid-ascii) by Alexander
+  Grooff (MIT). The ported engine lives in `Sources/MermaidRenderer` (see its
+  `NOTICE`); the diagram fidelity fixtures under
+  `Tests/MermaidRendererTests/testdata` are copied verbatim from that project.
+
 [swift-markdown]: https://github.com/apple/swift-markdown
 [Chroma]: https://github.com/onevcat/Chroma
+[mermaid-ascii]: https://github.com/AlexanderGrooff/mermaid-ascii

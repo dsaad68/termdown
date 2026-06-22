@@ -6,6 +6,17 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Mermaid diagrams**: ` ```mermaid ` fenced blocks now render as ASCII/Unicode
+  art instead of plain source. Supports flowcharts (`graph`/`flowchart` TD/LR
+  with labeled, chained and grouped edges, `subgraph` grouping and `classDef`
+  styling) and `sequenceDiagram`. Implemented as a self-contained native Swift
+  port of [mermaid-ascii](https://github.com/AlexanderGrooff/mermaid-ascii)
+  (MIT) in a new `MermaidRenderer` module — no external binary required. Diagrams
+  are drawn inside a labeled card; unsupported diagram types (and parse errors)
+  fall back to the previous highlighted code block. Configurable via the new
+  `mermaid` (on/off) and `mermaid-charset` (`unicode`/`ascii`) settings.
+
 ## [0.1.2] - 2026-06-19
 
 ### Fixed

@@ -5,6 +5,7 @@ import Darwin
 import Glibc
 #endif
 import termdownCore
+import MermaidRenderer
 
 let arguments = CommandLine.arguments
 
@@ -107,6 +108,10 @@ var activeThemeName = config.themeName.flatMap { Theme.named($0) != nil ? $0.low
 // Heading-banner mode (toggle `B` in the viewer): render closures read it live.
 var headingBanners = false
 
+// Mermaid diagram rendering (config-driven; defaults to on + Unicode).
+let mermaidEnabled = appConfig.mermaid ?? true
+let mermaidCharset: MermaidCharset = (appConfig.mermaidCharset == "ascii") ? .ascii : .unicode
+
 // MARK: - Help and version
 
 if config.showHelp {
@@ -168,7 +173,8 @@ if config.useStdin {
         pager.fixedWidth = config.width
         pager.mouseEnabled = mouseEnabled
         pager.renderSource = { w in
-            AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners).render(source)
+            AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners,
+                         mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(source)
         }
         pager.keyTranslation = keyTranslation
         pager.onToggleHeadingBanners = { headingBanners = $0 }
@@ -178,7 +184,8 @@ if config.useStdin {
         Terminal.showCursor()
     } else {
         let cols = config.width ?? Terminal.size().cols
-        let doc = AnsiRenderer(width: cols, theme: activeTheme).render(source)
+        let doc = AnsiRenderer(width: cols, theme: activeTheme,
+                               mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(source)
         print(doc.lines.joined(separator: "\n"))
     }
     exit(0)
@@ -193,7 +200,8 @@ if let file = config.renderFile {
         exit(1)
     }
     let cols = config.width ?? Terminal.size().cols
-    let doc = AnsiRenderer(width: cols, theme: activeTheme).render(source)
+    let doc = AnsiRenderer(width: cols, theme: activeTheme,
+                           mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(source)
     print(doc.lines.joined(separator: "\n"))
     exit(0)
 }
@@ -258,7 +266,8 @@ let liveGrep = LiveGrep(entries: entries.map { ($0.url, $0.relativePath) })
 // Render any markdown file at a given width (current doc, reload, link nav).
 let renderFile: (URL, Int) -> RenderedDocument? = { url, w in
     guard let src = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-    return AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners).render(src)
+    return AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners,
+                        mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(src)
 }
 
 // Resolve a [[wikilink]] page name to one of the discovered files — matching by

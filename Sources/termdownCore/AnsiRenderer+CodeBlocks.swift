@@ -1,5 +1,6 @@
 import Foundation
 import Markdown
+import MermaidRenderer
 
 extension AnsiRenderer {
 
@@ -14,6 +15,17 @@ extension AnsiRenderer {
 
         var source = code.code
         if source.hasSuffix("\n") { source.removeLast() }
+
+        // Mermaid: render the diagram as a framed card. Any parse failure (or an
+        // unsupported diagram type) falls through to the highlighted block below.
+        if mermaidEnabled, lang?.lowercased() == "mermaid" {
+            var options = MermaidOptions()
+            options.charset = mermaidCharset
+            options.colorEnabled = false
+            if let rows = Mermaid.render(source, options: options) {
+                return frameMermaid(rows, width: width)
+            }
+        }
 
         // Tokenize the whole block once (so multi-line strings / comments stay
         // correctly highlighted), tabs expanded first so colour indices line up
@@ -73,5 +85,30 @@ extension AnsiRenderer {
             k = m
         }
         return out
+    }
+
+    /// Frame a rendered mermaid diagram as a labelled card (matching the code
+    /// block card: a left bar, a `┌─ mermaid` top rule and a `└─` floor). Diagram
+    /// rows are emitted verbatim — never word-wrapped, since wrapping would
+    /// corrupt the ASCII art; over-wide diagrams rely on the pager's horizontal
+    /// scroll.
+    func frameMermaid(_ rows: [String], width: Int) -> [String] {
+        let barColor = theme.codeBar
+        let bar = Ansi.color("\u{2502} ", barColor) // │
+        let barWidth = 2
+
+        var body: [String] = []
+        var maxW = 0
+        for row in rows {
+            maxW = max(maxW, barWidth + Ansi.width(row))
+            body.append(bar + Ansi.color(row, theme.codeText))
+        }
+
+        let header = "\u{250C}\u{2500} mermaid " // ┌─ mermaid
+        let headerW = Ansi.width(header)
+        let floorW = min(width, max(maxW, headerW))
+        let top = Ansi.color(header + String(repeating: "\u{2500}", count: max(0, floorW - headerW)), barColor)
+        let bottom = Ansi.color("\u{2514}" + String(repeating: "\u{2500}", count: max(1, floorW - 1)), barColor)
+        return [top] + body + [bottom]
     }
 }

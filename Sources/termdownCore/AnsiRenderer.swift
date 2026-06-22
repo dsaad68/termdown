@@ -1,5 +1,6 @@
 import Foundation
 import Markdown
+import MermaidRenderer
 
 /// Renders a parsed Markdown document into styled ANSI lines for the terminal.
 ///
@@ -22,10 +23,20 @@ public struct AnsiRenderer {
     /// color as the background, contrasting text) instead of colored text + rule.
     let headingBanners: Bool
 
-    public init(width: Int, theme: Theme = .dark, headingBanners: Bool = false) {
+    /// When true, ```mermaid fenced blocks render as ASCII/Unicode diagrams
+    /// (falling back to a highlighted code block if parsing fails).
+    let mermaidEnabled: Bool
+
+    /// Box-drawing character set for rendered mermaid diagrams.
+    let mermaidCharset: MermaidCharset
+
+    public init(width: Int, theme: Theme = .dark, headingBanners: Bool = false,
+                mermaidEnabled: Bool = true, mermaidCharset: MermaidCharset = .unicode) {
         self.width = max(20, width)
         self.theme = theme
         self.headingBanners = headingBanners
+        self.mermaidEnabled = mermaidEnabled
+        self.mermaidCharset = mermaidCharset
     }
 
     /// Parse and render markdown source into ANSI-styled lines.

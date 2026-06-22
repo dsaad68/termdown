@@ -58,4 +58,5 @@ final class SnapshotTests: XCTestCase {
     func testTablesCJKSnapshot() throws { try assertSnapshot("tables-cjk") }
     func testMathSnapshot() throws { try assertSnapshot("math") }
     func testMalformedSnapshot() throws { try assertSnapshot("malformed") }
+    func testMermaidSnapshot() throws { try assertSnapshot("mermaid") }
 }
