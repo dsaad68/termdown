@@ -7,7 +7,9 @@
 
 A minimal terminal Markdown browser written in **pure Swift**. It lists every
 Markdown file under the current directory, lets you pick one with the arrow keys,
-and renders it **natively in the terminal** as styled ANSI text.
+renders it **natively in the terminal** as styled ANSI text, and lets you
+**edit blocks inline** (press `e`) and save back to disk, all without leaving
+the terminal.
 
 
 https://github.com/user-attachments/assets/b0885a6e-a740-451b-ab20-38fbee62d00b
