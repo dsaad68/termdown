@@ -141,7 +141,10 @@ extension Terminal {
         switch b0 {
         case 0x0D, 0x0A: return .enter
         case 0x09: return .tab
-        case 0x03: return .char("c") // Ctrl-C arrives here only if ISIG disabled; treat as quit upstream
+        // Ctrl-C is delivered as SIGINT (ISIG stays enabled in raw mode) and
+        // handled by the signal handler, so byte 0x03 never reaches here. It must
+        // NOT be decoded as the letter "c" — that would make a typed "c"
+        // indistinguishable from Ctrl-C. It falls through to `.other` below.
         case 0x0C: return .ctrlL     // Ctrl-L
         case 0x13: return .ctrlS     // Ctrl-S (IXON is disabled, so this reaches us)
         case 0x7F, 0x08: return .backspace

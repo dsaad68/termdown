@@ -42,7 +42,10 @@ struct TerminalMenu {
         var top = 0
         var query = ""
         var filteredItems: [(item: String, indices: [Int])] = items.map { ($0, []) }
-        var firstEsc = false
+        // Filtering is modal: keys navigate the list until the user focuses the
+        // search box with `/`, after which every printable key types into the
+        // filter (so a query may contain j/k/g/q/c like any other letter).
+        var searching = false
         var needsRedraw = true
         var lastRows = -1
         var lastCols = -1
@@ -76,8 +79,8 @@ struct TerminalMenu {
 
             if needsRedraw {
                 let frame = draw(selected: selected, top: top, viewport: viewport, rows: size.rows,
-                                 cols: size.cols, query: query, filteredItems: filteredItems,
-                                 detailFor: detailFor, context: context)
+                                 cols: size.cols, query: query, searching: searching,
+                                 filteredItems: filteredItems, detailFor: detailFor, context: context)
                 Terminal.render(frame)
                 needsRedraw = false
             }
@@ -85,82 +88,86 @@ struct TerminalMenu {
             guard let key = Terminal.readKey(timeoutMs: 150) else { continue }
             needsRedraw = true
 
+            // Recompute the fuzzy filter from `query` and park the cursor on the
+            // top match.
+            func applyFilter() {
+                filteredItems = query.isEmpty
+                    ? items.map { ($0, []) }
+                    : FuzzyMatch.filterAndSort(items, query: query)
+                selected = 0
+                top = 0
+            }
+
             switch key {
-            case .up, .char("k"):
+            // ── Navigation, paging, mouse and open: these never collide with
+            // typing, so they work whether or not the search box is focused. ──
+            case .up:
                 selected = selected > 0 ? selected - 1 : filteredItems.count - 1
-            case .down, .char("j"):
+            case .down:
                 selected = selected < filteredItems.count - 1 ? selected + 1 : 0
-            case .mouseScroll(let delta):
-                let next = selected + delta
-                selected = max(0, min(filteredItems.count - 1, next))
-            case .mouseClick(_, let y):
-                // File rows start just below the header chrome. A click selects the
-                // row; clicking the already-selected row opens it (like Enter).
-                let offset = y - 1 - headerLines
-                if offset >= 0, offset < viewport {
-                    let idx = top + offset
-                    if idx < filteredItems.count {
-                        if idx == selected {
-                            if let original = items.firstIndex(of: filteredItems[idx].item) {
-                                return .open(original)
-                            }
-                        } else {
-                            selected = idx
-                        }
-                    }
-                }
             case .pageUp:
                 selected = max(0, selected - viewport)
             case .pageDown:
                 selected = min(filteredItems.count - 1, selected + viewport)
-            case .enter:
-                if !filteredItems.isEmpty {
-                    let selectedItem = filteredItems[selected].item
-                    if let originalIndex = items.firstIndex(of: selectedItem) {
-                        return .open(originalIndex)
+            case .mouseScroll(let delta):
+                selected = max(0, min(filteredItems.count - 1, selected + delta))
+            case .mouseClick(_, let y):
+                // File rows start just below the header chrome. A click selects the
+                // row; clicking the already-selected row opens it (like Enter).
+                let offset = y - 1 - headerLines
+                if offset >= 0, offset < viewport, top + offset < filteredItems.count {
+                    let idx = top + offset
+                    if idx == selected, let original = items.firstIndex(of: filteredItems[idx].item) {
+                        return .open(original)
                     }
+                    selected = idx
+                }
+            case .enter:
+                if !filteredItems.isEmpty,
+                   let originalIndex = items.firstIndex(of: filteredItems[selected].item) {
+                    return .open(originalIndex)
                 }
                 return .quit
-            case .char("\\"):
-                return .grep
-            case .char("q"), .char("Q"), .char("c"):
+
+            // ── Navigation-mode keys (ignored while the search box is focused, so
+            // those letters can be typed into a query instead). ──
+            case .char("k") where !searching:
+                selected = selected > 0 ? selected - 1 : filteredItems.count - 1
+            case .char("j") where !searching:
+                selected = selected < filteredItems.count - 1 ? selected + 1 : 0
+            case .char("g") where !searching:
+                selected = 0
+            case .char("G") where !searching:
+                selected = filteredItems.count - 1
+            case .char("q") where !searching, .char("Q") where !searching:
                 return .quit
+            case .char("\\") where !searching:
+                return .grep
+            case .char("?") where !searching:
+                Terminal.showHelp(Terminal.menuHelpGroups)
+            case .char("/") where !searching:
+                searching = true
+
+            // ── Entering / leaving the search box ──
             case .escape:
-                if query.isEmpty || firstEsc {
+                if searching {
+                    searching = false          // leave the box, keep the filter & results
+                } else if query.isEmpty {
                     return .quit
                 } else {
-                    firstEsc = true
-                    query = ""
-                    filteredItems = items.map { ($0, []) }
-                    selected = 0
-                    top = 0
+                    query = ""; applyFilter()  // clear an active filter, stay in the list
                 }
-            case .char("g"):
-                selected = 0
-            case .char("G"):
-                selected = filteredItems.count - 1
-            case .char("?"):
-                Terminal.showHelp(Terminal.menuHelpGroups)
             case .backspace:
-                firstEsc = false
-                if !query.isEmpty {
-                    query.removeLast()
-                    if query.isEmpty {
-                        filteredItems = items.map { ($0, []) }
-                    } else {
-                        filteredItems = FuzzyMatch.filterAndSort(items, query: query)
-                    }
-                    selected = 0
-                    top = 0
+                if searching, !query.isEmpty {
+                    query.removeLast(); applyFilter()
+                } else if searching {
+                    searching = false          // backspace on an empty box leaves it
                 }
-            case .char(let c):
-                firstEsc = false
-                if c.isASCII && !c.isWhitespace && c != "\n" && c != "\r" {
-                    query.append(c)
-                    filteredItems = FuzzyMatch.filterAndSort(items, query: query)
-                    selected = 0
-                    top = 0
-                }
+
+            // ── Typing into the focused search box ──
+            case .char(let c) where searching && c.isASCII && !c.isWhitespace && c != "\n" && c != "\r":
+                query.append(c); applyFilter()
+
             default:
                 break
             }

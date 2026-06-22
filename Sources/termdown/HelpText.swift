@@ -10,9 +10,10 @@ extension Terminal {
             "PgUp / PgDn   Move by a page",
         ]),
         ("Filter", [
-            "Type          Filter by fuzzy match",
-            "Backspace     Delete filter character",
-            "Esc           Clear filter, then quit",
+            "/             Search files (focus the box)",
+            "Type          Filter by fuzzy match (any letter, in the box)",
+            "Backspace     Delete a character / leave the box",
+            "Esc           Leave box, then clear filter, then quit",
         ]),
         ("Open", [
             "Enter         Open selected file",

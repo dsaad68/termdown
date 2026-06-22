@@ -8,6 +8,10 @@ public struct AppConfig: Codable {
     public var noColor: Bool?
     public var mouse: Bool?
     public var ignorePatterns: [String]?
+    /// Render ```mermaid fenced blocks as diagrams (default true).
+    public var mermaid: Bool?
+    /// Mermaid box-drawing character set: "unicode" (default) or "ascii".
+    public var mermaidCharset: String?
     /// Viewer key overrides: action name → key (from `key-<action>: <char>`).
     public var keyBindings: [String: String]?
 
@@ -43,6 +47,13 @@ public struct AppConfig: Codable {
     # addition to the built-in skips (.git, node_modules, .build, ...).
     # Inline list only — the config reader is flat (no "- item" blocks):
     # ignore-patterns: [vendor, "*.snap", archive]
+
+    # mermaid: Render ```mermaid fenced blocks as ASCII/Unicode diagrams
+    # (true/false). Falls back to a highlighted code block on parse failure.
+    mermaid: true
+
+    # mermaid-charset: Box-drawing characters for diagrams: unicode or ascii.
+    mermaid-charset: unicode
 
     # Custom viewer keys: key-<action>: <char> binds a key to a viewer action
     # (the default key keeps working too). Actions: scroll-down/up, page-down/up,
@@ -100,6 +111,8 @@ public struct AppConfig: Codable {
         if let v = other.noColor        { noColor = v }
         if let v = other.mouse          { mouse = v }
         if let v = other.ignorePatterns { ignorePatterns = v }
+        if let v = other.mermaid        { mermaid = v }
+        if let v = other.mermaidCharset { mermaidCharset = v }
         if let v = other.keyBindings {
             if keyBindings == nil { keyBindings = v }
             else { v.forEach { keyBindings?[$0.key] = $0.value } }   // merge per binding
@@ -185,6 +198,10 @@ public struct AppConfig: Codable {
                 cfg.noColor = parseBool(value)
             case "mouse":
                 cfg.mouse = parseBool(value)
+            case "mermaid":
+                cfg.mermaid = parseBool(value)
+            case "mermaid-charset", "mermaidcharset", "mermaid_charset":
+                cfg.mermaidCharset = value.lowercased()
             case "ignore-patterns", "ignorepatterns", "ignore_patterns":
                 // Inline sequence: [a, b, c] or bare comma-separated list
                 let inner = value.hasPrefix("[") ? String(value.dropFirst().dropLast()) : value

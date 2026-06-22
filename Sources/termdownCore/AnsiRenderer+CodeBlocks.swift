@@ -1,19 +1,33 @@
 import Foundation
 import Markdown
+import MermaidRenderer
 
 extension AnsiRenderer {
 
     // MARK: - Code blocks
 
+    /// Visible columns of card chrome per row: "│ " on the left and " │" on the
+    /// right.
+    private var cardChrome: Int { 4 }
+
     func renderCodeBlock(_ code: CodeBlock, width: Int) -> [String] {
-        let barColor = theme.codeBar
-        let bar = Ansi.color("\u{2502} ", barColor) // │
-        let barWidth = 2
-        let codeWidth = max(4, width - barWidth)
         let lang = code.language?.trimmingCharacters(in: .whitespaces)
+        let codeWidth = max(4, width - cardChrome)
 
         var source = code.code
         if source.hasSuffix("\n") { source.removeLast() }
+
+        // Mermaid: render the diagram as a framed card. Any parse failure (or an
+        // unsupported diagram type) falls through to the highlighted block below.
+        if mermaidEnabled, lang?.lowercased() == "mermaid" {
+            var options = MermaidOptions()
+            options.charset = mermaidCharset
+            options.colorEnabled = false
+            if let rows = Mermaid.render(source, options: options) {
+                return frameCard(label: "mermaid", bodyRows: rows.map { Ansi.color($0, theme.codeText) },
+                                 width: width)
+            }
+        }
 
         // Tokenize the whole block once (so multi-line strings / comments stay
         // correctly highlighted), tabs expanded first so colour indices line up
@@ -24,7 +38,6 @@ extension AnsiRenderer {
         // Walk source lines, wrapping each to the code width and colouring every
         // piece from the matching slice of the whole-block colour map.
         var body: [String] = []
-        var maxW = 0
         var offset = 0
         for sub in expanded.split(separator: "\n", omittingEmptySubsequences: false) {
             let lineChars = Array(sub)
@@ -37,22 +50,13 @@ extension AnsiRenderer {
                     if w + cw > codeWidth && j > i { break }
                     w += cw; j += 1
                 }
-                body.append(bar + coloredRun(lineChars, colors, base: offset, from: i, to: j))
-                maxW = max(maxW, barWidth + w)
+                body.append(coloredRun(lineChars, colors, base: offset, from: i, to: j))
                 i = j
             } while i < lineLen
             offset += lineLen + 1   // +1 for the consumed "\n"
         }
 
-        // Frame: a labelled top rule and a closing bottom elbow, so the block
-        // reads as a complete card rather than a dangling left bar.
-        let header = (lang?.isEmpty == false) ? "\u{250C}\u{2500} \(lang!) " : "\u{250C}\u{2500}"  // ┌─ lang  /  ┌─
-        let headerW = Ansi.width(header)
-        let floorW = min(width, max(maxW, headerW))
-        let top = Ansi.color(header + String(repeating: "\u{2500}", count: max(0, floorW - headerW)), barColor)
-        let bottom = Ansi.color("\u{2514}" + String(repeating: "\u{2500}", count: max(1, floorW - 1)), barColor)
-
-        return [top] + body + [bottom]
+        return frameCard(label: lang ?? "", bodyRows: body, width: width)
     }
 
     /// Build an ANSI run for `chars[from..<to]`, taking each character's colour
@@ -72,6 +76,39 @@ extension AnsiRenderer {
             out += Ansi.color(String(chars[k..<m]), c)
             k = m
         }
+        return out
+    }
+
+    /// Frame already-coloured `bodyRows` as a complete box: a labelled top rule
+    /// (`┌─ label ──┐`), full-height left/right borders, and a closing floor
+    /// (`└──┘`). The box spans the full content width and grows to fit any row
+    /// wider than it (e.g. a large diagram), which the pager scrolls horizontally.
+    /// Rows are emitted verbatim — never word-wrapped — so diagram art stays intact.
+    func frameCard(label: String, bodyRows: [String], width: Int) -> [String] {
+        let barColor = theme.codeBar
+        let leftBar = Ansi.color("\u{2502} ", barColor)  // │ + space
+        let rightBar = Ansi.color(" \u{2502}", barColor) // space + │
+
+        var maxContent = 0
+        for row in bodyRows { maxContent = max(maxContent, Ansi.width(row)) }
+
+        let boxW = max(width, maxContent + cardChrome)
+        let inner = boxW - cardChrome
+        let dash = "\u{2500}"
+
+        let header = label.isEmpty ? "\u{250C}\u{2500}" : "\u{250C}\u{2500} \(label) " // ┌─ / ┌─ label
+        let headerW = Ansi.width(header)
+        let top = Ansi.color(header + String(repeating: dash, count: max(0, boxW - headerW - 1))
+            + "\u{2510}", barColor) // ┐
+        let bottom = Ansi.color("\u{2514}" + String(repeating: dash, count: max(0, boxW - 2))
+            + "\u{2518}", barColor) // └ … ┘
+
+        var out: [String] = [top]
+        for row in bodyRows {
+            let pad = max(0, inner - Ansi.width(row))
+            out.append(leftBar + row + String(repeating: " ", count: pad) + rightBar)
+        }
+        out.append(bottom)
         return out
     }
 }

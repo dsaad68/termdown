@@ -6,6 +6,33 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-06-22
+
+### Added
+- **Mermaid diagrams**: ` ```mermaid ` fenced blocks now render as ASCII/Unicode
+  art instead of plain source. Supports flowcharts (`graph`/`flowchart` TD/LR
+  with labeled, chained and grouped edges, `subgraph` grouping and `classDef`
+  styling) and `sequenceDiagram`. Implemented as a self-contained native Swift
+  port of [mermaid-ascii](https://github.com/AlexanderGrooff/mermaid-ascii)
+  (MIT) in a new `MermaidRenderer` module — no external binary required. Diagrams
+  are drawn inside a labeled card; unsupported diagram types (and parse errors)
+  fall back to the previous highlighted code block. Configurable via the new
+  `mermaid` (on/off) and `mermaid-charset` (`unicode`/`ascii`) settings.
+
+### Changed
+- Fenced code blocks (and mermaid diagram cards) now render as a **complete
+  box** — a labelled top rule, full-height left **and right** borders, and a
+  closing floor — spanning the full text column, instead of the previous
+  open left-bar card. The box grows to fit content wider than the column.
+
+### Fixed
+- **File finder**: typing a filter that contains `q`, `Q` or `c` no longer quits
+  the app (and `j`/`k`/`g`/`G` no longer move the selection instead of typing).
+  Filtering is now modal — press `/` to focus the search box, where every
+  printable key types into the query; the list/navigation keys work outside it.
+  Relatedly, Ctrl-C is no longer mis-decoded as a literal `c` (it is delivered as
+  `SIGINT`).
+
 ## [0.1.4] - 2026-06-22
 
 ### Added
@@ -71,7 +98,8 @@ Initial release.
 - Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
   updates the Homebrew tap.
 
-[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/dsaad68/termdown/releases/tag/v0.1.5
 [0.1.4]: https://github.com/dsaad68/termdown/releases/tag/v0.1.4
 [0.1.2]: https://github.com/dsaad68/termdown/releases/tag/v0.1.2
 [0.1.1]: https://github.com/dsaad68/termdown/releases/tag/v0.1.1

@@ -22,7 +22,7 @@ final class TerminalMenuDrawTests: XCTestCase {
     func testLaunchHeaderShowsTagline() {
         let m = sampleMenu()
         let frame = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
-                           query: "", filteredItems: filtered(m.items),
+                           query: "", searching: false, filteredItems: filtered(m.items),
                            detailFor: ["a.md": "1d", "docs/b.md": "2h"], context: nil)
         let plain = frame.map { Ansi.strip($0) }.joined(separator: "\n")
         XCTAssertTrue(plain.contains("markdown viewer"), plain)   // launch tagline
@@ -36,7 +36,7 @@ final class TerminalMenuDrawTests: XCTestCase {
     func testContextHeaderReplacesLaunchChrome() {
         let m = sampleMenu()
         let frame = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
-                           query: "", filteredItems: filtered(m.items),
+                           query: "", searching: false, filteredItems: filtered(m.items),
                            detailFor: ["a.md": "1d", "docs/b.md": "2h"], context: "New tab")
         let plain = frame.map { Ansi.strip($0) }.joined(separator: "\n")
         XCTAssertTrue(plain.contains("New tab"), plain)           // slim contextual title
@@ -54,7 +54,7 @@ final class TerminalMenuDrawTests: XCTestCase {
     func testContextLegendIsGradient() {
         let m = sampleMenu()
         let frame = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
-                           query: "", filteredItems: filtered(m.items),
+                           query: "", searching: false, filteredItems: filtered(m.items),
                            detailFor: [:], context: "New tab")
         let topBorder = frame[0]   // the legend lives on the top border row
         // The blue→mauve ramp's first and last stops must both appear (a gradient,
@@ -69,11 +69,31 @@ final class TerminalMenuDrawTests: XCTestCase {
     func testLaunchViewShowsNameOnce() {
         let m = sampleMenu()
         let frame = m.draw(selected: 0, top: 0, viewport: 3, rows: 16, cols: 30,
-                           query: "", filteredItems: filtered(m.items),
+                           query: "", searching: false, filteredItems: filtered(m.items),
                            detailFor: [:], context: nil)
         let plain = frame.map { Ansi.strip($0) }.joined(separator: "\n")
         let occurrences = plain.lowercased().components(separatedBy: "termdown").count - 1
         XCTAssertEqual(occurrences, 1, plain)
+    }
+
+    /// The search box is modal: unfocused it prompts to press `/`; focused it
+    /// shows the typing affordance. This guards the fix where letters like q / c
+    /// used to be intercepted as commands instead of filtering.
+    func testSearchBoxReflectsFocus() {
+        let m = sampleMenu()
+        let unfocused = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
+                               query: "", searching: false, filteredItems: filtered(m.items),
+                               detailFor: [:], context: nil)
+            .map { Ansi.strip($0) }.joined(separator: "\n")
+        XCTAssertTrue(unfocused.contains("/ search"), unfocused)
+        XCTAssertFalse(unfocused.contains("Esc done"), unfocused)
+
+        let focused = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
+                             query: "cfg", searching: true, filteredItems: filtered(["config.md"]),
+                             detailFor: [:], context: nil)
+            .map { Ansi.strip($0) }.joined(separator: "\n")
+        XCTAssertTrue(focused.contains("cfg"), focused)        // the typed query is shown
+        XCTAssertTrue(focused.contains("Esc done"), focused)   // focused-mode hint
     }
 
     /// The frame fills the full terminal height (11 chrome rows + viewport), so a
@@ -82,7 +102,7 @@ final class TerminalMenuDrawTests: XCTestCase {
         let m = sampleMenu()
         let rows = 24
         let frame = m.draw(selected: 0, top: 0, viewport: rows - 11, rows: rows, cols: 80,
-                           query: "", filteredItems: filtered(m.items),
+                           query: "", searching: false, filteredItems: filtered(m.items),
                            detailFor: [:], context: nil)
         XCTAssertEqual(frame.count, rows)
     }

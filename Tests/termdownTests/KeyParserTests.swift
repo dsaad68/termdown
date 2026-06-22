@@ -9,7 +9,7 @@ final class KeyParserTests: XCTestCase {
     /// Decode a full byte sequence: the first byte seeds `decodeKey`, the rest are
     /// served in order by `next` (returning nil once exhausted, like a timeout).
     private func decode(_ bytes: [UInt8]) -> Terminal.Key {
-        var rest = Array(bytes.dropFirst())
+        let rest = Array(bytes.dropFirst())
         var i = 0
         return Terminal.decodeKey(first: bytes[0]) { _ in
             guard i < rest.count else { return nil }
@@ -35,6 +35,16 @@ final class KeyParserTests: XCTestCase {
 
     func testCtrlL() {
         XCTAssertEqual(decode([0x0C]), .ctrlL)
+    }
+
+    /// Ctrl-C (0x03) must NOT decode to the letter "c" — otherwise a typed "c"
+    /// and Ctrl-C would be indistinguishable, which made "c" quit the file
+    /// finder. Real Ctrl-C is delivered as SIGINT, so the byte just falls to
+    /// `.other` and the literal "c" stays a normal character.
+    func testCtrlCIsNotLetterC() {
+        XCTAssertEqual(decode([0x03]), .other)
+        XCTAssertEqual(decode([UInt8(ascii: "c")]), .char("c"))
+        XCTAssertEqual(decode([UInt8(ascii: "q")]), .char("q"))
     }
 
     func testCtrlS() {

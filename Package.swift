@@ -11,11 +11,20 @@ let package = Package(
         .package(url: "https://github.com/onevcat/Chroma.git", from: "0.3.1"),
     ],
     targets: [
+        // Self-contained native Swift port of mermaid-ascii (MIT, © 2023
+        // Alexander Grooff). Has no dependency on termdownCore so it stays
+        // independently testable/reusable.
+        .target(
+            name: "MermaidRenderer",
+            path: "Sources/MermaidRenderer",
+            exclude: ["NOTICE"]
+        ),
         .target(
             name: "termdownCore",
             dependencies: [
                 .product(name: "Markdown", package: "swift-markdown"),
                 .product(name: "Chroma", package: "Chroma"),
+                .target(name: "MermaidRenderer"),
             ],
             path: "Sources/termdownCore"
         ),
@@ -23,6 +32,7 @@ let package = Package(
             name: "termdown",
             dependencies: [
                 .target(name: "termdownCore"),
+                .target(name: "MermaidRenderer"),
             ],
             path: "Sources/termdown"
         ),
@@ -32,6 +42,14 @@ let package = Package(
                 .target(name: "termdownCore"),
             ],
             path: "Tests/termdownCoreTests"
+        ),
+        .testTarget(
+            name: "MermaidRendererTests",
+            dependencies: [
+                .target(name: "MermaidRenderer"),
+            ],
+            path: "Tests/MermaidRendererTests",
+            exclude: ["testdata"]
         ),
         .testTarget(
             name: "termdownTests",

@@ -50,6 +50,16 @@ lint-fix:
 # Run every check the way CI does: formatting, lint, tests
 check: format-check lint test
 
+# Build & test the Linux version in a Swift 6.2 container. The build dir lives in
+# a named volume (termdown-linux-build) so rebuilds stay incremental. Requires Docker.
+# `--parallel` (+ </dev/null) is used for the test run because the serial
+# swift-corelibs-xctest runner hangs on a blocking ppoll when stdin isn't a TTY
+# (as in a non-interactive container); the parallel runner spawns per-test and
+# is unaffected.
+linux-build:
+    docker run --rm -v "$PWD":/src -w /src -v termdown-linux-build:/build \
+      swift:6.2 bash -c "swift build --build-path /build && swift test --parallel --build-path /build </dev/null"
+
 # Clean build artifacts
 clean:
     swift package clean
