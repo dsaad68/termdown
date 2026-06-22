@@ -11,7 +11,7 @@ extension Terminal {
         ]),
         ("Filter", [
             "/             Search files (focus the box)",
-            "Type          Fuzzy filter (any letter, while box focused)",
+            "Type          Filter by fuzzy match (any letter, in the box)",
             "Backspace     Delete a character / leave the box",
             "Esc           Leave box, then clear filter, then quit",
         ]),
