@@ -12,7 +12,7 @@ struct TerminalMenu {
     }
 
     let title: String
-    let items: [String]
+    var items: [String]
     /// Optional secondary text shown dimmed and right-aligned (e.g. mtime),
     /// indexed in parallel with `items`.
     var details: [String] = []
@@ -23,6 +23,11 @@ struct TerminalMenu {
     /// Whether mouse scroll events are enabled.
     var mouseEnabled: Bool = false
 
+    /// Called when the watched folder changes; returns the refreshed
+    /// item/detail lists, or nil if nothing actually changed (e.g. a file's
+    /// mtime was touched without the file list itself differing).
+    var onFolderChanged: (() -> (items: [String], details: [String])?)?
+
     /// Accent color (256) for fuzzy-matched characters.
     private static let accent = 39
 
@@ -32,11 +37,21 @@ struct TerminalMenu {
     func run(initialSelection: Int = 0, context: String? = nil) -> Action {
         guard !items.isEmpty else { return .quit }
 
+        // `run()` is non-mutating, so a folder-change refresh updates these
+        // local shadows rather than `self.items`/`self.details` — the caller
+        // re-seeds a fresh `TerminalMenu` before the next `run()` call anyway.
+        var items = self.items
+        var details = self.details
+
         // Fast lookup for the per-item secondary column.
         var detailFor: [String: String] = [:]
-        if details.count == items.count {
-            for (i, item) in items.enumerated() { detailFor[item] = details[i] }
+        func rebuildDetailFor() {
+            detailFor = [:]
+            if details.count == items.count {
+                for (i, item) in items.enumerated() { detailFor[item] = details[i] }
+            }
         }
+        rebuildDetailFor()
 
         var selected = min(max(initialSelection, 0), items.count - 1)
         var top = 0
@@ -49,6 +64,16 @@ struct TerminalMenu {
         var needsRedraw = true
         var lastRows = -1
         var lastCols = -1
+
+        // Recompute the fuzzy filter from `query` and park the cursor on the
+        // top match. Also used when the folder changes underneath an active filter.
+        func applyFilter() {
+            filteredItems = query.isEmpty
+                ? items.map { ($0, []) }
+                : FuzzyMatch.filterAndSort(items, query: query)
+            selected = 0
+            top = 0
+        }
 
         Terminal.hideCursor()
         if mouseEnabled { Terminal.enableMouseTracking() }
@@ -71,6 +96,17 @@ struct TerminalMenu {
                 needsRedraw = true
             }
 
+            if Terminal.folderChanged {
+                Terminal.folderChanged = false
+                if let refreshed = onFolderChanged?() {
+                    items = refreshed.items
+                    details = refreshed.details
+                    rebuildDetailFor()
+                    applyFilter()
+                }
+                needsRedraw = true
+            }
+
             if selected < top { top = selected; needsRedraw = true }
             if selected >= top + viewport { top = selected - viewport + 1; needsRedraw = true }
             let maxTop = max(0, filteredItems.count - viewport)
@@ -87,16 +123,6 @@ struct TerminalMenu {
 
             guard let key = Terminal.readKey(timeoutMs: 150) else { continue }
             needsRedraw = true
-
-            // Recompute the fuzzy filter from `query` and park the cursor on the
-            // top match.
-            func applyFilter() {
-                filteredItems = query.isEmpty
-                    ? items.map { ($0, []) }
-                    : FuzzyMatch.filterAndSort(items, query: query)
-                selected = 0
-                top = 0
-            }
 
             switch key {
             // ── Navigation, paging, mouse and open: these never collide with

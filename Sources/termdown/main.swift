@@ -221,11 +221,15 @@ guard FileManager.default.fileExists(atPath: rootURL.path, isDirectory: &isDir),
 
 // MARK: - Discover markdown files
 
-let entries = FileScanner.scan(root: rootURL, ignorePatterns: appConfig.ignorePatterns ?? [])
+var entries = FileScanner.scan(root: rootURL, ignorePatterns: appConfig.ignorePatterns ?? [])
 guard !entries.isEmpty else {
     print("No markdown files found under \(rootURL.path)")
     exit(0)
 }
+
+// Watch the folder so newly added/removed files show up in the picker
+// without restarting termdown.
+FolderWatcher.start(root: rootURL)
 
 // MARK: - Main loop: pick a file -> view it -> repeat
 
@@ -241,11 +245,15 @@ func relativeDate(_ date: Date) -> String {
     return fmt.string(from: date)
 }
 
-let details = entries.map { entry -> String in
-    let attrs = try? FileManager.default.attributesOfItem(atPath: entry.url.path)
-    guard let date = attrs?[.modificationDate] as? Date else { return "" }
-    return relativeDate(date)
+func fileDetails(_ entries: [FileScanner.Entry]) -> [String] {
+    entries.map { entry -> String in
+        let attrs = try? FileManager.default.attributesOfItem(atPath: entry.url.path)
+        guard let date = attrs?[.modificationDate] as? Date else { return "" }
+        return relativeDate(date)
+    }
 }
+
+var details = fileDetails(entries)
 
 let homePath = FileManager.default.homeDirectoryForCurrentUser.path
 let displayPath = rootURL.path.hasPrefix(homePath)
@@ -262,6 +270,23 @@ menu.mouseEnabled = mouseEnabled
 
 // Project-wide search across all discovered files (reused from list + pager).
 let liveGrep = LiveGrep(entries: entries.map { ($0.url, $0.relativePath) })
+
+// Re-scan the directory after `FolderWatcher` reports a change, syncing
+// `entries`/`details`/`liveGrep` if the file list actually differs (an
+// FSEvents firing can also be a same-file mtime touch with no list change).
+@discardableResult
+func refreshEntries() -> Bool {
+    let rescanned = FileScanner.scan(root: rootURL, ignorePatterns: appConfig.ignorePatterns ?? [])
+    guard rescanned.map(\.relativePath) != entries.map(\.relativePath) else { return false }
+    entries = rescanned
+    details = fileDetails(entries)
+    liveGrep.updateEntries(entries.map { ($0.url, $0.relativePath) })
+    return true
+}
+
+menu.onFolderChanged = {
+    refreshEntries() ? (items: entries.map { $0.relativePath }, details: details) : nil
+}
 
 // Render any markdown file at a given width (current doc, reload, link nav).
 let renderFile: (URL, Int) -> RenderedDocument? = { url, w in

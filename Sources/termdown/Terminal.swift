@@ -17,6 +17,10 @@ enum Terminal {
     /// Set by the `SIGWINCH` handler; the UI loops poll this to reflow on resize.
     static var didResize = false
 
+    /// Set by `FolderWatcher`'s FSEvents callback when the watched directory's
+    /// contents change; the picker polls this to refresh its file list.
+    static var folderChanged = false
+
     private static var altScreenActive = false
 
     /// Switch the terminal into raw (cbreak) mode: no echo, no line buffering.
@@ -103,12 +107,14 @@ enum Terminal {
             Terminal.showCursor()
             Terminal.exitAltScreen()
             Terminal.disableRawMode()
+            FolderWatcher.stop()
         }
         for sig in [SIGINT, SIGTERM] {
             signal(sig) { _ in
                 Terminal.showCursor()
                 Terminal.exitAltScreen()
                 Terminal.disableRawMode()
+                FolderWatcher.stop()
                 _exit(0)
             }
         }
