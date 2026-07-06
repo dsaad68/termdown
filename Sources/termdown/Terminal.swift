@@ -111,10 +111,14 @@ enum Terminal {
         }
         for sig in [SIGINT, SIGTERM] {
             signal(sig) { _ in
+                // Only restore state with an effect that outlives the process (the
+                // terminal mode/screen). FSEventStream teardown isn't safe to call
+                // from a signal handler (it's not async-signal-safe) and isn't
+                // needed here: `_exit` tears the whole process down immediately, so
+                // its background queue and kqueue fd go away with it regardless.
                 Terminal.showCursor()
                 Terminal.exitAltScreen()
                 Terminal.disableRawMode()
-                FolderWatcher.stop()
                 _exit(0)
             }
         }

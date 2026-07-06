@@ -34,14 +34,8 @@ struct TerminalMenu {
     /// Show the menu and return the user's chosen action. When `context` is set
     /// (e.g. "New tab"), the launch wordmark is replaced with a slim header so the
     /// finder doesn't look like the whole app relaunching.
-    func run(initialSelection: Int = 0, context: String? = nil) -> Action {
+    mutating func run(initialSelection: Int = 0, context: String? = nil) -> Action {
         guard !items.isEmpty else { return .quit }
-
-        // `run()` is non-mutating, so a folder-change refresh updates these
-        // local shadows rather than `self.items`/`self.details` — the caller
-        // re-seeds a fresh `TerminalMenu` before the next `run()` call anyway.
-        var items = self.items
-        var details = self.details
 
         // Fast lookup for the per-item secondary column.
         var detailFor: [String: String] = [:]
