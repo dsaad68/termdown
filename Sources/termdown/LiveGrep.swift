@@ -9,7 +9,7 @@ final class LiveGrep {
     private struct Source { let url: URL; let relativePath: String; let lines: [String] }
     struct Hit { let url: URL; let relativePath: String; let lineNo: Int; let preview: String }
 
-    private let entries: [(url: URL, relativePath: String)]
+    private var entries: [(url: URL, relativePath: String)]
     private var cache: [Source]?
 
     private static let resultCap = 500
@@ -17,6 +17,14 @@ final class LiveGrep {
 
     init(entries: [(url: URL, relativePath: String)]) {
         self.entries = entries
+    }
+
+    /// Replace the searchable file set (e.g. after the watched folder
+    /// changed) and drop the cached file contents so new/removed files take
+    /// effect on the next search.
+    func updateEntries(_ newEntries: [(url: URL, relativePath: String)]) {
+        entries = newEntries
+        cache = nil
     }
 
     /// File contents are read once and cached so repeated opens and per-keystroke

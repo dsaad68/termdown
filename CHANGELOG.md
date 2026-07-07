@@ -6,6 +6,14 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-07-07
+
+### Added
+- **Live folder watching**: the file picker, "New tab" picker, and project
+  search now notice markdown files added, removed, or renamed in the watched
+  directory while termdown is running (via macOS FSEvents) — no more
+  restarting to see new files.
+
 ## [0.1.5] - 2026-06-22
 
 ### Added

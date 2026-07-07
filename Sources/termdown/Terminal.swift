@@ -17,6 +17,10 @@ enum Terminal {
     /// Set by the `SIGWINCH` handler; the UI loops poll this to reflow on resize.
     static var didResize = false
 
+    /// Set by `FolderWatcher`'s FSEvents callback when the watched directory's
+    /// contents change; the picker polls this to refresh its file list.
+    static var folderChanged = false
+
     private static var altScreenActive = false
 
     /// Switch the terminal into raw (cbreak) mode: no echo, no line buffering.
@@ -103,9 +107,15 @@ enum Terminal {
             Terminal.showCursor()
             Terminal.exitAltScreen()
             Terminal.disableRawMode()
+            FolderWatcher.stop()
         }
         for sig in [SIGINT, SIGTERM] {
             signal(sig) { _ in
+                // Only restore state with an effect that outlives the process (the
+                // terminal mode/screen). FSEventStream teardown isn't safe to call
+                // from a signal handler (it's not async-signal-safe) and isn't
+                // needed here: `_exit` tears the whole process down immediately, so
+                // its background queue and kqueue fd go away with it regardless.
                 Terminal.showCursor()
                 Terminal.exitAltScreen()
                 Terminal.disableRawMode()

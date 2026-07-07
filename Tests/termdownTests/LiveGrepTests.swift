@@ -73,4 +73,20 @@ final class LiveGrepTests: XCTestCase {
         let hits = grep.matches("hit")
         XCTAssertEqual(hits.map { $0.lineNo }, [1, 3, 4])
     }
+
+    /// `updateEntries` drops the cached file contents so a file added after
+    /// the picker was opened (and search results cached) is found on the
+    /// next search, mirroring a folder-watch refresh.
+    func testUpdateEntriesPicksUpNewFile() {
+        let a = write("a.md", "alpha only")
+        let grep = LiveGrep(entries: [a])
+        XCTAssertTrue(grep.matches("needle").isEmpty)   // populates the cache without the new file
+
+        let b = write("b.md", "beta needle here")
+        grep.updateEntries([a, b])
+
+        let hits = grep.matches("needle")
+        XCTAssertEqual(hits.count, 1)
+        XCTAssertEqual(hits[0].relativePath, "b.md")
+    }
 }
