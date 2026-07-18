@@ -55,8 +55,10 @@ swift run termdown ~/notes    # scan a specific directory
     (via [Chroma]), drawn as a framed card and mapped onto the matte palette
   - **Mermaid diagrams**: ` ```mermaid ` blocks render as ASCII/Unicode art
     (flowcharts and sequence diagrams) via a native Swift port of
-    [mermaid-ascii] — no external tools. Falls back to a highlighted code block
-    for unsupported diagram types
+    [mermaid-ascii] — no external tools. All node shapes are accepted
+    (`[]`, `()`, `{}`, `([])`, `[[]]`, `[()]`, `(())`, `{{}}`, `>]`) and drawn as
+    rectangles; labels may be quoted and may span lines with `\n` or `<br>`.
+    Falls back to a highlighted code block for unsupported diagram types
   - GFM tables drawn with box-drawing borders and column alignment
   - Block quotes (including nested)
   - **GitHub alerts**: `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, etc. as colored callouts

@@ -6,6 +6,23 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Mermaid node shapes other than `[...]` are now parsed.** `A{"Decide"}`,
+  `A("x")`, `A(["x"])`, `A[["x"]]`, `A[("x")]`, `A(("x"))`, `A{{"x"}}` and
+  `A>"x"]` previously fell through the parser, so the raw syntax became the
+  label — a box captioned `A{"Decide"}` rather than one reading `Decide`. Every
+  shape is still *drawn* as a rectangle (as upstream mermaid-ascii does); only
+  the delimiters are now stripped.
+- **A `\n` inside a label no longer splits the statement.** Statement splitting
+  tracked only `[`/`]` depth and ignored quotes entirely, so a multi-line label
+  in `{...}` was cut in half. The tail either became a phantom disconnected node
+  or, when it contained a space, tripped the bare-node-id check and dropped the
+  whole diagram to a code block.
+- **Quoted edge labels** now have their quotes stripped and line breaks
+  flattened; `-->|"fail, retries < 2\n(with feedback)"|` rendered verbatim,
+  escape and all. Edge labels draw inline along a one-row arrow, so a `\n` or
+  `<br>` becomes a space rather than wrapping.
+
 ### Added
 - **Mouse text selection**: with `--mouse-select` (or `mouse-select: true`),
   drag in the viewer to select text character by character — across lines and
