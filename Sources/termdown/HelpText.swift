@@ -40,6 +40,7 @@ extension Terminal {
             "Shift+↑/↓, J/K   Select lines (auto-enters cursor mode)",
             "y                Copy selection as raw markdown",
             "Y                Copy selection as rendered text",
+            "Drag             Select text, copied on release (--mouse-select)",
             "Esc              Exit cursor mode / clear selection",
         ]),
         ("Search", [

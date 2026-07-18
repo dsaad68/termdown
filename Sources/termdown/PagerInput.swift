@@ -159,6 +159,7 @@ extension Pager {
         if case .char(let c) = key, let canonical = keyTranslation[c] {
             key = .char(canonical)
         }
+        dropTextSelection(unless: key)
         switch key {
         case .up, .char("k"):
             navUp(1)
@@ -177,8 +178,8 @@ extension Pager {
             hscroll = min(maxHscroll, hscroll + Pager.hStep)
         case .mouseScroll(let delta):
             top = max(0, min(maxTop, top + delta))   // cursor follows via clampCursorToView()
-        case .mouseClick(let x, let y):
-            handleClick(x: x, y: y)
+        case .mouseClick, .mouseDrag, .mouseRelease:
+            handleMouseButton(key)
         case .pageDown, .char(" "), .char("f"):
             navDown(contentRows)
         case .pageUp, .char("b"):
@@ -317,8 +318,11 @@ extension Pager {
             }
         case .char("y"):
             // With a live selection, `y` copies it as raw markdown; otherwise it
-            // falls back to copying the nearest code block.
-            if cursorVisible, let sel = selectionRange() {
+            // falls back to copying the nearest code block. A mouse text
+            // selection is character-precise, so it re-copies as rendered text.
+            if let sel = textSelection {
+                copyTextSelection(sel)
+            } else if cursorVisible, let sel = selectionRange() {
                 copySelection(sel, asMarkdown: true)
             } else if let block = nearestCodeBlock(codeBlocks, top: top, rows: contentRows), !block.text.isEmpty {
                 Terminal.copyToClipboard(block.text)
@@ -332,7 +336,9 @@ extension Pager {
         case .char("Y"):
             // With a live selection, `Y` copies it as rendered text; otherwise it
             // falls back to copying the focused / nearest link URL.
-            if cursorVisible, let sel = selectionRange() {
+            if let sel = textSelection {
+                copyTextSelection(sel)
+            } else if cursorVisible, let sel = selectionRange() {
                 copySelection(sel, asMarkdown: false)
             } else if let i = linkFocus ?? firstVisibleLink(top: top, rows: contentRows), i < links.count {
                 Terminal.copyToClipboard(links[i].url)

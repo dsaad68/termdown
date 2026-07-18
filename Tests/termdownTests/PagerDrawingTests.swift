@@ -101,4 +101,85 @@ final class PagerDrawingTests: XCTestCase {
         // The focused header carries an ↑↓ affordance.
         XCTAssertTrue(Ansi.strip(focused[0]).contains("\u{2191}\u{2193}"))
     }
+
+    // MARK: - Mouse text selection
+
+    private func selectionPager() -> Pager {
+        var p = Pager(title: "doc.md", lines: [])
+        p.lines = (0..<30).map { "line \($0) with some text" }
+        p.plainLines = p.lines
+        p.mouseSelectEnabled = true
+        return p
+    }
+
+    /// The frame invariant: autowrap is off, so every row must be exactly `cols`
+    /// display columns. A selection tint inserts escape sequences only, so it
+    /// must not change any row's measured width — if it did, the right border
+    /// and scrollbar column would be clipped away under tmux.
+    func testSelectionKeepsEveryRowExactlyColsWide() {
+        var p = selectionPager()
+        p.textSelection = TextSelection(anchor: TextPoint(line: 1, col: 4),
+                                        head: TextPoint(line: 3, col: 8))
+        let frame = p.buildFrame(top: 0, contentRows: 10, cols: 80, maxTop: 20, available: 70,
+                                 sidebarActive: false, sidebarFocus: false, sidebarCursor: 0,
+                                 wrapOn: true, hscroll: 0, followMode: false,
+                                 reloadFlashActive: false, title: "doc.md",
+                                 searchQuery: "", searchMatches: [], currentMatchIndex: 0,
+                                 searchMode: false, gotoMode: false, gotoInput: "",
+                                 linkFocus: nil, copyFlash: nil)
+        for (i, row) in frame.enumerated() {
+            XCTAssertEqual(Ansi.width(row), 80, "row \(i) is \(Ansi.width(row)) cols, not 80")
+        }
+    }
+
+    /// Selection columns are stored in content coordinates, so a horizontally
+    /// scrolled viewport must shift them left by `hscroll` — otherwise the tint
+    /// slides away from the text it belongs to.
+    func testSelectionShiftsWithHorizontalScroll() {
+        var p = selectionPager()
+        p.lines = ["0123456789abcdefghij"]
+        p.plainLines = p.lines
+        // Content columns 10..<14 ("abcd") with the view scrolled right by 10
+        // land on screen columns 0..<4 of the clipped row.
+        p.textSelection = TextSelection(anchor: TextPoint(line: 0, col: 10),
+                                        head: TextPoint(line: 0, col: 14))
+        let frame = p.buildFrame(top: 0, contentRows: 3, cols: 40, maxTop: 0, available: 30,
+                                 sidebarActive: false, sidebarFocus: false, sidebarCursor: 0,
+                                 wrapOn: false, hscroll: 10, followMode: false,
+                                 reloadFlashActive: false, title: "doc.md",
+                                 searchQuery: "", searchMatches: [], currentMatchIndex: 0,
+                                 searchMode: false, gotoMode: false, gotoInput: "",
+                                 linkFocus: nil, copyFlash: nil)
+        let bg = Ansi.code(Ansi.bg(Ansi.Pastel.selectBg))
+        let parts = frame[0].components(separatedBy: bg)
+        XCTAssertEqual(parts.count, 2, frame[0].debugDescription)
+        // Everything before the tint is chrome only — the tint starts at "abcd".
+        XCTAssertEqual(Ansi.strip(parts[0]), "  ")
+        XCTAssertTrue(Ansi.strip(parts[1]).hasPrefix("abcd"), Ansi.strip(parts[1]))
+        XCTAssertEqual(Ansi.width(frame[0]), 40)
+    }
+
+    /// Tinting must not disturb the text itself — same visible characters with
+    /// and without a selection.
+    func testSelectionLeavesVisibleTextUnchanged() {
+        var plain = selectionPager()
+        let base = plain.buildFrame(top: 0, contentRows: 10, cols: 80, maxTop: 20, available: 70,
+                                    sidebarActive: false, sidebarFocus: false, sidebarCursor: 0,
+                                    wrapOn: true, hscroll: 0, followMode: false,
+                                    reloadFlashActive: false, title: "doc.md",
+                                    searchQuery: "", searchMatches: [], currentMatchIndex: 0,
+                                    searchMode: false, gotoMode: false, gotoInput: "",
+                                    linkFocus: nil, copyFlash: nil)
+        var sel = selectionPager()
+        sel.textSelection = TextSelection(anchor: TextPoint(line: 1, col: 4),
+                                          head: TextPoint(line: 3, col: 8))
+        let tinted = sel.buildFrame(top: 0, contentRows: 10, cols: 80, maxTop: 20, available: 70,
+                                    sidebarActive: false, sidebarFocus: false, sidebarCursor: 0,
+                                    wrapOn: true, hscroll: 0, followMode: false,
+                                    reloadFlashActive: false, title: "doc.md",
+                                    searchQuery: "", searchMatches: [], currentMatchIndex: 0,
+                                    searchMode: false, gotoMode: false, gotoInput: "",
+                                    linkFocus: nil, copyFlash: nil)
+        XCTAssertEqual(base.map { Ansi.strip($0) }, tinted.map { Ansi.strip($0) })
+    }
 }

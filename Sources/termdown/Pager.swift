@@ -64,6 +64,11 @@ struct Pager {
     /// Whether mouse scroll events are enabled.
     var mouseEnabled: Bool = false
 
+    /// Whether drag-to-select is enabled (implies mouse tracking). Off by default
+    /// because motion reporting takes click-drag away from the terminal's own
+    /// text selection.
+    var mouseSelectEnabled: Bool = false
+
     // MARK: - Layout chrome constants
 
     static let leftMargin = 2
@@ -143,6 +148,11 @@ struct Pager {
     // range between this anchor and `cursorLine`. Shift+arrows / Shift+J/K extend
     // it; a plain motion clears it.
     var selectionAnchor: Int?
+    // Character-precise mouse selection (`mouse-select`). Independent of the
+    // line selection above so the keyboard's `y`/`Y` behaviour is untouched.
+    var textSelection: TextSelection?
+    var dragAnchor: TextPoint?
+    var dragMoved = false
 
     // Inline edit mode (activated by `e`): the cursor's block becomes an editable
     // raw-markdown field while the rest of the document stays rendered. On Enter
@@ -194,9 +204,12 @@ struct Pager {
     /// Display the content and block until the user exits (q / Esc).
     mutating func run() {
         Terminal.hideCursor()
-        if mouseEnabled { Terminal.enableMouseTracking() }
+        // `mouse-select` needs the pointer even when plain mouse mode is off, so
+        // either setting turns tracking on; only the former asks for motion.
+        let wantsMouse = mouseEnabled || mouseSelectEnabled
+        if wantsMouse { Terminal.enableMouseTracking(drag: mouseSelectEnabled) }
         defer {
-            if mouseEnabled { Terminal.disableMouseTracking() }
+            if wantsMouse { Terminal.disableMouseTracking() }
             Terminal.showCursor()
         }
 

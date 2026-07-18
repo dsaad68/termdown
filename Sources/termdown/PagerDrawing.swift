@@ -83,6 +83,18 @@ extension Pager {
                 // marker under --no-color).
                 if inField { cell = Ansi.bgRow(cell, bg: P.outlineSelBg, cols: available) }
                 else if isCursor || inSelection { cell = Ansi.bgRow(cell, bg: P.selectBg, cols: available) }
+                // Character-precise mouse selection, applied last: `truncate`
+                // above strips styling when it truncates, and `bgRow` would
+                // otherwise overwrite a sub-range tint. Columns are stored in
+                // content coordinates, so shift them into the clipped view.
+                if let sel = textSelection,
+                   let r = sel.columnRange(forLine: lineIdx, width: available + hscroll) {
+                    let lo = max(0, r.lowerBound - hscroll)
+                    let hi = min(available, r.upperBound - hscroll)
+                    if lo < hi {
+                        cell = Ansi.bgRange(Ansi.pad(cell, to: available), from: lo, to: hi, bg: P.selectBg)
+                    }
+                }
             }
 
             var row: String

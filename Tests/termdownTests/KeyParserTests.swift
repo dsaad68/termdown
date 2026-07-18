@@ -129,10 +129,31 @@ final class KeyParserTests: XCTestCase {
         // Left-button (0) press carries 1-based (col, row).
         XCTAssertEqual(decode(csi("<0;10;5M")), .mouseClick(x: 10, y: 5))
         XCTAssertEqual(decode(csi("<0;132;48M")), .mouseClick(x: 132, y: 48))
-        // Release ('m') is not a click.
-        XCTAssertEqual(decode(csi("<0;10;5m")), .other)
         // Other buttons (e.g. right = 2) are ignored.
         XCTAssertEqual(decode(csi("<2;10;5M")), .other)
+        XCTAssertEqual(decode(csi("<2;10;5m")), .other)
+    }
+
+    func testMouseRelease() {
+        // Release ('m') on the left button is its own event — it ends a drag.
+        XCTAssertEqual(decode(csi("<0;10;5m")), .mouseRelease(x: 10, y: 5))
+    }
+
+    func testMouseDrag() {
+        // Motion bit (32) set with the left button held = a drag.
+        XCTAssertEqual(decode(csi("<32;10;5M")), .mouseDrag(x: 10, y: 5))
+        XCTAssertEqual(decode(csi("<32;7;3m")), .mouseDrag(x: 7, y: 3))
+        // Motion with a non-left button is still ignored (34 = right + motion).
+        XCTAssertEqual(decode(csi("<34;10;5M")), .other)
+    }
+
+    func testMouseModifiersAreMasked() {
+        // Modifier bits (Shift 4 / Alt 8 / Ctrl 16) must not hide the button.
+        XCTAssertEqual(decode(csi("<4;10;5M")), .mouseClick(x: 10, y: 5))
+        XCTAssertEqual(decode(csi("<16;10;5M")), .mouseClick(x: 10, y: 5))
+        // Wheel with a modifier still scrolls (68 = 64 | 4 = shift + wheel up).
+        XCTAssertEqual(decode(csi("<68;1;1M")), .mouseScroll(-3))
+        XCTAssertEqual(decode(csi("<69;1;1M")), .mouseScroll(3))
     }
 
     // MARK: - Unknown sequences

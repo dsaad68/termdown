@@ -51,18 +51,28 @@ enum Terminal {
 
     private static var mouseTrackingEnabled = false
 
-    /// Enable mouse tracking for scroll events (SGR mode).
-    static func enableMouseTracking() {
+    /// Enable mouse tracking for scroll events (SGR mode). With `drag`, also turn
+    /// on button-event tracking (`?1002h`) so motion is reported while a button is
+    /// held — what drag-to-select needs. `?1003h` (any motion) would report every
+    /// pointer move and is deliberately not used.
+    ///
+    /// Motion tracking takes click-drag away from the terminal's own text
+    /// selection, so it stays behind the opt-in `mouse-select` setting.
+    static func enableMouseTracking(drag: Bool = false) {
         if mouseTrackingEnabled { return }
         write("\u{1B}[?1000h") // Enable mouse tracking
+        if drag { write("\u{1B}[?1002h") } // Report motion while a button is held
         write("\u{1B}[?1006h") // Enable SGR mode for better coordinates
         mouseTrackingEnabled = true
     }
 
-    /// Disable mouse tracking.
+    /// Disable mouse tracking. Sent unconditionally for every mode we might have
+    /// enabled — this runs from `disableRawMode()`, which the atexit hook and the
+    /// SIGINT/SIGTERM handlers both call, so no mode can leak on an abnormal exit.
     static func disableMouseTracking() {
         if !mouseTrackingEnabled { return }
         write("\u{1B}[?1006l") // Disable SGR mode
+        write("\u{1B}[?1002l") // Disable button-event (drag) tracking
         write("\u{1B}[?1000l") // Disable mouse tracking
         mouseTrackingEnabled = false
     }

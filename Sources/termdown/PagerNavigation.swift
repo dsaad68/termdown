@@ -21,6 +21,9 @@ extension Pager {
     /// wrap/width toggle, sidebar show/hide, navigation).
     mutating func reflowIfNeeded(renderWidth: Int) {
         guard renderWidth != currentRenderWidth else { return }
+        // Re-wrapping moves every display row and column, so a mouse selection
+        // captured against the old layout would paint over unrelated text.
+        clearTextSelection()
         if let doc = renderCurrent(renderWidth) {
             baseLines = doc.lines
             baseHeadings = doc.headings

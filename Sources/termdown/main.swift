@@ -16,6 +16,7 @@ struct Config {
     var themeName: String?
     var noColor: Bool = false
     var mouse: Bool?  // nil = use yaml/default
+    var mouseSelect: Bool?  // nil = use yaml/default
     var directory: String?
     var renderFile: String?
     var showHelp: Bool = false
@@ -53,6 +54,10 @@ while let arg = args.first {
         config.mouse = true
     case "--no-mouse":
         config.mouse = false
+    case "--mouse-select":
+        config.mouseSelect = true
+    case "--no-mouse-select":
+        config.mouseSelect = false
     case "render":
         guard let file = args.first else {
             FileHandle.standardError.write(Data("termdown: render requires a file path\n".utf8))
@@ -88,7 +93,11 @@ if !config.noColor {
 if config.mouse == nil {
     config.mouse = appConfig.mouse ?? false
 }
+if config.mouseSelect == nil {
+    config.mouseSelect = appConfig.mouseSelect ?? false
+}
 let mouseEnabled = config.mouse ?? false
+let mouseSelectEnabled = config.mouseSelect ?? false
 
 // Viewer key rebindings (config `key-<action>: <char>`) → canonical-key translation.
 let keyTranslation = KeyBindings.translation(from: appConfig.keyBindings)
@@ -128,6 +137,9 @@ if config.showHelp {
       --no-color        Disable ANSI colors
       --mouse           Enable mouse scroll (overrides config)
       --no-mouse        Disable mouse scroll (overrides config)
+      --mouse-select    Enable drag-to-select text, copied on release. Replaces
+                        the terminal's own click-drag selection while active
+      --no-mouse-select Disable drag-to-select (overrides config)
       --version, -V     Show version information
       --help, -h        Show this help message
     """)
@@ -172,6 +184,7 @@ if config.useStdin {
         var pager = Pager(title: "stdin", lines: [])
         pager.fixedWidth = config.width
         pager.mouseEnabled = mouseEnabled
+        pager.mouseSelectEnabled = mouseSelectEnabled
         pager.renderSource = { w in
             AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners,
                          mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(source)
@@ -295,6 +308,7 @@ func viewFile(_ url: URL, query: String?) {
     pager.fileURL = url
     pager.fixedWidth = config.width
     pager.mouseEnabled = mouseEnabled
+    pager.mouseSelectEnabled = mouseSelectEnabled
     pager.initialQuery = query
     pager.renderFile = renderFile
     pager.renderText = renderText

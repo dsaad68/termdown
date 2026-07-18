@@ -6,6 +6,17 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Mouse text selection**: with `--mouse-select` (or `mouse-select: true`),
+  drag in the viewer to select text character by character — across lines and
+  starting/ending mid-word — copied to the clipboard on release. `y`/`Y`
+  re-copy the selection and any other key clears it; a click that doesn't move
+  still follows the link under it. Off by default and independent of `mouse`,
+  since motion reporting replaces the terminal's own click-drag selection.
+- `Ansi.bgRange` tints a display-column range while preserving the SGR
+  attributes underneath, so a selection drawn over a code block keeps its
+  syntax highlighting.
+
 ## [0.1.5] - 2026-06-22
 
 ### Added

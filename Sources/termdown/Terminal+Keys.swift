@@ -22,6 +22,8 @@ extension Terminal {
         case ctrlS          // save
         case mouseScroll(Int) // positive = down, negative = up
         case mouseClick(x: Int, y: Int) // left-button press at 1-based (col, row)
+        case mouseDrag(x: Int, y: Int) // motion with the left button held
+        case mouseRelease(x: Int, y: Int) // left-button release
         case other
     }
 
@@ -62,12 +64,18 @@ extension Terminal {
                             current = 0
                         } else if b == 0x4D /* M */ || b == 0x6D /* m */ {
                             let isPress = (b == 0x4D) // 'M' press, 'm' release
-                            // Buttons 64/65 = scroll up/down (press events only).
-                            if button == 64 && isPress { return .mouseScroll(-3) }
-                            if button == 65 && isPress { return .mouseScroll(3) }
-                            // Left button (0) press = a click at 1-based (x, y).
-                            if button == 0 && isPress { return .mouseClick(x: x, y: y) }
-                            return .other
+                            // The button field packs flags alongside the button
+                            // number: bit 2 = Shift, 3 = Alt, 4 = Ctrl, 5 (32) =
+                            // motion, 6 (64) = wheel. Mask them off so a drag
+                            // (0|32) or a modified click still resolves to its
+                            // button instead of falling through as `.other`.
+                            let motion = (button & 32) != 0
+                            let wheel = (button & 64) != 0
+                            let btn = button & 3
+                            if wheel && isPress { return .mouseScroll(btn == 0 ? -3 : 3) }
+                            guard btn == 0 else { return .other }  // left button only
+                            if motion { return .mouseDrag(x: x, y: y) }
+                            return isPress ? .mouseClick(x: x, y: y) : .mouseRelease(x: x, y: y)
                         } else if b >= 0x30 && b <= 0x39 {
                             current = current * 10 + Int(b - 0x30)
                             switch reading {

@@ -7,6 +7,10 @@ public struct AppConfig: Codable {
     public var width: Int?
     public var noColor: Bool?
     public var mouse: Bool?
+    /// Drag-to-select text with the mouse (default false). Independent of
+    /// `mouse`: it needs motion reporting, which costs the terminal's own
+    /// click-drag selection, so it stays a separate opt-in.
+    public var mouseSelect: Bool?
     public var ignorePatterns: [String]?
     /// Render ```mermaid fenced blocks as diagrams (default true).
     public var mermaid: Bool?
@@ -42,6 +46,11 @@ public struct AppConfig: Codable {
     # Note: enabling mouse scroll prevents native text selection in the terminal.
     # In tmux, hold Option (macOS) or Shift to select text while mouse is on.
     mouse: false
+
+    # mouse-select: Drag with the mouse to select text, copied on release
+    # (true/false). Separate from `mouse` because it reports pointer motion,
+    # which replaces the terminal's own click-drag selection entirely.
+    mouse-select: false
 
     # ignore-patterns: Extra path patterns to skip during file discovery, in
     # addition to the built-in skips (.git, node_modules, .build, ...).
@@ -110,6 +119,7 @@ public struct AppConfig: Codable {
         if let v = other.width          { width = v }
         if let v = other.noColor        { noColor = v }
         if let v = other.mouse          { mouse = v }
+        if let v = other.mouseSelect    { mouseSelect = v }
         if let v = other.ignorePatterns { ignorePatterns = v }
         if let v = other.mermaid        { mermaid = v }
         if let v = other.mermaidCharset { mermaidCharset = v }
@@ -198,6 +208,8 @@ public struct AppConfig: Codable {
                 cfg.noColor = parseBool(value)
             case "mouse":
                 cfg.mouse = parseBool(value)
+            case "mouse-select", "mouseselect", "mouse_select":
+                cfg.mouseSelect = parseBool(value)
             case "mermaid":
                 cfg.mermaid = parseBool(value)
             case "mermaid-charset", "mermaidcharset", "mermaid_charset":
