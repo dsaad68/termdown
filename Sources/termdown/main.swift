@@ -274,7 +274,8 @@ menu.path = displayPath
 menu.mouseEnabled = mouseEnabled
 
 // Project-wide search across all discovered files (reused from list + pager).
-let liveGrep = LiveGrep(entries: entries.map { ($0.url, $0.relativePath) })
+var liveGrep = LiveGrep(entries: entries.map { ($0.url, $0.relativePath) })
+liveGrep.mouseEnabled = mouseEnabled
 
 // Render any markdown file at a given width (current doc, reload, link nav).
 let renderFile: (URL, Int) -> RenderedDocument? = { url, w in
