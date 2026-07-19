@@ -117,4 +117,39 @@ final class WidthTests: XCTestCase {
         // "👍🏽" occupies columns 0..<2, so a slice at column 2 starts after it.
         XCTAssertEqual(Ansi.strip(Ansi.horizontalSlice("👍🏽ab", start: 2, width: 2)), "ab")
     }
+
+    /// A slice must occupy exactly the columns it claims — every caller pads
+    /// against that count, and one column short of `available` shifts the row
+    /// out from under the search / link / selection tints drawn beside it.
+    func testHorizontalSliceIsColumnExactAcrossWideGlyphs() {
+        // 日 spans columns 3..<5 and 語 spans 7..<9, so columns 4..<8 cut both in
+        // half. Each contributes a space per visible cell; dropping them
+        // outright (the old `col >= start` test) returned only 本語 — 2 columns
+        // where 4 were asked for.
+        let cut = Ansi.horizontalSlice("abc日本語xyz", start: 4, width: 4)
+        XCTAssertEqual(Ansi.width(cut), 4, "a straddled glyph must not shorten the slice")
+        XCTAssertEqual(Ansi.strip(cut), " 本 ", "each cut half stands in as a space")
+        // Cut by the far edge instead: 語 spans 7..<9 and only 7 is requested.
+        let tail = Ansi.horizontalSlice("abc日本語xyz", start: 3, width: 5)
+        XCTAssertEqual(Ansi.width(tail), 5)
+    }
+
+    /// Copy favors keeping the character whole where drawing favors the column
+    /// count, so the two slices deliberately differ on a straddled glyph.
+    func testClusterSliceKeepsAStraddledGlyphWhole() {
+        XCTAssertEqual(Ansi.clusterSlice("abc日本語xyz", start: 4, width: 4), "日本語")
+        XCTAssertEqual(Ansi.clusterSlice("The quick brown", start: 4, width: 5), "quick")
+        XCTAssertEqual(Ansi.clusterSlice("日本語", start: 2, width: 2), "本")
+    }
+
+    func testCharacterIndexInvertsColumnMeasurement() {
+        // "日本語テスト": each glyph is 2 columns, so column 4 is index 2.
+        XCTAssertEqual(Ansi.characterIndex("日本語テスト", atColumn: 4), 2)
+        XCTAssertEqual(Ansi.characterIndex("日本語テスト", atColumn: 0), 0)
+        // The trailing half of a wide glyph rounds past it, as a caret should.
+        XCTAssertEqual(Ansi.characterIndex("日本語テスト", atColumn: 5), 3)
+        // Past the end clamps to the end index; ASCII is 1:1.
+        XCTAssertEqual(Ansi.characterIndex("日本語テスト", atColumn: 99), 6)
+        XCTAssertEqual(Ansi.characterIndex("hello", atColumn: 3), 3)
+    }
 }

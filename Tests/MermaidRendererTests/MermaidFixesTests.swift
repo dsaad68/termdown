@@ -77,6 +77,48 @@ final class MermaidFixesTests: XCTestCase {
         XCTAssertEqual(out?.contains("a & b"), true)
     }
 
+    // MARK: - Unbalanced delimiters inside a label
+
+    /// Counting `(` and `{` toward one depth counter meant a single unbalanced
+    /// opener never returned the depth to zero, so every following statement was
+    /// swallowed into the label that opened it. Matching each closer back to its
+    /// own opener keeps one malformed label local to its line.
+    func testUnbalancedParenInLabelDoesNotSwallowTheDiagram() {
+        // Three statements stay three; the old counter left depth at 1 after the
+        // stray `(`, so no later newline split and it collapsed to two.
+        XCTAssertEqual(splitGraphLines("graph TD\nA[Retry (3x] --> B[Done]\nB --> C[End]").count, 3)
+        var opts = MermaidOptions()
+        opts.colorEnabled = false
+        let out = Mermaid.renderToString("graph TD\nA[Retry (3x] --> B[Done]\nB --> C[End]", options: opts)
+        XCTAssertNotNil(out)
+        // All three nodes survive as nodes rather than collapsing into one box
+        // whose caption is the rest of the diagram's source text.
+        XCTAssertEqual(out?.contains("Done"), true)
+        XCTAssertEqual(out?.contains("End"), true)
+        XCTAssertEqual(out?.contains("--> B[Done]"), false, "the arrow must still parse as an edge")
+    }
+
+    func testUnbalancedParenInLabelStillMasksItsOwnArrow() {
+        // `A[Cost (USD --> B`: the `]`-less label ends at the bracket, so the
+        // top-level `-->` after it is real syntax and must not be masked.
+        let masked = maskNested("A[Cost (USD] --> B")
+        XCTAssertTrue(masked.contains("-->"), "a top-level arrow must survive masking")
+    }
+
+    func testStrayCloserInLabelIsTreatedAsText() {
+        // A `:-)` smiley must not pop the depth below its enclosing `[`.
+        let masked = maskNested("A[happy :-) day] --> B")
+        XCTAssertTrue(masked.contains("-->"))
+        XCTAssertFalse(masked.contains(":-)"), "the label's own dash stays masked")
+    }
+
+    func testOddQuoteDoesNotLatchForTheRestOfTheDiagram() {
+        // An odd `"` in a comment used to latch `inQuotes` for the whole input,
+        // so no later newline split and everything after it became one
+        // statement — four lines came back as two.
+        XCTAssertEqual(splitGraphLines("graph TD\n%% it\"s a note\nA --> B\nB --> C").count, 4)
+    }
+
     // MARK: - Fix 6: classDef key/value trimming
 
     func testParseStyleClassTrimsSpacedList() {

@@ -68,6 +68,10 @@ extension Pager {
         guard !editMode, !isDirty else { return }
         guard let url = currentURL, let lastMod = lastModDate,
               let newModDate = mtime(url), newModDate > lastMod else { return }
+        // The rows and columns underneath a mouse selection are about to be
+        // replaced wholesale, so its coordinates would address different text
+        // than the highlight still shows — and `y` would copy that instead.
+        clearTextSelection()
         if let doc = renderCurrent(currentRenderWidth) {
             baseLines = doc.lines
             baseHeadings = doc.headings
@@ -83,40 +87,6 @@ extension Pager {
         lastModDate = newModDate
         reloadFlashUntil = Date().addingTimeInterval(1.5)
         needsRedraw = true
-    }
-
-    // MARK: - Search
-
-    mutating func performSearch() {
-        searchMatches = []
-        currentMatchIndex = 0
-        guard !searchQuery.isEmpty else { return }
-        let lowerQuery = searchQuery.lowercased()
-        for (lineIndex, line) in plainLines.enumerated() {
-            let lowerLine = line.lowercased()
-            var searchStart = lowerLine.startIndex
-            while let range = lowerLine.range(of: lowerQuery, range: searchStart..<lowerLine.endIndex) {
-                // Display columns, not character offsets: the highlight is drawn
-                // with `Ansi.bgRange`, which walks cells, and the two diverge on
-                // any line containing CJK or emoji.
-                let lo = Ansi.width(String(lowerLine[lowerLine.startIndex..<range.lowerBound]))
-                let hi = lo + Ansi.width(String(lowerLine[range]))
-                searchMatches.append((lineIndex, lo..<hi))
-                searchStart = range.upperBound
-            }
-        }
-    }
-
-    mutating func centerTop(on lineIndex: Int, viewport: Int) {
-        let maxTop = max(0, plainLines.count - viewport)
-        top = max(0, min(lineIndex - viewport / 2, maxTop))
-    }
-
-    mutating func ensureVisible(_ lineIndex: Int, viewport: Int) {
-        if lineIndex < top + Pager.scrolloff || lineIndex >= top + viewport - Pager.scrolloff {
-            let maxTop = max(0, plainLines.count - viewport)
-            top = max(0, min(lineIndex - Pager.scrolloff, maxTop))
-        }
     }
 
     // MARK: - Line cursor

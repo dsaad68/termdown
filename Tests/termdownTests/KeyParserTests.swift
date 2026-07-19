@@ -156,6 +156,22 @@ final class KeyParserTests: XCTestCase {
         XCTAssertEqual(decode(csi("<69;1;1M")), .mouseScroll(3))
     }
 
+    func testHorizontalWheelIsIgnored() {
+        // 66/67 are wheel-left/right (a tilt wheel or a two-finger swipe). They
+        // carry the wheel bit, so masking the button to `& 3` read them as 2/3
+        // and scrolled the document *down* for both directions.
+        XCTAssertEqual(decode(csi("<66;10;5M")), .other)
+        XCTAssertEqual(decode(csi("<67;10;5M")), .other)
+        // …including with a modifier held (70 = 66 | 4).
+        XCTAssertEqual(decode(csi("<70;10;5M")), .other)
+    }
+
+    func testWheelReleaseIsNotAClick() {
+        // A wheel event only ever presses; an 'm' must not fall through to the
+        // left-button path and surface as a phantom release.
+        XCTAssertEqual(decode(csi("<64;10;5m")), .other)
+    }
+
     // MARK: - Unknown sequences
 
     func testUnknownCsiIsOther() {

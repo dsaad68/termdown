@@ -60,8 +60,30 @@ final class PagerModalMouseTests: XCTestCase {
     func testClickOnStatusBarCancelsGoto() {
         var p = makePager()
         p.gotoMode = true
+        p.gotoInput = "42"
         XCTAssertTrue(p.handleModalMouse(.mouseClick(x: 5, y: p.contentRows + 1)))
         XCTAssertFalse(p.gotoMode)
+        XCTAssertEqual(p.gotoInput, "", "a cancelled prompt must not keep its input")
+    }
+
+    /// Cancelling has to undo the incremental search the way Escape does.
+    /// Merely closing the prompt left every match still tinted, `n`/`N` still
+    /// bound to the abandoned query, and the viewport parked wherever the
+    /// incremental scroll had taken it — a "cancel" that actually accepted.
+    func testClickOnStatusBarCancelsSearchCompletely() {
+        var p = makePager()
+        p.plainLines = ["alpha", "beta", "gamma alpha"]
+        p.searchOrigin = 0
+        p.searchMode = true
+        p.searchQuery = "alpha"
+        p.performSearch()
+        p.top = 2
+        XCTAssertFalse(p.searchMatches.isEmpty)
+        XCTAssertTrue(p.handleModalMouse(.mouseClick(x: 5, y: p.contentRows + 1)))
+        XCTAssertFalse(p.searchMode)
+        XCTAssertEqual(p.searchQuery, "")
+        XCTAssertTrue(p.searchMatches.isEmpty, "the highlights must go with the query")
+        XCTAssertEqual(p.top, 0, "the viewport returns to where `/` was pressed")
     }
 
     // MARK: - Save prompt

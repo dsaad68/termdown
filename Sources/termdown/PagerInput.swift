@@ -5,12 +5,23 @@ extension Pager {
 
     // MARK: - Incremental search input
 
+    /// Abandon an incremental search: drop the query with its highlights and put
+    /// the viewport back where `/` was pressed. Shared with the mouse path, so a
+    /// click that dismisses the prompt means the same thing Escape does.
+    mutating func cancelSearch() {
+        searchMode = false
+        searchQuery = ""; searchMatches = []; currentMatchIndex = 0
+        top = searchOrigin
+    }
+
+    mutating func cancelGoto() {
+        gotoMode = false; gotoInput = ""
+    }
+
     mutating func handleSearchMode(_ key: Terminal.Key) {
         switch key {
         case .escape:
-            searchMode = false
-            searchQuery = ""; searchMatches = []; currentMatchIndex = 0
-            top = searchOrigin
+            cancelSearch()
         case .enter:
             searchMode = false
             if !searchMatches.isEmpty {
@@ -34,7 +45,7 @@ extension Pager {
     mutating func handleGotoMode(_ key: Terminal.Key) {
         switch key {
         case .escape:
-            gotoMode = false; gotoInput = ""
+            cancelGoto()
         case .backspace:
             if !gotoInput.isEmpty { gotoInput.removeLast() }
         case .enter:
@@ -82,7 +93,6 @@ extension Pager {
         let row = y - 1
         guard row >= 0, row < contentRows else { return }   // ignore the status bar / gutter
         let lineIndex = top + row
-        let chromeLeft = sidebarActive ? (Pager.sidebarWidth + 2) : Pager.leftMargin
         let contentCol = (x - 1) - chromeLeft + hscroll
         guard contentCol >= 0 else { return }               // a click in the sidebar/margin
         if let i = links.firstIndex(where: {

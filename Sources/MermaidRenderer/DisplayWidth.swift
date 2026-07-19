@@ -6,7 +6,18 @@
 
 import Foundation
 
-enum DisplayWidth {
+public enum DisplayWidth {
+    /// How emoji clusters are measured. Mirrors `Ansi.EmojiWidthMode` in
+    /// termdownCore, and is set from the same `wide-emoji` setting: a diagram
+    /// has to measure a glyph exactly the way the pager drawing the rows around
+    /// it does, or its borders sit a cell off on every row that contains one.
+    public enum EmojiWidthMode {
+        case cluster
+        case scalar
+    }
+
+    public static var emojiWidthMode: EmojiWidthMode = .cluster
+
     /// Visual column width of a string.
     ///
     /// Iterates grapheme clusters rather than scalars so an emoji sequence
@@ -27,7 +38,7 @@ enum DisplayWidth {
     /// Visual column width of one grapheme cluster.
     static func clusterWidth(_ c: Character) -> Int {
         let scalars = Array(c.unicodeScalars)
-        guard scalars.count > 1 else {
+        guard emojiWidthMode == .cluster, scalars.count > 1 else {
             return scalars.reduce(0) { $0 + scalarWidth($1) }
         }
         var isEmojiSequence = false
@@ -78,7 +89,9 @@ enum DisplayWidth {
         inRanges(v, wideRanges)
     }
 
-    // Combining marks, zero-width spaces/joiners and variation selectors.
+    // Combining marks, zero-width spaces/joiners, the BOM and variation
+    // selectors. Byte-for-byte identical to `Ansi.zeroWidthRanges` — see the
+    // note on `stringWidth`; edit both together.
     private static let zeroWidthRanges: [(UInt32, UInt32)] = [
         (0x0300, 0x036F), (0x0483, 0x0489), (0x0591, 0x05BD), (0x05BF, 0x05BF),
         (0x05C1, 0x05C2), (0x05C4, 0x05C5), (0x05C7, 0x05C7), (0x0610, 0x061A),
@@ -89,11 +102,11 @@ enum DisplayWidth {
         (0x093A, 0x093A), (0x093C, 0x093C), (0x0941, 0x0948), (0x094D, 0x094D),
         (0x0951, 0x0957), (0x0962, 0x0963), (0x0E31, 0x0E31), (0x0E34, 0x0E3A),
         (0x0E47, 0x0E4E), (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x2064),
-        (0x20D0, 0x20F0), (0xFE00, 0xFE0F), (0xFE20, 0xFE2F), (0x1AB0, 0x1AFF),
-        (0x1DC0, 0x1DFF), (0xE0100, 0xE01EF),
+        (0x20D0, 0x20F0), (0xFE00, 0xFE0F), (0xFE20, 0xFE2F), (0xFEFF, 0xFEFF),
+        (0x1AB0, 0x1AFF), (0x1DC0, 0x1DFF), (0xE0100, 0xE01EF),
     ]
 
-    // East-Asian Wide / Fullwidth and emoji.
+    // East-Asian Wide / Fullwidth and emoji. Identical to `Ansi.wideRanges`.
     private static let wideRanges: [(UInt32, UInt32)] = [
         (0x1100, 0x115F), (0x231A, 0x231B), (0x2329, 0x232A), (0x23E9, 0x23EC),
         (0x23F0, 0x23F0), (0x23F3, 0x23F3), (0x25FD, 0x25FE), (0x2614, 0x2615),

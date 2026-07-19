@@ -23,8 +23,11 @@ All notable changes to termdown are documented here. The format is based on
   columns and a skin-tone thumb 4, while variation-selector emoji (`❤️`, `⚠️`,
   `✔️`, `➡️`) counted 1 instead of 2 — the under-count reaching 31 of the 220
   `:shortcode:` mappings. Rows containing any of them padded to the wrong
-  width, drifting the right border and scrollbar column. `wide-emoji: scalar`
-  restores the old behavior for terminals that draw the components separately.
+  width, drifting the right border and scrollbar column. The enclosed and
+  squared blocks (`🆕`, `🀄`, `🈚`, `🅾`) were under-counted the same way.
+  `wide-emoji: scalar` restores the old behavior for terminals that draw the
+  components separately, and applies to mermaid diagrams as well as document
+  rows so the two are always measured the same way.
 - **Combining marks outside Latin are now zero-width.** Only `U+0300–U+036F`
   was recognized, so every Hebrew, Arabic, Devanagari and Thai document
   over-counted. Hebrew points, Arabic marks, Devanagari matras, Thai vowels and

@@ -52,9 +52,9 @@ private func regexGroupsNested(_ pattern: String, _ original: String, _ masked: 
 /// single ASCII placeholder). The operator regexes then only see top-level
 /// operators, so `A["foo & bar"]` and `A["x --> y"]` are treated as labels
 /// rather than syntax.
-private func maskNested(_ line: String) -> String {
+func maskNested(_ line: String) -> String {
     var out = String.UnicodeScalarView()
-    var depth = 0
+    var shapes = ShapeNesting()
     var inQuotes = false
     let neutral = Unicode.Scalar(1)! // SOH — never a meaningful character here
     for scalar in line.unicodeScalars {
@@ -65,13 +65,13 @@ private func maskNested(_ line: String) -> String {
         // All shape delimiters, so an operator inside `{a-b}` or `(a>b)` is
         // masked the same way one inside `[a-b]` already was.
         case "[", "(", "{":
-            if !inQuotes { depth += 1 }
+            if !inQuotes { shapes.open(scalar) }
             out.append(scalar)
         case "]", ")", "}":
-            if !inQuotes, depth > 0 { depth -= 1 }
+            if !inQuotes { shapes.close(scalar) }
             out.append(scalar)
         case "-", ">", "&", "|":
-            out.append(depth > 0 || inQuotes ? neutral : scalar)
+            out.append(!shapes.isEmpty || inQuotes ? neutral : scalar)
         default:
             out.append(scalar)
         }
@@ -100,7 +100,7 @@ func parseSubgraphHeader(_ header: String) -> TextSubgraph {
 func splitGraphLines(_ mermaid: String) -> [String] {
     var result: [String] = []
     var current = ""
-    var bracketDepth = 0
+    var shapes = ShapeNesting()
     var inQuotes = false
     let chars = Array(mermaid)
     var i = 0
@@ -113,11 +113,15 @@ func splitGraphLines(_ mermaid: String) -> [String] {
         // Every node-shape delimiter counts, not just `[` — a label inside
         // `{...}`, `(...)` or any compound shape must not be split mid-way.
         case "[", "(", "{":
-            if !inQuotes { bracketDepth += 1 }
+            if !inQuotes, let s = c.unicodeScalars.first { shapes.open(s) }
         case "]", ")", "}":
-            if !inQuotes, bracketDepth > 0 { bracketDepth -= 1 }
+            if !inQuotes, let s = c.unicodeScalars.first { shapes.close(s) }
         case "\n":
-            if bracketDepth == 0, !inQuotes {
+            if shapes.isEmpty {
+                // A quoted label never spans a real newline, so an odd `"` —
+                // easily a `%%` comment or an apostrophe — must not latch and
+                // stop every later split. Scope it to the line that opened it.
+                inQuotes = false
                 result.append(current)
                 current = ""
                 skip = true
@@ -125,7 +129,7 @@ func splitGraphLines(_ mermaid: String) -> [String] {
         case "\\":
             // A literal `\n` separates statements, but never inside a label —
             // whether the label is bracketed or merely quoted.
-            if i + 1 < chars.count, chars[i + 1] == "n", bracketDepth == 0, !inQuotes {
+            if i + 1 < chars.count, chars[i + 1] == "n", shapes.isEmpty, !inQuotes {
                 result.append(current)
                 current = ""
                 i += 1

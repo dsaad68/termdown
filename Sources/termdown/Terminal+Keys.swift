@@ -80,7 +80,15 @@ extension Terminal {
                             let motion = (button & 32) != 0
                             let wheel = (button & 64) != 0
                             let btn = button & 3
-                            if wheel && isPress { return .mouseScroll(btn == 0 ? -3 : 3) }
+                            if wheel {
+                                // Only the vertical wheel scrolls: 64/65 are
+                                // up/down, but 66/67 are the horizontal tilt or
+                                // trackpad swipe, and masking those to 2/3 would
+                                // read both directions as "down". There is
+                                // nothing to scroll sideways, so ignore them.
+                                guard isPress, btn < 2 else { return .other }
+                                return .mouseScroll(btn == 0 ? -3 : 3)
+                            }
                             guard btn == 0 else { return .other }  // left button only
                             if motion { return .mouseDrag(x: x, y: y) }
                             return isPress ? .mouseClick(x: x, y: y) : .mouseRelease(x: x, y: y)

@@ -90,14 +90,17 @@ extension Pager {
 
     // MARK: - Inline editor
 
-    /// Click to position the caret. The field holds raw text rather than styled
-    /// output, so a display column is a character index here — no slicing needed.
+    /// Click to position the caret. `editCaretCol` is a character index into the
+    /// raw source line while `selectionPoint` yields a display column, and the
+    /// two only coincide on pure-ASCII text — convert, or a click on a line
+    /// holding CJK or emoji drops the caret cells away from the pointer and the
+    /// next keystroke edits the wrong place.
     private mutating func editClick(x: Int, y: Int) -> Bool {
         guard let p = selectionPoint(x: x, y: y) else { return true }
         let row = p.line - editDisplayStart
         guard row >= 0, row < editBuffer.count else { return true }
         editCaretRow = row
-        editCaretCol = max(0, min(p.col, editBuffer[row].count))
+        editCaretCol = Ansi.characterIndex(editBuffer[row], atColumn: p.col)
         needsRedraw = true
         return true
     }
@@ -129,7 +132,10 @@ extension Pager {
     private mutating func promptClick(y: Int) -> Bool {
         let row = y - 1
         guard row >= 0, row < contentRows else {
-            if searchMode { searchMode = false } else { gotoMode = false }
+            // Cancel exactly as Escape does. Only closing the prompt left the
+            // abandoned query still highlighted, still bound to `n`/`N`, and
+            // the viewport parked wherever the incremental search scrolled it.
+            if searchMode { cancelSearch() } else { cancelGoto() }
             return true
         }
         let line = top + row

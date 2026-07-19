@@ -134,8 +134,50 @@ final class PagerSelectionTests: XCTestCase {
         p.cursorVisible = true
         p.selectionAnchor = 3
         p.beginDrag(x: x(1), y: y(1))
+        p.extendDrag(x: x(4), y: y(1))
         XCTAssertFalse(p.cursorVisible)
         XCTAssertNil(p.selectionAnchor)
+    }
+
+    func testBarePressKeepsKeyboardSelection() {
+        // Only a real character selection takes the highlight over. A press that
+        // turns out to be a click — following a link, or a stray one — must not
+        // silently throw away a line selection built with `v` / `Shift+J`.
+        var p = makePager(Array(repeating: "xxxxx", count: 30))
+        p.cursorVisible = true
+        p.selectionAnchor = 3
+        p.beginDrag(x: x(1), y: y(1))
+        XCTAssertTrue(p.cursorVisible)
+        XCTAssertEqual(p.selectionAnchor, 3)
+        p.endDrag(x: x(1), y: y(1))
+        XCTAssertTrue(p.cursorVisible)
+        XCTAssertEqual(p.selectionAnchor, 3)
+    }
+
+    func testPressOutsideContentDropsAStaleSelection() {
+        // A drag leaves its highlight lit as copy confirmation. A later click on
+        // the status bar has no anchor, so it must neither re-copy that stale
+        // selection nor leave it addressable.
+        var p = makePager(["The quick brown fox"])
+        p.beginDrag(x: x(4), y: y(0))
+        p.extendDrag(x: x(9), y: y(0))
+        p.endDrag(x: x(9), y: y(0))
+        XCTAssertNotNil(p.textSelection)
+        p.copyFlashMsg = ""
+        p.beginDrag(x: x(4), y: p.contentRows + 1)   // the status bar
+        p.endDrag(x: x(4), y: p.contentRows + 1)
+        XCTAssertNil(p.textSelection)
+        XCTAssertEqual(p.copyFlashMsg, "", "a status-bar click must not re-copy")
+    }
+
+    func testPressInSidebarDoesNotStartASelection() {
+        var p = makePager(Array(repeating: "xxxxx", count: 30))
+        p.sidebarActive = true
+        p.cursorVisible = true
+        p.beginDrag(x: 1, y: y(1))                   // inside the outline column
+        XCTAssertNil(p.dragAnchor)
+        XCTAssertNil(p.textSelection)
+        XCTAssertTrue(p.cursorVisible)
     }
 
     func testKeypressClearsSelectionButYRecopiesIt() {
@@ -167,8 +209,36 @@ final class PagerSelectionTests: XCTestCase {
         p.maxTop = 90
         p.top = 5
         p.beginDrag(x: x(0), y: y(2))
-        p.extendDrag(x: x(4), y: 0)                   // above the first content row
+        // Terminals clamp to the window, so "above the viewport" arrives as the
+        // topmost content row — y: 0 is a coordinate no terminal ever emits.
+        p.extendDrag(x: x(4), y: y(0))
         XCTAssertEqual(p.top, 4)
+    }
+
+    func testDragAlongTheTopRowDoesNotAutoscroll() {
+        // Selecting rightward across the first visible row is not an up-edge
+        // gesture; scrolling there would run the document out from under it.
+        var p = makePager(Array(repeating: "xxxxxxxxxx", count: 100))
+        p.maxTop = 90
+        p.top = 5
+        p.beginDrag(x: x(0), y: y(0))
+        p.extendDrag(x: x(6), y: y(0))
+        XCTAssertEqual(p.top, 5)
+        XCTAssertEqual(p.autoScrollDir, 0)
+    }
+
+    func testTickAutoScrollKeepsExtendingTheSelection() {
+        // The head has to advance with `top`; deriving it from the last reported
+        // pointer alone froze it after one tick while the document kept moving.
+        var p = makePager(Array(repeating: "xxxxxxxxxx", count: 100))
+        p.maxTop = 90
+        p.beginDrag(x: x(0), y: y(0))
+        p.extendDrag(x: x(4), y: p.contentRows + 1)
+        let firstHead = p.textSelection!.head.line
+        p.tickAutoScroll()
+        XCTAssertEqual(p.textSelection?.head.line, firstHead + 1)
+        p.tickAutoScroll()
+        XCTAssertEqual(p.textSelection?.head.line, firstHead + 2)
     }
 
     func testDragAndReleaseIgnoredWhenMouseSelectDisabled() {
@@ -207,103 +277,5 @@ final class PagerSelectionTests: XCTestCase {
         let sel = TextSelection(anchor: TextPoint(line: 0, col: 0),
                                 head: TextPoint(line: 40, col: 5))
         XCTAssertEqual(p.selectedText(sel), "only line")
-    }
-
-    // MARK: - Multi-click
-
-    func testWordRangeFindsWordUnderColumn() {
-        let p = makePager(["The quick brown fox"])
-        XCTAssertEqual(p.wordRange(line: 0, col: 6), 4..<9)    // inside "quick"
-        XCTAssertEqual(p.wordRange(line: 0, col: 4), 4..<9)    // on its first cell
-        XCTAssertEqual(p.wordRange(line: 0, col: 8), 4..<9)    // on its last cell
-        XCTAssertNil(p.wordRange(line: 0, col: 3))             // the space
-        XCTAssertNil(p.wordRange(line: 0, col: 99))            // past the end
-    }
-
-    /// Word boundaries are display columns, so a CJK prefix must not shift them.
-    func testWordRangeUsesDisplayColumns() {
-        let p = makePager(["日本 quick end"])   // "日本 " spans columns 0..<5
-        XCTAssertEqual(p.wordRange(line: 0, col: 6), 5..<10)
-    }
-
-    func testDoubleClickSelectsWord() {
-        var p = makePager(["The quick brown fox"])
-        p.beginDrag(x: x(6), y: y(0))
-        p.beginDrag(x: x(6), y: y(0))          // second press, same cell
-        XCTAssertEqual(p.selectedText(p.textSelection!), "quick")
-    }
-
-    func testTripleClickSelectsLine() {
-        var p = makePager(["The quick brown fox"])
-        for _ in 0..<3 { p.beginDrag(x: x(6), y: y(0)) }
-        XCTAssertEqual(p.selectedText(p.textSelection!), "The quick brown fox")
-    }
-
-    func testClickCountResetsOnADifferentCell() {
-        var p = makePager(["The quick brown fox"])
-        _ = p.registerClick(at: TextPoint(line: 0, col: 6))
-        XCTAssertEqual(p.registerClick(at: TextPoint(line: 0, col: 12)), 1)
-    }
-
-    func testClickCountResetsAfterTheInterval() {
-        var p = makePager(["The quick brown fox"])
-        let t0 = Date()
-        _ = p.registerClick(at: TextPoint(line: 0, col: 6), now: t0)
-        let late = t0.addingTimeInterval(Pager.multiClickInterval + 0.1)
-        XCTAssertEqual(p.registerClick(at: TextPoint(line: 0, col: 6), now: late), 1)
-    }
-
-    func testFourthClickStartsOver() {
-        var p = makePager(["word here"])
-        let t = Date()
-        XCTAssertEqual(p.registerClick(at: TextPoint(line: 0, col: 1), now: t), 1)
-        XCTAssertEqual(p.registerClick(at: TextPoint(line: 0, col: 1), now: t), 2)
-        XCTAssertEqual(p.registerClick(at: TextPoint(line: 0, col: 1), now: t), 3)
-        XCTAssertEqual(p.registerClick(at: TextPoint(line: 0, col: 1), now: t), 1)
-    }
-
-    // MARK: - Autoscroll while held
-
-    func testTickAutoScrollContinuesWhilePointerHeldAtEdge() {
-        var p = makePager(Array(repeating: "xxxxxxxxxx", count: 100))
-        p.maxTop = 90
-        p.beginDrag(x: x(0), y: y(0))
-        p.extendDrag(x: x(4), y: p.contentRows + 1)   // past the bottom edge
-        let afterDrag = p.top
-        p.tickAutoScroll()                            // no further motion reported
-        XCTAssertEqual(p.top, afterDrag + 1, "a held drag must keep scrolling")
-        p.tickAutoScroll()
-        XCTAssertEqual(p.top, afterDrag + 2)
-    }
-
-    func testTickAutoScrollInertWithoutADrag() {
-        var p = makePager(Array(repeating: "x", count: 100))
-        p.maxTop = 90
-        p.top = 5
-        p.tickAutoScroll()
-        XCTAssertEqual(p.top, 5)
-    }
-
-    func testAutoScrollStopsWhenPointerReturnsInsideViewport() {
-        var p = makePager(Array(repeating: "xxxxxxxxxx", count: 100))
-        p.maxTop = 90
-        p.beginDrag(x: x(0), y: y(0))
-        p.extendDrag(x: x(4), y: p.contentRows + 1)
-        p.extendDrag(x: x(4), y: y(2))               // back inside
-        let held = p.top
-        p.tickAutoScroll()
-        XCTAssertEqual(p.top, held, "scrolling must stop once the pointer is back")
-    }
-
-    func testReflowClearsSelection() {
-        // Re-wrapping moves every row and column; a stale selection would paint
-        // over unrelated text.
-        var p = makePager(["The quick brown fox"])
-        p.beginDrag(x: x(4), y: y(0))
-        p.extendDrag(x: x(9), y: y(0))
-        XCTAssertNotNil(p.textSelection)
-        p.currentRenderWidth = 80
-        p.reflowIfNeeded(renderWidth: 40)
-        XCTAssertNil(p.textSelection)
     }
 }

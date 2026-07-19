@@ -106,66 +106,69 @@ extension Ansi {
     private static func scalarWidth(_ s: Unicode.Scalar) -> Int {
         let v = s.value
         if v == 0 { return 0 }
-        // Zero-width: combining marks across every script (not just Latin — a
-        // Hebrew, Arabic, Devanagari or Thai mark occupies no column either),
-        // zero-width spaces/joiners, BOM, and the variation selectors (incl.
-        // U+FE0F, which selects emoji presentation but adds no column itself).
-        if (0x0300...0x036F).contains(v) ||      // Latin combining
-           (0x0483...0x0489).contains(v) ||      // Cyrillic combining
-           (0x0591...0x05BD).contains(v) ||      // Hebrew points
-           v == 0x05BF || (0x05C1...0x05C2).contains(v) ||
-           (0x05C4...0x05C5).contains(v) || v == 0x05C7 ||
-           (0x0610...0x061A).contains(v) ||      // Arabic
-           (0x064B...0x065F).contains(v) || v == 0x0670 ||
-           (0x06D6...0x06DC).contains(v) || (0x06DF...0x06E4).contains(v) ||
-           (0x0730...0x074A).contains(v) ||      // Syriac
-           (0x0900...0x0902).contains(v) || v == 0x093A ||  // Devanagari
-           (0x093C...0x093C).contains(v) || (0x0941...0x0948).contains(v) ||
-           v == 0x094D || (0x0951...0x0957).contains(v) ||
-           (0x0E31...0x0E31).contains(v) || (0x0E34...0x0E3A).contains(v) ||  // Thai
-           (0x0E47...0x0E4E).contains(v) ||
-           (0x1AB0...0x1AFF).contains(v) ||      // combining ext
-           (0x1DC0...0x1DFF).contains(v) ||      // combining supplement
-           (0x20D0...0x20F0).contains(v) ||      // combining symbols
-           (0x200B...0x200F).contains(v) ||
-           (0xFE00...0xFE0F).contains(v) ||      // variation selectors
-           (0xFE20...0xFE2F).contains(v) ||      // combining half marks
-           v == 0xFEFF ||
-           (0xE0100...0xE01EF).contains(v) {     // variation selectors supplement
-            return 0
-        }
-        // Wide (CJK, Hangul, fullwidth, common emoji blocks)
-        if (0x1100...0x115F).contains(v) ||      // Hangul Jamo
-           (0x2E80...0xA4CF).contains(v) ||      // CJK
-           (0xAC00...0xD7A3).contains(v) ||      // Hangul syllables
-           (0xF900...0xFAFF).contains(v) ||      // CJK compat
-           (0xFE30...0xFE4F).contains(v) ||      // CJK compat forms
-           (0xFF00...0xFF60).contains(v) ||      // Fullwidth forms
-           (0xFFE0...0xFFE6).contains(v) ||
-           (0x1F300...0x1FAFF).contains(v) ||    // emoji / symbols
-           (0x20000...0x3FFFD).contains(v) {     // CJK extensions
-            return 2
-        }
-        // Emoji_Presentation=Yes code points that live below U+1F300, which
-        // terminals render double-width even though legacy wcwidth tables call
-        // them single-width. Miscounting these by one column overflows a padded
-        // row and corrupts the full-screen redraw (e.g. ✅ U+2705, ⭐ U+2B50).
-        if (0x231A...0x231B).contains(v) || (0x23E9...0x23EC).contains(v) ||
-           v == 0x23F0 || v == 0x23F3 || (0x25FD...0x25FE).contains(v) ||
-           (0x2614...0x2615).contains(v) || (0x2648...0x2653).contains(v) ||
-           v == 0x267F || v == 0x2693 || v == 0x26A1 ||
-           (0x26AA...0x26AB).contains(v) || (0x26BD...0x26BE).contains(v) ||
-           (0x26C4...0x26C5).contains(v) || v == 0x26CE || v == 0x26D4 ||
-           v == 0x26EA || (0x26F2...0x26F3).contains(v) || v == 0x26F5 ||
-           v == 0x26FA || v == 0x26FD || v == 0x2705 ||
-           (0x270A...0x270B).contains(v) || v == 0x2728 || v == 0x274C ||
-           v == 0x274E || (0x2753...0x2755).contains(v) || v == 0x2757 ||
-           (0x2795...0x2797).contains(v) || v == 0x27B0 || v == 0x27BF ||
-           (0x2B1B...0x2B1C).contains(v) || v == 0x2B50 || v == 0x2B55 {
-            return 2
-        }
+        if inRanges(v, zeroWidthRanges) { return 0 }
+        if inRanges(v, wideRanges) { return 2 }
         return 1
     }
+
+    private static func inRanges(_ v: UInt32, _ ranges: [(UInt32, UInt32)]) -> Bool {
+        // Ranges are sorted and disjoint; binary search.
+        var lo = 0
+        var hi = ranges.count - 1
+        while lo <= hi {
+            let mid = (lo + hi) / 2
+            let (start, end) = ranges[mid]
+            if v < start { hi = mid - 1 } else if v > end { lo = mid + 1 } else { return true }
+        }
+        return false
+    }
+
+    // Combining marks across every script (not just Latin — a Hebrew, Arabic,
+    // Devanagari or Thai mark occupies no column either), zero-width
+    // spaces/joiners, the BOM, and the variation selectors (incl. U+FE0F, which
+    // selects emoji presentation but adds no column itself).
+    //
+    // Byte-for-byte identical to `DisplayWidth.zeroWidthRanges` in
+    // MermaidRenderer — see the note on `charWidth`. Edit both or a diagram's
+    // borders drift from the rows around it.
+    private static let zeroWidthRanges: [(UInt32, UInt32)] = [
+        (0x0300, 0x036F), (0x0483, 0x0489), (0x0591, 0x05BD), (0x05BF, 0x05BF),
+        (0x05C1, 0x05C2), (0x05C4, 0x05C5), (0x05C7, 0x05C7), (0x0610, 0x061A),
+        (0x064B, 0x065F), (0x0670, 0x0670), (0x06D6, 0x06DC), (0x06DF, 0x06E4),
+        (0x06E7, 0x06E8), (0x06EA, 0x06ED), (0x0711, 0x0711), (0x0730, 0x074A),
+        (0x07A6, 0x07B0), (0x07EB, 0x07F3), (0x0816, 0x0819), (0x081B, 0x0823),
+        (0x0825, 0x0827), (0x0829, 0x082D), (0x0859, 0x085B), (0x08E3, 0x0902),
+        (0x093A, 0x093A), (0x093C, 0x093C), (0x0941, 0x0948), (0x094D, 0x094D),
+        (0x0951, 0x0957), (0x0962, 0x0963), (0x0E31, 0x0E31), (0x0E34, 0x0E3A),
+        (0x0E47, 0x0E4E), (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x2064),
+        (0x20D0, 0x20F0), (0xFE00, 0xFE0F), (0xFE20, 0xFE2F), (0xFEFF, 0xFEFF),
+        (0x1AB0, 0x1AFF), (0x1DC0, 0x1DFF), (0xE0100, 0xE01EF),
+    ]
+
+    // East-Asian Wide / Fullwidth, plus the Emoji_Presentation=Yes code points
+    // below U+1F300 that terminals draw double-width even though legacy wcwidth
+    // tables call them narrow. Miscounting one of those by a column overflows a
+    // padded row and corrupts the full-screen redraw (e.g. ✅ U+2705, ⭐ U+2B50).
+    //
+    // Identical to `DisplayWidth.wideRanges` — same caveat as above.
+    private static let wideRanges: [(UInt32, UInt32)] = [
+        (0x1100, 0x115F), (0x231A, 0x231B), (0x2329, 0x232A), (0x23E9, 0x23EC),
+        (0x23F0, 0x23F0), (0x23F3, 0x23F3), (0x25FD, 0x25FE), (0x2614, 0x2615),
+        (0x2648, 0x2653), (0x267F, 0x267F), (0x2693, 0x2693), (0x26A1, 0x26A1),
+        (0x26AA, 0x26AB), (0x26BD, 0x26BE), (0x26C4, 0x26C5), (0x26CE, 0x26CE),
+        (0x26D4, 0x26D4), (0x26EA, 0x26EA), (0x26F2, 0x26F3), (0x26F5, 0x26F5),
+        (0x26FA, 0x26FA), (0x26FD, 0x26FD), (0x2705, 0x2705), (0x270A, 0x270B),
+        (0x2728, 0x2728), (0x274C, 0x274C), (0x274E, 0x274E), (0x2753, 0x2755),
+        (0x2757, 0x2757), (0x2795, 0x2797), (0x27B0, 0x27B0), (0x27BF, 0x27BF),
+        (0x2B1B, 0x2B1C), (0x2B50, 0x2B50), (0x2B55, 0x2B55), (0x2E80, 0x303E),
+        (0x3041, 0x33FF), (0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xA000, 0xA4CF),
+        (0xA960, 0xA97F), (0xAC00, 0xD7A3), (0xF900, 0xFAFF), (0xFE10, 0xFE19),
+        (0xFE30, 0xFE6F), (0xFF00, 0xFF60), (0xFFE0, 0xFFE6), (0x1F004, 0x1F004),
+        (0x1F0CF, 0x1F0CF), (0x1F18E, 0x1F18E), (0x1F191, 0x1F19A),
+        (0x1F1E6, 0x1F1FF), (0x1F200, 0x1F2FF), (0x1F300, 0x1F64F),
+        (0x1F680, 0x1F6FF), (0x1F900, 0x1F9FF), (0x1FA70, 0x1FAFF),
+        (0x20000, 0x3FFFD),
+    ]
 
     /// Pad a (possibly styled) string to `target` visible width.
     public static func pad(_ s: String, to target: Int, align: TextAlign = .left) -> String {
@@ -235,19 +238,68 @@ extension Ansi {
                     continue
                 }
             }
-            if col >= start && col < end {
+            let w = charWidth(c)
+            let cellEnd = col + w
+            // Admit any cluster that *overlaps* the window, not only one whose
+            // first cell is inside it: a double-width glyph straddling `start`
+            // covers a requested column, and skipping it left the slice a
+            // column short and dropped a visible character.
+            if cellEnd > start && col < end {
                 if !started {
                     if colorEnabled && !active.isEmpty { out += active }
                     started = true
                 }
-                out.append(c)
+                // A wide cluster cut by either edge cannot be drawn half-width,
+                // so stand in a space per visible cell. That keeps the result
+                // exactly `width` columns, which every caller pads against.
+                if col < start || cellEnd > end {
+                    out += String(repeating: " ", count: min(cellEnd, end) - max(col, start))
+                } else {
+                    out.append(c)
+                }
             }
-            col += charWidth(c)
+            col = cellEnd
             if col >= end { break }
             i += 1
         }
         if started && !active.isEmpty { out += reset }
         return out
+    }
+
+    /// The whole grapheme clusters of a *plain* string that overlap the display
+    /// columns `[start, start + width)`.
+    ///
+    /// Where `horizontalSlice` is column-exact — it substitutes spaces for a
+    /// glyph an edge cuts in half, because a drawn row must occupy the columns
+    /// it claims — this favors keeping a character intact. It backs copy, where
+    /// a glyph the selection visibly covered should come along whole rather
+    /// than arrive as a space.
+    public static func clusterSlice(_ s: String, start: Int, width: Int) -> String {
+        guard width > 0 else { return "" }
+        let end = start + width
+        var col = 0
+        var out = ""
+        for c in s {
+            let cellEnd = col + charWidth(c)
+            if cellEnd > start, col < end { out.append(c) }
+            col = cellEnd
+            if col >= end { break }
+        }
+        return out
+    }
+
+    /// The index of the character boundary nearest display column `col` in a
+    /// *plain* string — the inverse of summing `charWidth`, for turning a click
+    /// into a caret position. A column inside the trailing half of a wide glyph
+    /// rounds past it, and a column beyond the text maps to the end.
+    public static func characterIndex(_ s: String, atColumn col: Int) -> Int {
+        var c = 0
+        for (i, ch) in s.enumerated() {
+            let w = charWidth(ch)
+            if col < c + w { return col - c >= (w + 1) / 2 ? i + 1 : i }
+            c += w
+        }
+        return s.count
     }
 
     /// Truncate a styled string to a maximum visible width, appending an ellipsis.

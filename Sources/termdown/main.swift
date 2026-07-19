@@ -155,8 +155,13 @@ if config.showVersion {
 Ansi.colorEnabled = !config.noColor
 
 // Emoji width mode: `scalar` restores legacy per-scalar summing for terminals
-// that draw the components of a ZWJ sequence separately.
-if appConfig.wideEmoji?.lowercased() == "scalar" { Ansi.emojiWidthMode = .scalar }
+// that draw the components of a ZWJ sequence separately. Both measurement
+// tables have to move together — a diagram measured one way inside a document
+// measured the other has its borders off by a cell on every emoji row.
+if appConfig.wideEmoji?.lowercased() == "scalar" {
+    Ansi.emojiWidthMode = .scalar
+    DisplayWidth.emojiWidthMode = .scalar
+}
 
 // Detect 24-bit color support so content + chrome render in true color when the
 // terminal advertises it (most modern terminals set COLORTERM=truecolor/24bit).

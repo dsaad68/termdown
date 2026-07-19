@@ -44,13 +44,18 @@ extension Pager {
 
     // MARK: - Screen ↔ document mapping
 
-    /// Map 1-based screen coordinates to a document point, clamping into the
-    /// content area. Returns nil for rows outside the viewport (status bar).
+    /// Screen columns occupied by chrome to the left of the document text.
+    var chromeLeft: Int { sidebarActive ? (Pager.sidebarWidth + 2) : Pager.leftMargin }
+
+    /// Map 1-based screen coordinates to a document point. Returns nil for
+    /// anything that is not document text — rows outside the viewport (the
+    /// status bar) and columns inside the left chrome (the outline sidebar or
+    /// the margin), matching the guards `handleClick` already applies.
     func selectionPoint(x: Int, y: Int) -> TextPoint? {
         let row = y - 1
         guard row >= 0, row < contentRows else { return nil }
-        let chromeLeft = sidebarActive ? (Pager.sidebarWidth + 2) : Pager.leftMargin
-        let col = max(0, (x - 1) - chromeLeft + hscroll)
+        let col = (x - 1) - chromeLeft + hscroll
+        guard col >= 0 else { return nil }
         return TextPoint(line: top + row, col: col)
     }
 
@@ -160,13 +165,19 @@ extension Pager {
     /// past the viewport edge would stop scrolling. The event loop's idle tick
     /// keeps it going.
     mutating func tickAutoScroll() {
-        guard dragAnchor != nil, autoScrollDir != 0 else { return }
+        guard let anchor = dragAnchor, autoScrollDir != 0, let head = lastDragPoint else { return }
         let before = top
         top = max(0, min(maxTop, top + autoScrollDir))
-        guard top != before, let head = lastDragPoint else { return }
-        // Keep extending to the row the pointer still hovers as content moves.
-        let row = min(max(0, head.line - before + autoScrollDir), max(0, contentRows - 1))
-        textSelection = TextSelection(anchor: dragAnchor!, head: TextPoint(line: top + row, col: head.col))
+        guard top != before else { return }
+        // The pointer is pinned to one screen row, so the document row under it
+        // advances with `top`. Feed the new head back into `lastDragPoint`: the
+        // row is derived from it, so leaving it at the last *reported* position
+        // makes the row shrink by exactly what `top` gained and the selection
+        // stops growing after a tick while the document keeps scrolling.
+        let row = min(max(0, head.line - before), max(0, contentRows - 1))
+        let moved = TextPoint(line: top + row, col: head.col)
+        lastDragPoint = moved
+        textSelection = TextSelection(anchor: anchor, head: moved)
         needsRedraw = true
     }
 
@@ -176,24 +187,39 @@ extension Pager {
     /// opened here — that waits for a release without motion, so a drag that
     /// happens to start on a link selects text instead of navigating away.
     mutating func beginDrag(x: Int, y: Int) {
-        guard let p = selectionPoint(x: x, y: y) else { return }
+        guard let p = selectionPoint(x: x, y: y) else {
+            // The press landed on the status bar or in the sidebar, so no drag
+            // starts here. Drop any state a previous drag left behind, or the
+            // release would still see `dragMoved`/`textSelection` set and copy
+            // that stale selection over the clipboard a second time.
+            clearTextSelection()
+            return
+        }
         dragAnchor = p
         dragMoved = false
         textSelection = nil
         autoScrollDir = 0
         lastDragPoint = p
-        // The keyboard's full-row matte and a character tint on the same rows
-        // read as one confused highlight — only one selection is live at a time.
-        cursorVisible = false
-        clearSelection()
         // A repeat press on the same cell escalates to word then line. The
         // selection is set now rather than on release so it is visible while the
         // button is still down, as in a GUI.
         switch registerClick(at: p) {
-        case 2: selectWord(at: p); dragMoved = true
-        case 3: selectLine(at: p); dragMoved = true
+        case 2: selectWord(at: p); dragMoved = true; takeSelectionOwnership()
+        case 3: selectLine(at: p); dragMoved = true; takeSelectionOwnership()
         default: break
         }
+    }
+
+    /// Hand the one live selection over to the mouse. The keyboard's full-row
+    /// matte and a character tint on the same rows read as one confused
+    /// highlight, so only one may be lit — but this waits until a character
+    /// selection actually exists. Doing it on the bare press threw away a line
+    /// selection the user had built with `v`/`Shift+J` on every stray click,
+    /// including the clicks that only mean "follow this link".
+    private mutating func takeSelectionOwnership() {
+        guard cursorVisible || selectionAnchor != nil else { return }
+        cursorVisible = false
+        clearSelection()
     }
 
     /// Motion with the button held: extend the selection, auto-scrolling when the
@@ -202,26 +228,42 @@ extension Pager {
         guard let anchor = dragAnchor else { return }
         // Remember which edge the pointer is past so the idle tick can keep
         // scrolling while it is held still — no further motion will be reported.
-        if y - 1 < 0 {
+        //
+        // Terminals clamp the pointer to the window and report 1-based rows, so
+        // dragging above the viewport arrives as row 0 and never as a negative
+        // one: the topmost content row has to serve as the up-edge. Require the
+        // drag to have come from below it, so selecting rightward along the
+        // first visible row does not scroll the document out from under it.
+        let row = y - 1
+        if row <= 0, anchor.line > top {
             autoScrollDir = -1
             top = max(0, top - 1)
-        } else if y - 1 >= contentRows {
+        } else if row >= contentRows {
             autoScrollDir = 1
             top = min(maxTop, top + 1)
         } else {
             autoScrollDir = 0
         }
+        // Clamp back into the content area rather than letting `selectionPoint`
+        // reject the point: a drag that wanders into the margin or past an edge
+        // should keep extending from the nearest cell, not freeze.
         let clampedY = min(max(y, 1), contentRows)
-        guard let p = selectionPoint(x: x, y: clampedY) else { return }
+        let clampedX = max(x, chromeLeft + 1)
+        guard let p = selectionPoint(x: clampedX, y: clampedY) else { return }
         dragMoved = true
         lastDragPoint = p
         textSelection = TextSelection(anchor: anchor, head: p)
+        takeSelectionOwnership()
     }
 
     /// Left-button release: a drag copies its text, a stationary click falls back
     /// to the existing click behavior (follow a link).
     mutating func endDrag(x: Int, y: Int) {
-        defer { dragAnchor = nil; autoScrollDir = 0 }
+        // A release with no anchor never had a press inside the document — it
+        // began on the status bar or in the sidebar. It is not this pager's
+        // gesture, so it must neither open a link nor re-copy anything.
+        guard dragAnchor != nil else { return }
+        defer { dragAnchor = nil; dragMoved = false; autoScrollDir = 0 }
         guard dragMoved, let sel = textSelection, !sel.isEmpty else {
             textSelection = nil
             handleClick(x: x, y: y)
@@ -242,8 +284,9 @@ extension Pager {
     // MARK: - Copy
 
     /// The selected text, sliced out of the ANSI-stripped `plainLines` by display
-    /// column. `horizontalSlice` on plain text is exactly a column slice, so no
-    /// separate column→index helper is needed.
+    /// column. `clusterSlice` rather than `horizontalSlice`: an edge landing
+    /// inside a wide glyph should copy that glyph, not the space the drawing
+    /// path substitutes to keep a row's column count exact.
     func selectedText(_ sel: TextSelection) -> String {
         let (start, end) = sel.ordered
         guard start.line < plainLines.count else { return "" }
@@ -252,7 +295,7 @@ extension Pager {
         return (start.line...last).map { line -> String in
             let text = plainLines[line]
             guard let r = sel.columnRange(forLine: line, width: Ansi.width(text)) else { return "" }
-            let slice = Ansi.horizontalSlice(text, start: r.lowerBound, width: r.count)
+            let slice = Ansi.clusterSlice(text, start: r.lowerBound, width: r.count)
             return String(slice.reversed().drop(while: { $0 == " " }).reversed())
         }.joined(separator: "\n")
     }
