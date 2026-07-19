@@ -6,6 +6,8 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-07-19
+
 ### Fixed
 - **Search matches and focused links no longer flatten the line they land on.**
   Both highlights rebuilt the row from `Ansi.strip`, so a match inside a code
@@ -54,6 +56,38 @@ All notable changes to termdown are documented here. The format is based on
   flattened; `-->|"fail, retries < 2\n(with feedback)"|` rendered verbatim,
   escape and all. Edge labels draw inline along a one-row arrow, so a `\n` or
   `<br>` becomes a space rather than wrapping.
+
+- **Fast scrolling no longer flashes.** A frame is ~12 KB at a typical terminal
+  size — more than a pty delivers at once — so the terminal painted half-drawn
+  frames, and nothing coalesced wheel events, so a trackpad flick repainted once
+  per notch. Frames are now emitted as a synchronized update (DEC mode 2026) and
+  a scroll burst folds into a single redraw. Terminals without mode 2026 still
+  benefit from the coalescing.
+- **Horizontal wheel events no longer scroll the document.** A tilt wheel or
+  two-finger sideways swipe was decoded as scroll-down — in both directions — so
+  the reading position ran away.
+- **An unbalanced `(`, `{` or `)` in a mermaid label no longer eats the rest of
+  the diagram.** `A[Retry (3x]` collapsed a whole flowchart into a single box
+  captioned with the remaining source; a stray quote in a `%%` comment did the
+  same. Delimiters are now matched by kind, and quotes are scoped to a statement.
+- **Drag selection no longer discards the keyboard selection on a stray click.**
+  A press took the highlight over before it was known to be a drag, so clicking
+  a link threw away a selection built with `v`/`Shift+J`.
+- **A click on the status bar no longer re-copies the previous selection** over
+  the clipboard, and a click in the outline sidebar no longer starts a selection
+  in the document.
+- **A drag held past an edge keeps extending the selection.** It stopped growing
+  after the first tick while the document kept scrolling, and dragging above the
+  top edge never scrolled up at all.
+- **Clicking in the inline editor lands the caret where you clicked** on lines
+  containing CJK or emoji; a display column was used directly as a character
+  index, so the next keystroke edited the wrong place.
+- **Dismissing the search prompt with a click now cancels it** the way Escape
+  does, instead of leaving the abandoned query highlighted and bound to `n`/`N`.
+- **A live reload no longer leaves a stale selection**, which made `y` copy the
+  new document sliced at the old coordinates.
+- Incremental search no longer re-measures each match from the start of its
+  line, which stalled the `/` prompt a beat per keystroke in large documents.
 
 ### Added
 - **Mouse text selection**: with `--mouse-select` (or `mouse-select: true`),
