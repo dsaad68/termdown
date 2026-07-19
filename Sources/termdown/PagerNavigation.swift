@@ -96,8 +96,11 @@ extension Pager {
             let lowerLine = line.lowercased()
             var searchStart = lowerLine.startIndex
             while let range = lowerLine.range(of: lowerQuery, range: searchStart..<lowerLine.endIndex) {
-                let lo = lowerLine.distance(from: lowerLine.startIndex, to: range.lowerBound)
-                let hi = lowerLine.distance(from: lowerLine.startIndex, to: range.upperBound)
+                // Display columns, not character offsets: the highlight is drawn
+                // with `Ansi.bgRange`, which walks cells, and the two diverge on
+                // any line containing CJK or emoji.
+                let lo = Ansi.width(String(lowerLine[lowerLine.startIndex..<range.lowerBound]))
+                let hi = lo + Ansi.width(String(lowerLine[range]))
                 searchMatches.append((lineIndex, lo..<hi))
                 searchStart = range.upperBound
             }

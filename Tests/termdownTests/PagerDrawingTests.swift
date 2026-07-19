@@ -102,6 +102,81 @@ final class PagerDrawingTests: XCTestCase {
         XCTAssertTrue(Ansi.strip(focused[0]).contains("\u{2191}\u{2193}"))
     }
 
+    // MARK: - Column-range overlays (search / link focus)
+
+    private func overlayFrame(_ p: inout Pager, searchQuery: String = "",
+                              matches: [(lineIndex: Int, range: Range<Int>)] = [],
+                              current: Int = 0, linkFocus: Int? = nil,
+                              wrapOn: Bool = true, hscroll: Int = 0) -> [String] {
+        p.buildFrame(top: 0, contentRows: 6, cols: 80, maxTop: 0, available: 70,
+                     sidebarActive: false, sidebarFocus: false, sidebarCursor: 0,
+                     wrapOn: wrapOn, hscroll: hscroll, followMode: false,
+                     reloadFlashActive: false, title: "doc.md",
+                     searchQuery: searchQuery, searchMatches: matches, currentMatchIndex: current,
+                     searchMode: false, gotoMode: false, gotoInput: "",
+                     linkFocus: linkFocus, copyFlash: nil)
+    }
+
+    /// The point of moving off the strip-and-reverse helpers: a search match no
+    /// longer flattens the line it lands on. Previously any line containing a
+    /// match was rebuilt from `Ansi.strip`, losing every colour and OSC 8 link.
+    func testSearchHighlightPreservesUnderlyingStyling() {
+        var p = Pager(title: "doc.md", lines: [])
+        let styled = Ansi.color("keyword", 212) + " plain tail"
+        p.lines = [styled]
+        p.plainLines = [Ansi.strip(styled)]
+        let frame = overlayFrame(&p, searchQuery: "plain", matches: [(0, 8..<13)])
+        XCTAssertTrue(frame[0].contains(Ansi.code(Ansi.fg(212))), "syntax colour was flattened")
+        XCTAssertTrue(frame[0].contains(Ansi.code(Ansi.bg(Ansi.Pastel.searchCurBg))), "no match tint")
+        XCTAssertEqual(Ansi.strip(frame[0]).trimmingCharacters(in: .whitespaces), "keyword plain tail")
+    }
+
+    /// `bgRange` carries no weight, so current-vs-other is a colour difference.
+    func testCurrentMatchUsesADistinctTint() {
+        var p = Pager(title: "doc.md", lines: [])
+        p.lines = ["aaa bbb aaa"]
+        p.plainLines = p.lines
+        let frame = overlayFrame(&p, searchQuery: "aaa",
+                                 matches: [(0, 0..<3), (0, 8..<11)], current: 1)
+        XCTAssertTrue(frame[0].contains(Ansi.code(Ansi.bg(Ansi.Pastel.searchBg))))
+        XCTAssertTrue(frame[0].contains(Ansi.code(Ansi.bg(Ansi.Pastel.searchCurBg))))
+    }
+
+    /// Link focus used to be gated on `wrapOn`, so it never drew in no-wrap mode.
+    func testLinkFocusHighlightsInNoWrapMode() {
+        var p = Pager(title: "doc.md", lines: [],
+                      links: [LinkInfo(lineIndex: 0, url: "x.md", text: "Doc", column: 4, length: 3)])
+        p.lines = ["see Doc here"]
+        p.plainLines = p.lines
+        let frame = overlayFrame(&p, linkFocus: 0, wrapOn: false)
+        XCTAssertTrue(frame[0].contains(Ansi.code(Ansi.bg(Ansi.Pastel.linkFocusBg))),
+                      "focused link not tinted with wrapping off")
+    }
+
+    /// Previously mutually exclusive via `else if`: a non-empty query suppressed
+    /// link focus entirely, even on lines with no match.
+    func testSearchAndLinkFocusCanCoexist() {
+        var p = Pager(title: "doc.md", lines: [],
+                      links: [LinkInfo(lineIndex: 0, url: "x.md", text: "Doc", column: 4, length: 3)])
+        p.lines = ["see Doc here"]
+        p.plainLines = p.lines
+        let frame = overlayFrame(&p, searchQuery: "here", matches: [(0, 8..<12)], linkFocus: 0)
+        XCTAssertTrue(frame[0].contains(Ansi.code(Ansi.bg(Ansi.Pastel.linkFocusBg))))
+        XCTAssertTrue(frame[0].contains(Ansi.code(Ansi.bg(Ansi.Pastel.searchCurBg))))
+    }
+
+    func testOverlaysKeepRowWidthAndText() {
+        var p = Pager(title: "doc.md", lines: [],
+                      links: [LinkInfo(lineIndex: 0, url: "x.md", text: "本語", column: 3, length: 4)])
+        p.lines = ["日本語 と Doc です"]
+        p.plainLines = p.lines
+        let frame = overlayFrame(&p, searchQuery: "Doc", matches: [(0, 10..<13)], linkFocus: 0)
+        for (i, row) in frame.enumerated() {
+            XCTAssertEqual(Ansi.width(row), 80, "row \(i)")
+        }
+        XCTAssertTrue(Ansi.strip(frame[0]).contains("日本語 と Doc です"))
+    }
+
     // MARK: - Mouse text selection
 
     private func selectionPager() -> Pager {

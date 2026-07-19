@@ -7,6 +7,17 @@ All notable changes to termdown are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Search matches and focused links no longer flatten the line they land on.**
+  Both highlights rebuilt the row from `Ansi.strip`, so a match inside a code
+  block erased its syntax colouring and any OSC 8 hyperlink on the row. They now
+  use `Ansi.bgRange`, which tints the columns while preserving what is under it.
+- **Focused-link highlighting was misaligned on lines with wide characters**,
+  and never drew at all with wrapping off. `LinkInfo.column`/`length` are display
+  columns but were used to index characters. The same confusion is fixed in the
+  link-merge gap probe, which misread the gap between two fragments of one link.
+- **Search highlighting and link focus can now appear together.** They were
+  mutually exclusive, so any non-empty query suppressed link focus even on lines
+  with no match.
 - **Display width now measures grapheme clusters, not scalars.** Emoji
   sequences were summed component-by-component, so a ZWJ family counted 6
   columns and a skin-tone thumb 4, while variation-selector emoji (`❤️`, `⚠️`,

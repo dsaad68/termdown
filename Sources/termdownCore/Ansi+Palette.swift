@@ -74,6 +74,12 @@ extension Ansi {
         public static let headerBg:    Color = 237   // raised title / header surface
         public static let panelBg:     Color = 236   // sidebar / panel surface
         public static let selectBg:    Color = 238   // matte selection surface
+        // Overlay tints. Distinct from `selectBg` and from each other: several
+        // can be live on one row, and `bgRange` carries no weight/attribute, so
+        // the current match is told apart by colour rather than by bold.
+        public static let searchBg:      Color = 60    // other search matches — dark lavender
+        public static let searchCurBg:   Color = 97    // the current match — brighter
+        public static let linkFocusBg:   Color = 24    // focused link — dark teal
         public static let outlineSelBg: Color = 60   // focused outline selection — dark lavender, echoes accent 183
         public static let statusBg:    Color = 237   // status bar (lighter segment)
         public static let statusDimBg: Color = 235   // status bar (darker segment)

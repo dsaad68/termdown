@@ -69,13 +69,7 @@ extension Pager {
             let inSelection = selection?.contains(lineIdx) ?? false
             var cell = ""
             if lineIdx < total {
-                var display = view[lineIdx]
-                if !editMode, !searchQuery.isEmpty {
-                    display = highlightLine(display, lineIndex: lineIdx, matches: searchMatches, currentMatchIndex: currentMatchIndex)
-                } else if !editMode, wrapOn, let lf = linkFocus, lf < links.count,
-                          links[lf].lineIndex == lineIdx, links[lf].length > 0 {
-                    display = highlightColumns(display, start: links[lf].column, length: links[lf].length)
-                }
+                let display = view[lineIdx]
                 cell = wrapOn ? Ansi.truncate(display, to: available)
                               : Ansi.horizontalSlice(display, start: hscroll, width: available)
                 // Current-line cursor / selection / edit field: a full-width matte
@@ -83,17 +77,32 @@ extension Pager {
                 // marker under --no-color).
                 if inField { cell = Ansi.bgRow(cell, bg: P.outlineSelBg, cols: available) }
                 else if isCursor || inSelection { cell = Ansi.bgRow(cell, bg: P.selectBg, cols: available) }
-                // Character-precise mouse selection, applied last: `truncate`
-                // above strips styling when it truncates, and `bgRow` would
-                // otherwise overwrite a sub-range tint. Columns are stored in
-                // content coordinates, so shift them into the clipped view.
+                // Column-range overlays, all applied after the clip. `truncate`
+                // above strips styling when it truncates and `bgRow` would
+                // overwrite a sub-range tint, so tinting here is what keeps the
+                // underlying syntax colours — the previous strip-and-reverse
+                // helpers flattened the whole line. Painted weakest first, so a
+                // stronger overlay wins the cells they share.
+                if !editMode {
+                    if let lf = linkFocus, lf < links.count,
+                       links[lf].lineIndex == lineIdx, links[lf].length > 0 {
+                        cell = tintColumns(cell, from: links[lf].column,
+                                           to: links[lf].column + links[lf].length,
+                                           bg: P.linkFocusBg, available: available, hscroll: hscroll)
+                    }
+                    if !searchQuery.isEmpty {
+                        for (i, m) in searchMatches.enumerated() where m.lineIndex == lineIdx {
+                            cell = tintColumns(cell, from: m.range.lowerBound, to: m.range.upperBound,
+                                               bg: i == currentMatchIndex ? P.searchCurBg : P.searchBg,
+                                               available: available, hscroll: hscroll)
+                        }
+                    }
+                }
                 if let sel = textSelection,
                    let r = sel.columnRange(forLine: lineIdx, width: available + hscroll) {
-                    let lo = max(0, r.lowerBound - hscroll)
-                    let hi = min(available, r.upperBound - hscroll)
-                    if lo < hi {
-                        cell = Ansi.bgRange(Ansi.pad(cell, to: available), from: lo, to: hi, bg: P.selectBg)
-                    }
+                    cell = tintColumns(Ansi.pad(cell, to: available),
+                                       from: r.lowerBound, to: r.upperBound,
+                                       bg: P.selectBg, available: available, hscroll: hscroll)
                 }
             }
 
@@ -240,41 +249,18 @@ extension Pager {
 
     // MARK: - Highlighting
 
-    /// Re-render a line as plain text with search matches highlighted.
-    private func highlightLine(_ line: String, lineIndex: Int,
-                               matches: [(lineIndex: Int, range: Range<Int>)],
-                               currentMatchIndex: Int) -> String {
-        let onThisLine = matches.enumerated().filter { $0.element.lineIndex == lineIndex }
-        if onThisLine.isEmpty { return line }
-        let plain = Array(Ansi.strip(line))
-        let sorted = onThisLine.sorted { $0.element.range.lowerBound < $1.element.range.lowerBound }
-        var result = ""
-        var idx = 0
-        for (globalIdx, m) in sorted {
-            let lo = max(idx, m.range.lowerBound)
-            let hi = min(m.range.upperBound, plain.count)
-            if lo > idx { result += String(plain[idx..<lo]) }
-            if lo < hi {
-                let seg = String(plain[lo..<hi])
-                let codes = globalIdx == currentMatchIndex ? [7, 1] : [7]
-                result += Ansi.wrap(seg, codes)
-            }
-            idx = max(idx, hi)
-        }
-        if idx < plain.count { result += String(plain[idx...]) }
-        return result
-    }
-
-    /// Highlight a visible column range on a line (used for the focused link).
-    private func highlightColumns(_ line: String, start: Int, length: Int) -> String {
-        let plain = Array(Ansi.strip(line))
-        let lo = max(0, start)
-        let hi = min(plain.count, start + length)
-        guard lo < hi else { return line }
-        var out = ""
-        if lo > 0 { out += String(plain[0..<lo]) }
-        out += Ansi.wrap(String(plain[lo..<hi]), [7, 1])
-        if hi < plain.count { out += String(plain[hi...]) }
-        return out
+    /// Tint a content-column range on an already-clipped row.
+    ///
+    /// Columns arrive in content coordinates (what `LinkInfo` and `searchMatches`
+    /// record), so they are shifted into the clipped view and clamped to it.
+    /// `Ansi.bgRange` preserves the SGR underneath, which is the whole point:
+    /// the helpers this replaced rebuilt the line from `Ansi.strip`, so any line
+    /// carrying a search match lost its syntax colours and its OSC 8 links.
+    private func tintColumns(_ cell: String, from: Int, to: Int, bg: Ansi.Color,
+                             available: Int, hscroll: Int) -> String {
+        let lo = max(0, from - hscroll)
+        let hi = min(available, to - hscroll)
+        guard lo < hi else { return cell }
+        return Ansi.bgRange(cell, from: lo, to: hi, bg: bg)
     }
 }
