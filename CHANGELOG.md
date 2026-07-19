@@ -7,6 +7,24 @@ All notable changes to termdown are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Display width now measures grapheme clusters, not scalars.** Emoji
+  sequences were summed component-by-component, so a ZWJ family counted 6
+  columns and a skin-tone thumb 4, while variation-selector emoji (`❤️`, `⚠️`,
+  `✔️`, `➡️`) counted 1 instead of 2 — the under-count reaching 31 of the 220
+  `:shortcode:` mappings. Rows containing any of them padded to the wrong
+  width, drifting the right border and scrollbar column. `wide-emoji: scalar`
+  restores the old behavior for terminals that draw the components separately.
+- **Combining marks outside Latin are now zero-width.** Only `U+0300–U+036F`
+  was recognized, so every Hebrew, Arabic, Devanagari and Thai document
+  over-counted. Hebrew points, Arabic marks, Devanagari matras, Thai vowels and
+  the combining supplements are all zero-width now.
+- **The status bar no longer overflows a narrow terminal.** With flags like
+  NOWRAP or "N selected" present the bar could exceed the terminal width;
+  autowrap is off, so it was clipped at the margin along with the frame's right
+  edge. The title and flags elide first.
+- **Mouse tracking survives a nested UI.** Opening the file finder from the
+  pager (`T`) tore tracking down while the pager was still running, killing
+  scroll, click and drag-select for the rest of the session.
 - **Mermaid node shapes other than `[...]` are now parsed.** `A{"Decide"}`,
   `A("x")`, `A(["x"])`, `A[["x"]]`, `A[("x")]`, `A(("x"))`, `A{{"x"}}` and
   `A>"x"]` previously fell through the parser, so the raw syntax became the

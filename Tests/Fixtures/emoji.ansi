@@ -6,8 +6,8 @@ Width classes that terminals disagree about, and that padded rows depend on.
 Single-scalar emoji: 😀 🌡 🎯 — and the sub-U+1F300 ones legacy tables get
 wrong: ✅ ⭐ ✨ ❌ ⚡ ⛔.
 
-Variation-selector-16 sequences, whose base is narrow but which render wide: ❤️ ⚠️
-✔️ ➡️ ⌨️ ✏️ ☀️ ❄️.
+Variation-selector-16 sequences, whose base is narrow but which render wide: ❤️
+⚠️ ✔️ ➡️ ⌨️ ✏️ ☀️ ❄️.
 
 Skin-tone modifiers: 👍🏻 👍🏽 👍🏿 — the modifier adds no column of its own.
 
@@ -31,9 +31,9 @@ Combining marks are zero-width: éàü vs e\u{301}a\u{300}u\u{308}.
 [38;5;240m│[0m Symbol [38;5;240m│[0m Name         [38;5;240m│[0m Width [38;5;240m│[0m
 [38;5;240m├────────┼──────────────┼───────┤[0m
 [38;5;240m│[0m ✅     [38;5;240m│[0m check        [38;5;240m│[0m 2     [38;5;240m│[0m
-[38;5;240m│[0m ❤️      [38;5;240m│[0m heart vs16   [38;5;240m│[0m 2     [38;5;240m│[0m
-[38;5;240m│[0m 👍🏽   [38;5;240m│[0m thumb + tone [38;5;240m│[0m 2     [38;5;240m│[0m
-[38;5;240m│[0m 👨‍👩‍👧 [38;5;240m│[0m family zwj   [38;5;240m│[0m 2     [38;5;240m│[0m
+[38;5;240m│[0m ❤️     [38;5;240m│[0m heart vs16   [38;5;240m│[0m 2     [38;5;240m│[0m
+[38;5;240m│[0m 👍🏽     [38;5;240m│[0m thumb + tone [38;5;240m│[0m 2     [38;5;240m│[0m
+[38;5;240m│[0m 👨‍👩‍👧     [38;5;240m│[0m family zwj   [38;5;240m│[0m 2     [38;5;240m│[0m
 [38;5;240m│[0m 日本   [38;5;240m│[0m cjk          [38;5;240m│[0m 4     [38;5;240m│[0m
 [38;5;240m└────────┴──────────────┴───────┘[0m
 
@@ -41,8 +41,8 @@ Combining marks are zero-width: éàü vs e\u{301}a\u{300}u\u{308}.
 [38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
 
 [38;5;240m┌─ text ───────────────────────────────────────────────────────────────────────┐[0m
-[38;5;240m│ [0m[38;5;252m✅ done      ❤️ vs16[0m                                                         [38;5;240m │[0m
-[38;5;240m│ [0m[38;5;252m👍🏽 tone      👨‍👩‍👧 zwj[0m                                                   [38;5;240m │[0m
+[38;5;240m│ [0m[38;5;252m✅ done      ❤️ vs16[0m                                                        [38;5;240m │[0m
+[38;5;240m│ [0m[38;5;252m👍🏽 tone      👨‍👩‍👧 zwj[0m                                                         [38;5;240m │[0m
 [38;5;240m│ [0m[38;5;252m日本語 cjk    plain[0m                                                         [38;5;240m │[0m
 [38;5;240m└──────────────────────────────────────────────────────────────────────────────┘[0m
 

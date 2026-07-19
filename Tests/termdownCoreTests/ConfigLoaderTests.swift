@@ -80,6 +80,13 @@ final class ConfigLoaderTests: XCTestCase {
         XCTAssertNil(cfg?.mouseSelect)
     }
 
+    func testWideEmojiAliases() {
+        XCTAssertEqual(parse("wide-emoji: scalar")?.wideEmoji, "scalar")
+        XCTAssertEqual(parse("wideemoji: cluster")?.wideEmoji, "cluster")
+        XCTAssertEqual(parse("wide_emoji: scalar")?.wideEmoji, "scalar")
+        XCTAssertNil(parse("mouse: true")?.wideEmoji)
+    }
+
     func testMouseSelectMerges() {
         var base = AppConfig()
         base.mouseSelect = false

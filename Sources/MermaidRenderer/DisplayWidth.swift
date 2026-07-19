@@ -7,13 +7,40 @@
 import Foundation
 
 enum DisplayWidth {
-    /// Visual column width of a string (runewidth.StringWidth).
+    /// Visual column width of a string.
+    ///
+    /// Iterates grapheme clusters rather than scalars so an emoji sequence
+    /// counts as the one glyph a terminal draws: summing the parts scored 👨‍👩‍👧
+    /// as 6 and ❤️ as 1, which misplaces every box border on the row.
+    ///
+    /// This mirrors `Ansi.charWidth` in termdownCore. The two are deliberate
+    /// duplicates — MermaidRenderer stays dependency-free so it can be vendored
+    /// on its own — so a fix to either belongs in both.
     static func stringWidth(_ s: String) -> Int {
         var w = 0
-        for scalar in s.unicodeScalars {
-            w += scalarWidth(scalar)
+        for ch in s {
+            w += clusterWidth(ch)
         }
         return w
+    }
+
+    /// Visual column width of one grapheme cluster.
+    static func clusterWidth(_ c: Character) -> Int {
+        let scalars = Array(c.unicodeScalars)
+        guard scalars.count > 1 else {
+            return scalars.reduce(0) { $0 + scalarWidth($1) }
+        }
+        var isEmojiSequence = false
+        var regionalIndicators = 0
+        for s in scalars {
+            switch s.value {
+            case 0x200D, 0xFE0F, 0x1F3FB...0x1F3FF: isEmojiSequence = true
+            case 0x1F1E6...0x1F1FF: regionalIndicators += 1
+            default: break
+            }
+        }
+        if isEmojiSequence || regionalIndicators >= 2 { return 2 }
+        return scalars.reduce(0) { $0 + scalarWidth($1) }
     }
 
     /// Visual column width of a single Unicode scalar (runewidth.RuneWidth).

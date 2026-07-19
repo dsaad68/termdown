@@ -11,6 +11,10 @@ public struct AppConfig: Codable {
     /// `mouse`: it needs motion reporting, which costs the terminal's own
     /// click-drag selection, so it stays a separate opt-in.
     public var mouseSelect: Bool?
+    /// Emoji width mode: "cluster" (default, one glyph per grapheme cluster) or
+    /// "scalar" (legacy per-scalar summing) for terminals that draw the
+    /// components of a ZWJ sequence separately.
+    public var wideEmoji: String?
     public var ignorePatterns: [String]?
     /// Render ```mermaid fenced blocks as diagrams (default true).
     public var mermaid: Bool?
@@ -51,6 +55,12 @@ public struct AppConfig: Codable {
     # (true/false). Separate from `mouse` because it reports pointer motion,
     # which replaces the terminal's own click-drag selection entirely.
     mouse-select: false
+
+    # wide-emoji: How emoji are measured — "cluster" (default) treats a ZWJ
+    # sequence, skin-tone or variation-selector emoji as one two-column glyph.
+    # Use "scalar" only if your terminal draws the components separately and
+    # rows look misaligned.
+    wide-emoji: cluster
 
     # ignore-patterns: Extra path patterns to skip during file discovery, in
     # addition to the built-in skips (.git, node_modules, .build, ...).
@@ -120,6 +130,7 @@ public struct AppConfig: Codable {
         if let v = other.noColor        { noColor = v }
         if let v = other.mouse          { mouse = v }
         if let v = other.mouseSelect    { mouseSelect = v }
+        if let v = other.wideEmoji      { wideEmoji = v }
         if let v = other.ignorePatterns { ignorePatterns = v }
         if let v = other.mermaid        { mermaid = v }
         if let v = other.mermaidCharset { mermaidCharset = v }
@@ -210,6 +221,8 @@ public struct AppConfig: Codable {
                 cfg.mouse = parseBool(value)
             case "mouse-select", "mouseselect", "mouse_select":
                 cfg.mouseSelect = parseBool(value)
+            case "wide-emoji", "wideemoji", "wide_emoji":
+                cfg.wideEmoji = value
             case "mermaid":
                 cfg.mermaid = parseBool(value)
             case "mermaid-charset", "mermaidcharset", "mermaid_charset":

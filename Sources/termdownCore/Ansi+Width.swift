@@ -47,27 +47,91 @@ extension Ansi {
         return String(out)
     }
 
-    /// Visible display width in terminal cells (handles common wide characters).
+    /// How emoji clusters are measured. `cluster` (the default) is correct for
+    /// terminals that render a ZWJ sequence as one glyph — iTerm2, WezTerm,
+    /// Kitty, VTE and modern tmux. `scalar` restores the legacy sum-the-scalars
+    /// behavior for a terminal that draws the components separately.
+    public enum EmojiWidthMode {
+        case cluster
+        case scalar
+    }
+
+    public static var emojiWidthMode: EmojiWidthMode = .cluster
+
+    /// Visible display width in terminal cells.
+    ///
+    /// Iterates grapheme clusters, not scalars: a ZWJ sequence like 👨‍👩‍👧 is one
+    /// glyph occupying two cells, and summing its parts counted six. Anything
+    /// that measures a row — padding, wrapping, table columns, the frame-width
+    /// invariant — depends on this agreeing with what the terminal draws.
     public static func width(_ s: String) -> Int {
         var w = 0
-        for scalar in strip(s).unicodeScalars {
-            w += scalarWidth(scalar)
+        for ch in strip(s) {
+            w += charWidth(ch)
         }
         return w
     }
 
+    /// Display width of a single grapheme cluster. This is the per-cell advance
+    /// used by `horizontalSlice` and `bgRange`, so it must agree with `width` or
+    /// tinted cells drift from the text they cover.
     public static func charWidth(_ c: Character) -> Int {
-        c.unicodeScalars.reduce(0) { $0 + scalarWidth($1) }
+        let scalars = Array(c.unicodeScalars)
+        guard emojiWidthMode == .cluster, scalars.count > 1 else {
+            return scalars.reduce(0) { $0 + scalarWidth($1) }
+        }
+        // A cluster carrying emoji-sequence evidence is one glyph, two cells:
+        //   ZWJ            👨‍👩‍👧 — components joined into a single glyph
+        //   skin tone      👍🏽  — the modifier adds no column
+        //   VS16           ❤️  — selects emoji presentation of a narrow base,
+        //                        which the scalar table alone scores as 1
+        //   regional pair  🇺🇸  — two indicators, one flag
+        var sawZWJ = false
+        var sawModifier = false
+        var sawVS16 = false
+        var regionalIndicators = 0
+        for s in scalars {
+            switch s.value {
+            case 0x200D: sawZWJ = true
+            case 0x1F3FB...0x1F3FF: sawModifier = true
+            case 0xFE0F: sawVS16 = true
+            case 0x1F1E6...0x1F1FF: regionalIndicators += 1
+            default: break
+            }
+        }
+        if sawZWJ || sawModifier || sawVS16 || regionalIndicators >= 2 { return 2 }
+        return scalars.reduce(0) { $0 + scalarWidth($1) }
     }
 
     private static func scalarWidth(_ s: Unicode.Scalar) -> Int {
         let v = s.value
         if v == 0 { return 0 }
-        // Zero-width: combining marks, zero-width spaces/joiners, BOM, and the
-        // variation selectors (incl. U+FE0F, which selects emoji presentation but
-        // adds no column of its own).
-        if (0x0300...0x036F).contains(v) || (0x200B...0x200F).contains(v) ||
-           (0xFE00...0xFE0F).contains(v) || v == 0xFEFF {
+        // Zero-width: combining marks across every script (not just Latin — a
+        // Hebrew, Arabic, Devanagari or Thai mark occupies no column either),
+        // zero-width spaces/joiners, BOM, and the variation selectors (incl.
+        // U+FE0F, which selects emoji presentation but adds no column itself).
+        if (0x0300...0x036F).contains(v) ||      // Latin combining
+           (0x0483...0x0489).contains(v) ||      // Cyrillic combining
+           (0x0591...0x05BD).contains(v) ||      // Hebrew points
+           v == 0x05BF || (0x05C1...0x05C2).contains(v) ||
+           (0x05C4...0x05C5).contains(v) || v == 0x05C7 ||
+           (0x0610...0x061A).contains(v) ||      // Arabic
+           (0x064B...0x065F).contains(v) || v == 0x0670 ||
+           (0x06D6...0x06DC).contains(v) || (0x06DF...0x06E4).contains(v) ||
+           (0x0730...0x074A).contains(v) ||      // Syriac
+           (0x0900...0x0902).contains(v) || v == 0x093A ||  // Devanagari
+           (0x093C...0x093C).contains(v) || (0x0941...0x0948).contains(v) ||
+           v == 0x094D || (0x0951...0x0957).contains(v) ||
+           (0x0E31...0x0E31).contains(v) || (0x0E34...0x0E3A).contains(v) ||  // Thai
+           (0x0E47...0x0E4E).contains(v) ||
+           (0x1AB0...0x1AFF).contains(v) ||      // combining ext
+           (0x1DC0...0x1DFF).contains(v) ||      // combining supplement
+           (0x20D0...0x20F0).contains(v) ||      // combining symbols
+           (0x200B...0x200F).contains(v) ||
+           (0xFE00...0xFE0F).contains(v) ||      // variation selectors
+           (0xFE20...0xFE2F).contains(v) ||      // combining half marks
+           v == 0xFEFF ||
+           (0xE0100...0xE01EF).contains(v) {     // variation selectors supplement
             return 0
         }
         // Wide (CJK, Hangul, fullwidth, common emoji blocks)

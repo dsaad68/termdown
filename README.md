@@ -221,6 +221,7 @@ mouse: false      # true to enable mouse scroll
 | `width` | int | e.g. `80` | Fixes the text column width; omit for auto-detect |
 | `no-color` | bool | `true`/`false` | Disables all ANSI color |
 | `mouse` | bool | `true`/`false` | Mouse scroll in the finder and pager |
+| `wide-emoji` | string | `cluster`/`scalar` | How emoji are measured (default `cluster`: a ZWJ, skin-tone or variation-selector sequence is one two-column glyph). Use `scalar` only if your terminal draws the components separately |
 | `mouse-select` | bool | `true`/`false` | Drag to select text in the pager, copied on release (replaces the terminal's own click-drag selection) |
 | `ignore-patterns` | list | `[a, b, c]` | Extra path patterns to skip during file discovery (beyond the built-in `.git`/`node_modules`/`.build` skips) |
 | `mermaid` | bool | `true`/`false` | Render ` ```mermaid ` blocks as diagrams (default `true`; falls back to a code block on parse failure) |

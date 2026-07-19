@@ -154,6 +154,10 @@ if config.showVersion {
 // Apply color setting
 Ansi.colorEnabled = !config.noColor
 
+// Emoji width mode: `scalar` restores legacy per-scalar summing for terminals
+// that draw the components of a ZWJ sequence separately.
+if appConfig.wideEmoji?.lowercased() == "scalar" { Ansi.emojiWidthMode = .scalar }
+
 // Detect 24-bit color support so content + chrome render in true color when the
 // terminal advertises it (most modern terminals set COLORTERM=truecolor/24bit).
 if let colorterm = ProcessInfo.processInfo.environment["COLORTERM"]?.lowercased() {
