@@ -71,6 +71,23 @@ TD_UPDATE_SNAPSHOTS=1 swift test
 > Snapshot goldens are generated in 256-color mode (truecolor off), so they stay
 > byte-stable across terminals.
 
+`FrameGoldenTests` does the same for assembled **pager frames**, under
+`Tests/Fixtures/frames/*.frame`, and uses the same environment variable. It
+complements the width sweep in `PagerDrawingTests`: the sweep proves every row
+measures exactly `cols`, but it measures with `Ansi.width` itself, so it cannot
+notice a frame that is correctly sized and visually wrong.
+
+Two golden sets are **not** regenerable and must never be rewritten to make a
+test pass:
+
+- `Tests/MermaidRendererTests/testdata/` — 99 fixtures copied verbatim from
+  upstream mermaid-ascii. They encode upstream fidelity, so a diff there means
+  the port has diverged, not that the golden is stale. There is deliberately no
+  regeneration path.
+- Width behavior — `WidthTests` asserts what terminals actually draw for emoji
+  and combining marks. If one fails, the table is wrong; the expectation is not
+  a snapshot to be refreshed.
+
 ## Releases
 
 The version lives in `Sources/termdown/Version.swift` (`appVersion`). To cut a
