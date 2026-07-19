@@ -168,6 +168,7 @@ swift run termdown ~/notes    # scan a specific directory
 | Viewer (pager) | `v`                          | show/hide the line cursor (cursor mode) |
 | Viewer (pager) | `Shift-↑`/`↓`, `J`/`K`       | select lines (cursor mode); `y` copies as markdown, `Y` as rendered text |
 | Viewer (pager) | drag (`--mouse-select`)      | select text character by character; copied on release, `y`/`Y` re-copy, any key clears |
+| Viewer (pager) | double / triple click        | select the word / the whole line |
 | Viewer (pager) | `e`                          | edit the block under the cursor (raw markdown); `Enter` commits to buffer, `Esc` cancels |
 | Viewer (pager) | `Ctrl-S`                     | save unsaved edits to the file |
 | Viewer (pager) | `w`                          | toggle line wrap               |

@@ -59,6 +59,11 @@ All notable changes to termdown are documented here. The format is based on
   re-copy the selection and any other key clears it; a click that doesn't move
   still follows the link under it. Off by default and independent of `mouse`,
   since motion reporting replaces the terminal's own click-drag selection.
+- **Double-click selects a word, triple-click selects the line** (with
+  `--mouse-select`). Word boundaries are display columns, so they hold on lines
+  containing CJK or emoji.
+- **A drag held past the top or bottom edge keeps scrolling.** Terminals only
+  report motion when the pointer moves, so holding still used to stall it.
 - `Ansi.bgRange` tints a display-column range while preserving the SGR
   attributes underneath, so a selection drawn over a code block keeps its
   syntax highlighting.

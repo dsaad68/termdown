@@ -78,6 +78,7 @@ struct Pager {
     static let minColsForSidebar = 60
     static let noWrapWidth = 100_000
     static let hStep = 8           // horizontal scroll step
+    static let multiClickInterval = 0.4   // seconds; double/triple click window
 
     // MARK: - Runtime state (initialized in `run()`; see the doc comment above)
 
@@ -153,6 +154,15 @@ struct Pager {
     var textSelection: TextSelection?
     var dragAnchor: TextPoint?
     var dragMoved = false
+    // Multi-click: a press within `multiClickInterval` on the same cell escalates
+    // to word (2) then line (3) selection.
+    var clickCount = 0
+    var lastClickAt = Date.distantPast
+    var lastClickPoint: TextPoint?
+    // Edge autoscroll while a drag is held still: direction plus the last
+    // reported pointer position, so the selection keeps extending.
+    var autoScrollDir = 0
+    var lastDragPoint: TextPoint?
 
     // Inline edit mode (activated by `e`): the cursor's block becomes an editable
     // raw-markdown field while the rest of the document stays rendered. On Enter
@@ -279,7 +289,9 @@ struct Pager {
 
             pollReload()
 
-            guard let key = Terminal.readKey(timeoutMs: 100) else { continue }
+            // On idle, keep a held-at-the-edge drag scrolling: the terminal only
+            // reports motion when the pointer actually moves.
+            guard let key = Terminal.readKey(timeoutMs: 100) else { tickAutoScroll(); continue }
             needsRedraw = true
 
             if editMode { handleEditMode(key); continue }

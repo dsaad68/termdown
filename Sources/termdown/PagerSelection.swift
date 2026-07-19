@@ -65,7 +65,21 @@ extension Pager {
             // on release, and only if the pointer never moved.
             if mouseSelectEnabled { beginDrag(x: x, y: y) } else { handleClick(x: x, y: y) }
         case .mouseDrag(let x, let y):
-            if mouseSelectEnabled { extendDrag(x: x, y: y) }
+            guard mouseSelectEnabled else { break }
+            // Coalesce: `?1002h` emits an event per cell crossed and `readByte`
+            // costs a poll+read syscall per byte, so a fast drag queues far more
+            // motion than the eye needs — and every one repaints a full frame.
+            // Keep only the newest, and hand back whatever ended the drain.
+            var (lastX, lastY) = (x, y)
+            while let next = Terminal.readKey(timeoutMs: 0) {
+                if case .mouseDrag(let nx, let ny) = next {
+                    (lastX, lastY) = (nx, ny)
+                } else {
+                    Terminal.pushBack(next)
+                    break
+                }
+            }
+            extendDrag(x: lastX, y: lastY)
         case .mouseRelease(let x, let y):
             if mouseSelectEnabled { endDrag(x: x, y: y) }
         default:
@@ -85,6 +99,77 @@ extension Pager {
         }
     }
 
+    // MARK: - Multi-click word / line selection
+
+    /// The display-column span of the word under `col` on `line`, or nil when
+    /// that cell is whitespace or out of range.
+    ///
+    /// Walks characters accumulating `Ansi.charWidth`, so it stays in step with
+    /// the tint and the copy, both of which address cells rather than indices.
+    func wordRange(line: Int, col: Int) -> Range<Int>? {
+        guard line >= 0, line < plainLines.count else { return nil }
+        let text = plainLines[line]
+        let isWord: (Character) -> Bool = { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }
+        var spans: [(Range<Int>, Bool)] = []   // (columns, isWordChar)
+        var c = 0
+        for ch in text {
+            let w = Ansi.charWidth(ch)
+            spans.append((c..<(c + w), isWord(ch)))
+            c += w
+        }
+        guard let hit = spans.firstIndex(where: { $0.0.contains(col) }), spans[hit].1 else { return nil }
+        var lo = hit
+        while lo > 0, spans[lo - 1].1 { lo -= 1 }
+        var hi = hit
+        while hi + 1 < spans.count, spans[hi + 1].1 { hi += 1 }
+        return spans[lo].0.lowerBound..<spans[hi].0.upperBound
+    }
+
+    /// Register a press for click-counting. Returns how many clicks this is
+    /// (1, 2 or 3) — a second or third press lands within `multiClickInterval`
+    /// on the same cell, and the count wraps back to 1 after a triple.
+    mutating func registerClick(at p: TextPoint, now: Date = Date()) -> Int {
+        let withinTime = now.timeIntervalSince(lastClickAt) < Pager.multiClickInterval
+        if withinTime, lastClickPoint == p, clickCount < 3 {
+            clickCount += 1
+        } else {
+            clickCount = 1
+        }
+        lastClickAt = now
+        lastClickPoint = p
+        return clickCount
+    }
+
+    /// Select the word under the pointer (double click).
+    mutating func selectWord(at p: TextPoint) {
+        guard let r = wordRange(line: p.line, col: p.col) else { return }
+        textSelection = TextSelection(anchor: TextPoint(line: p.line, col: r.lowerBound),
+                                      head: TextPoint(line: p.line, col: r.upperBound))
+    }
+
+    /// Select the whole display line (triple click).
+    mutating func selectLine(at p: TextPoint) {
+        guard p.line >= 0, p.line < plainLines.count else { return }
+        textSelection = TextSelection(anchor: TextPoint(line: p.line, col: 0),
+                                      head: TextPoint(line: p.line, col: Ansi.width(plainLines[p.line])))
+    }
+
+    // MARK: - Autoscroll while the pointer is held past an edge
+
+    /// Terminals only report motion when the pointer *moves*, so holding still
+    /// past the viewport edge would stop scrolling. The event loop's idle tick
+    /// keeps it going.
+    mutating func tickAutoScroll() {
+        guard dragAnchor != nil, autoScrollDir != 0 else { return }
+        let before = top
+        top = max(0, min(maxTop, top + autoScrollDir))
+        guard top != before, let head = lastDragPoint else { return }
+        // Keep extending to the row the pointer still hovers as content moves.
+        let row = min(max(0, head.line - before + autoScrollDir), max(0, contentRows - 1))
+        textSelection = TextSelection(anchor: dragAnchor!, head: TextPoint(line: top + row, col: head.col))
+        needsRedraw = true
+    }
+
     // MARK: - Drag state machine
 
     /// Left-button press: anchor a selection. The link under the pointer is *not*
@@ -95,28 +180,48 @@ extension Pager {
         dragAnchor = p
         dragMoved = false
         textSelection = nil
+        autoScrollDir = 0
+        lastDragPoint = p
         // The keyboard's full-row matte and a character tint on the same rows
         // read as one confused highlight — only one selection is live at a time.
         cursorVisible = false
         clearSelection()
+        // A repeat press on the same cell escalates to word then line. The
+        // selection is set now rather than on release so it is visible while the
+        // button is still down, as in a GUI.
+        switch registerClick(at: p) {
+        case 2: selectWord(at: p); dragMoved = true
+        case 3: selectLine(at: p); dragMoved = true
+        default: break
+        }
     }
 
     /// Motion with the button held: extend the selection, auto-scrolling when the
     /// pointer leaves the viewport so a drag can run past the visible region.
     mutating func extendDrag(x: Int, y: Int) {
         guard let anchor = dragAnchor else { return }
-        if y - 1 < 0 { top = max(0, top - 1) }
-        else if y - 1 >= contentRows { top = min(maxTop, top + 1) }
+        // Remember which edge the pointer is past so the idle tick can keep
+        // scrolling while it is held still — no further motion will be reported.
+        if y - 1 < 0 {
+            autoScrollDir = -1
+            top = max(0, top - 1)
+        } else if y - 1 >= contentRows {
+            autoScrollDir = 1
+            top = min(maxTop, top + 1)
+        } else {
+            autoScrollDir = 0
+        }
         let clampedY = min(max(y, 1), contentRows)
         guard let p = selectionPoint(x: x, y: clampedY) else { return }
         dragMoved = true
+        lastDragPoint = p
         textSelection = TextSelection(anchor: anchor, head: p)
     }
 
     /// Left-button release: a drag copies its text, a stationary click falls back
     /// to the existing click behavior (follow a link).
     mutating func endDrag(x: Int, y: Int) {
-        defer { dragAnchor = nil }
+        defer { dragAnchor = nil; autoScrollDir = 0 }
         guard dragMoved, let sel = textSelection, !sel.isEmpty else {
             textSelection = nil
             handleClick(x: x, y: y)

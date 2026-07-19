@@ -33,9 +33,17 @@ extension Terminal {
         readKey(timeoutMs: nil)!
     }
 
+    /// A key read ahead of time and handed back. Drag coalescing drains pending
+    /// motion events and must return the one non-drag key that ended the drain.
+    private static var pushedBack: Key?
+
+    /// Return `key` from the next `readKey` call. Only one key is buffered.
+    static func pushBack(_ key: Key) { pushedBack = key }
+
     /// Read a single logical key press with an optional timeout.
     /// Returns nil if timeout expires before a key is pressed.
     static func readKey(timeoutMs: Int32?) -> Key? {
+        if let k = pushedBack { pushedBack = nil; return k }
         // A nil here means EOF (e.g. Ctrl-D or a closed stdin); treat as Escape
         // so callers exit cleanly instead of spinning.
         guard let b0 = readByte(timeoutMs: timeoutMs) else { return timeoutMs != nil ? nil : .escape }
