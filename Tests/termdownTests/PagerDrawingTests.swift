@@ -112,6 +112,61 @@ final class PagerDrawingTests: XCTestCase {
         return p
     }
 
+    /// The frame invariant, swept across content classes, widths and pager
+    /// states. Autowrap is off, so a row that measures wrong is not merely ugly
+    /// — it desyncs every later redraw. The single-state ASCII test below is the
+    /// origin of this sweep; wide and zero-width content is where the width
+    /// table is actually at risk.
+    func testFrameRowsAreExactlyColsWideAcrossStatesAndContent() {
+        let corpus: [(String, [String])] = [
+            ("ascii", (0..<30).map { "line \($0) with some text" }),
+            ("cjk", (0..<30).map { "行 \($0) 日本語 中文 한국어 テスト" }),
+            ("emoji", (0..<30).map { "row \($0) ✅ ⭐ 😀 ❤️ ⚠️ done" }),
+            ("zwj", (0..<30).map { "fam \($0) 👨‍👩‍👧 👩‍💻 🏳️‍🌈 end" }),
+            ("skin-tone", (0..<30).map { "tone \($0) 👍🏻 👍🏽 👍🏿 end" }),
+            ("flags", (0..<30).map { "flag \($0) 🇺🇸 🇩🇪 🇯🇵 end" }),
+            ("combining", (0..<30).map { "acc \($0) e\u{301}a\u{300}u\u{308} end" }),
+            ("mixed", (0..<30).map { "mix \($0) 日本 ✅ ❤️ 👍🏽 abc" }),
+        ]
+        let states: [(String, (inout Pager) -> Void)] = [
+            ("plain", { _ in }),
+            ("cursor", { p in p.cursorVisible = true; p.cursorLine = 2 }),
+            ("line-selection", { p in p.cursorVisible = true; p.cursorLine = 4; p.selectionAnchor = 1 }),
+            ("text-selection", { p in
+                p.textSelection = TextSelection(anchor: TextPoint(line: 1, col: 3),
+                                                head: TextPoint(line: 3, col: 9))
+            }),
+        ]
+        for (contentName, lines) in corpus {
+            for (stateName, apply) in states {
+                for cols in [40, 60, 80, 120] {
+                    for wrapOn in [true, false] {
+                        var p = Pager(title: "doc.md", lines: [])
+                        p.lines = lines
+                        p.plainLines = lines
+                        p.mouseSelectEnabled = true
+                        apply(&p)
+                        let available = max(20, cols - 4)
+                        let frame = p.buildFrame(
+                            top: 0, contentRows: 8, cols: cols, maxTop: 20, available: available,
+                            sidebarActive: false, sidebarFocus: false, sidebarCursor: 0,
+                            wrapOn: wrapOn, hscroll: wrapOn ? 0 : 4, followMode: false,
+                            reloadFlashActive: false, title: "doc.md",
+                            searchQuery: "", searchMatches: [], currentMatchIndex: 0,
+                            searchMode: false, gotoMode: false, gotoInput: "",
+                            linkFocus: nil, copyFlash: nil)
+                        for (i, row) in frame.enumerated() {
+                            XCTAssertEqual(
+                                Ansi.width(row), cols,
+                                "\(contentName)/\(stateName)/cols=\(cols)/wrap=\(wrapOn) row \(i) "
+                                    + "measured \(Ansi.width(row))")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// The frame invariant: autowrap is off, so every row must be exactly `cols`
     /// display columns. A selection tint inserts escape sequences only, so it
     /// must not change any row's measured width — if it did, the right border

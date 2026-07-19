@@ -1,0 +1,51 @@
+[2m# [0m[1;38;5;183mEmoji[0m [1;38;5;183mand[0m [1;38;5;183mwide[0m [1;38;5;183mcharacters[0m
+[38;5;183m════════════════════════════════════════════════════════════════════════════════[0m
+
+Width classes that terminals disagree about, and that padded rows depend on.
+
+Single-scalar emoji: 😀 🌡 🎯 — and the sub-U+1F300 ones legacy tables get
+wrong: ✅ ⭐ ✨ ❌ ⚡ ⛔.
+
+Variation-selector-16 sequences, whose base is narrow but which render wide: ❤️ ⚠️
+✔️ ➡️ ⌨️ ✏️ ☀️ ❄️.
+
+Skin-tone modifiers: 👍🏻 👍🏽 👍🏿 — the modifier adds no column of its own.
+
+ZWJ sequences: 👨‍👩‍👧 👩‍💻 🏳️‍🌈 — joined into one glyph, not one per component.
+
+Regional-indicator flags: 🇺🇸 🇩🇪 🇯🇵.
+
+Task-list checkboxes must stay narrow — they are [38;5;218mEmoji_Presentation=No[0m:
+
+[2m☐[0m unchecked stays one column
+[38;5;151m☑[0m checked stays one column
+
+CJK for comparison: 日本語 中文 한국어.
+
+Combining marks are zero-width: éàü vs e\u{301}a\u{300}u\u{308}.
+
+[2m## [0m[1;38;5;111mInside[0m [1;38;5;111ma[0m [1;38;5;111mtable[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;5;240m┌────────┬──────────────┬───────┐[0m
+[38;5;240m│[0m Symbol [38;5;240m│[0m Name         [38;5;240m│[0m Width [38;5;240m│[0m
+[38;5;240m├────────┼──────────────┼───────┤[0m
+[38;5;240m│[0m ✅     [38;5;240m│[0m check        [38;5;240m│[0m 2     [38;5;240m│[0m
+[38;5;240m│[0m ❤️      [38;5;240m│[0m heart vs16   [38;5;240m│[0m 2     [38;5;240m│[0m
+[38;5;240m│[0m 👍🏽   [38;5;240m│[0m thumb + tone [38;5;240m│[0m 2     [38;5;240m│[0m
+[38;5;240m│[0m 👨‍👩‍👧 [38;5;240m│[0m family zwj   [38;5;240m│[0m 2     [38;5;240m│[0m
+[38;5;240m│[0m 日本   [38;5;240m│[0m cjk          [38;5;240m│[0m 4     [38;5;240m│[0m
+[38;5;240m└────────┴──────────────┴───────┘[0m
+
+[2m## [0m[1;38;5;111mInside[0m [1;38;5;111ma[0m [1;38;5;111mcode[0m [1;38;5;111mcard[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;5;240m┌─ text ───────────────────────────────────────────────────────────────────────┐[0m
+[38;5;240m│ [0m[38;5;252m✅ done      ❤️ vs16[0m                                                         [38;5;240m │[0m
+[38;5;240m│ [0m[38;5;252m👍🏽 tone      👨‍👩‍👧 zwj[0m                                                   [38;5;240m │[0m
+[38;5;240m│ [0m[38;5;252m日本語 cjk    plain[0m                                                         [38;5;240m │[0m
+[38;5;240m└──────────────────────────────────────────────────────────────────────────────┘[0m
+
+Inline [38;5;218m❤️[0m [38;5;218mcode[0m and [1mbold[0m [1m✅[0m and a ]8;;https://example.com\[4;38;5;117mlink[0m]8;;\ ]8;;https://example.com\[4;38;5;117mwith[0m]8;;\ ]8;;https://example.com\[4;38;5;117m😀[0m]8;;\ [38;5;117m↗[0m.
+
+

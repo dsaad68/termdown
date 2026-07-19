@@ -145,8 +145,24 @@ extension Pager {
         // Two-tone helper: darker left segment, lighter right segment. Both are
         // bg-filled with inner colours preserved (bgRow re-asserts the bg).
         func twoTone(left: String, right: String) -> String {
-            let lw = Ansi.width(left)
-            let rw = Ansi.width(right)
+            var left = left
+            var right = right
+            var rw = Ansi.width(right)
+            // The bar must never exceed `cols`. Autowrap is off, so an over-wide
+            // status row is clipped at the margin and takes the frame's right
+            // edge with it — the same failure the row padding guards against.
+            // Flags like NOWRAP and "N selected" push past `cols` on a narrow
+            // terminal, so elide the left (title + flags) before the right,
+            // which carries position and key hints.
+            if rw > cols {
+                right = Ansi.truncate(right, to: cols)
+                rw = Ansi.width(right)
+            }
+            var lw = Ansi.width(left)
+            if lw + rw > cols {
+                left = Ansi.truncate(left, to: max(0, cols - rw))
+                lw = Ansi.width(left)
+            }
             let gap = max(0, cols - lw - rw)
             let leftSeg  = Ansi.bgRow(left, bg: P.statusDimBg, cols: lw)
             let midSeg   = Ansi.wrap(String(repeating: " ", count: gap), Ansi.bg(P.statusBg))
