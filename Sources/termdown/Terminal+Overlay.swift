@@ -82,8 +82,37 @@ extension Terminal {
     /// running an input loop — the caller manages the background and keys. Used
     /// for live-preview pickers (e.g. the theme selector) that repaint their own
     /// content behind the box on every selection change.
-    static func paintList(title: String, items: [String], selected: Int, hint: String) {
-        let size = Terminal.size()
+    /// Where a centred list box lands on screen. Returned rather than recomputed
+    /// so drawing and hit-testing cannot drift apart — the geometry used to be
+    /// locals inside `paintList`, which left a click handler no way to ask where
+    /// a row actually is.
+    struct ListBoxGeometry {
+        var listH: Int
+        var innerW: Int
+        var boxW: Int
+        var boxH: Int
+        var startRow: Int
+        var startCol: Int
+        var scroll: Int
+
+        /// Index of the item at 1-based screen row `y`, or nil if the point is
+        /// on the border, the hint line, or past the last item.
+        func itemIndex(atRow y: Int, count: Int) -> Int? {
+            let offset = y - (startRow + 1)      // +1 skips the top border
+            guard offset >= 0, offset < listH else { return nil }
+            let idx = scroll + offset
+            return idx < count ? idx : nil
+        }
+
+        /// Whether a 1-based screen point is inside the box at all — a click
+        /// outside dismisses.
+        func contains(x: Int, y: Int) -> Bool {
+            x >= startCol && x < startCol + boxW && y >= startRow && y < startRow + boxH
+        }
+    }
+
+    static func listBoxGeometry(title: String, items: [String], selected: Int,
+                                hint: String, size: Size = Terminal.size()) -> ListBoxGeometry {
         let hintLines = hint.isEmpty ? 0 : 1
         let maxBoxH = max(5, size.rows - 4)
         let listH = max(1, min(items.count, maxBoxH - 2 - hintLines))
@@ -91,13 +120,19 @@ extension Terminal {
         let widest = items.map { Ansi.width($0) }.max() ?? 0
         let innerW = max(1, min(max(widest, Ansi.width(title) + 2, Ansi.width(hint)), size.cols - 4))
         let boxW = innerW + 4
-        let startRow = max(1, (size.rows - boxH) / 2 + 1)
-        let startCol = max(1, (size.cols - boxW) / 2 + 1)
         var scroll = 0
         if selected >= listH { scroll = min(selected - listH + 1, max(0, items.count - listH)) }
+        return ListBoxGeometry(listH: listH, innerW: innerW, boxW: boxW, boxH: boxH,
+                               startRow: max(1, (size.rows - boxH) / 2 + 1),
+                               startCol: max(1, (size.cols - boxW) / 2 + 1),
+                               scroll: scroll)
+    }
+
+    static func paintList(title: String, items: [String], selected: Int, hint: String) {
+        let g = listBoxGeometry(title: title, items: items, selected: selected, hint: hint)
         paintBox(title: title, items: items, selectable: true, hint: hint,
-                 selected: selected, scroll: scroll, listH: listH, innerW: innerW,
-                 startRow: startRow, startCol: startCol, boxW: boxW, boxH: boxH)
+                 selected: selected, scroll: g.scroll, listH: g.listH, innerW: g.innerW,
+                 startRow: g.startRow, startCol: g.startCol, boxW: g.boxW, boxH: g.boxH)
     }
 
     private static func paintBox(title: String, items: [String], selectable: Bool, hint: String,

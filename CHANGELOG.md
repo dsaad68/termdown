@@ -59,6 +59,14 @@ All notable changes to termdown are documented here. The format is based on
   re-copy the selection and any other key clears it; a click that doesn't move
   still follows the link under it. Off by default and independent of `mouse`,
   since motion reporting replaces the terminal's own click-drag selection.
+- **Mouse now works in modal states.** Search, goto, the theme picker, sidebar
+  focus and the inline editor consumed the key and continued, so scroll and
+  click were silently dropped. The wheel scrolls the document under the search
+  and goto prompts (the query stays live) and moves the selection in the theme
+  picker and sidebar; a click picks a list row and a second click on the same
+  row commits, positions the caret in the inline editor, or accepts a prompt at
+  the clicked line. The unsaved-changes prompt stays deliberately inert — a
+  modal that answers on a stray click risks discarding work.
 - **Double-click selects a word, triple-click selects the line** (with
   `--mouse-select`). Word boundaries are display columns, so they hold on lines
   containing CJK or emoji.

@@ -308,7 +308,10 @@ swift run termdown render README.md | less -R
   `F`) only affect the interactive viewer, not `render` output.
 - **Mouse** is off by default. Enable it with `--mouse` on the CLI or
   `mouse: true` in `.termdown.yaml`. It works in both the file list and the
-  viewer (pager): the wheel scrolls, and a **click** follows the link under the
+  viewer (pager), and inside the theme picker, outline sidebar, project search
+  and inline editor: the wheel scrolls or moves the selection, and a **click**
+  picks a row (clicking the highlighted row activates it), positions the editor
+  caret, or follows the link under the
   cursor (pager) or selects a file, and clicking the highlighted file opens it
   (list). Mouse reporting uses SGR 1006 mode; terminals that don't support it
   will just ignore the escape sequences.

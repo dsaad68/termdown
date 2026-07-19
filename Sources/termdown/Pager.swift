@@ -294,6 +294,10 @@ struct Pager {
             guard let key = Terminal.readKey(timeoutMs: 100) else { tickAutoScroll(); continue }
             needsRedraw = true
 
+            // Mouse events reach the modal handlers first; each keyboard handler
+            // below would otherwise swallow them in its `default` branch.
+            if handleModalMouse(key) { continue }
+
             if editMode { handleEditMode(key); continue }
             if savePromptMode { if handleSavePrompt(key) { return }; continue }
             if searchMode { handleSearchMode(key); continue }
