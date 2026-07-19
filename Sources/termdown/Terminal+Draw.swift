@@ -66,13 +66,21 @@ extension Terminal {
     /// Build the escape-sequence stream `render` writes. Pure (no I/O / size query)
     /// so the cursor/clear placement that keeps the frame sealed can be unit-tested.
     static func frameSequence(_ rows: [String], screenRows: Int) -> String {
-        var buf = "\u{1B}[H"
+        // Wrapped in Begin/End Synchronized Update (DEC private mode 2026). A
+        // frame runs to ~12 KB at a typical terminal size — far more than a pty
+        // hands over in one piece — so without this the terminal paints whatever
+        // half it has read, and the `\e[2K` that precedes each row is on screen
+        // as a blank while the content is still arriving. One frame reads as a
+        // flicker; a fast wheel spin reads as flashing. Terminals that do not
+        // implement 2026 ignore both sequences, and those that do release the
+        // update on a timeout, so a crash mid-frame cannot freeze the display.
+        var buf = "\u{1B}[?2026h\u{1B}[H"
         for (i, row) in rows.enumerated() {
             buf += "\u{1B}[2K" + row
             if i < rows.count - 1 { buf += "\r\n" }
         }
         if rows.count < screenRows { buf += "\r\n\u{1B}[J" }
-        return buf
+        return buf + "\u{1B}[?2026l"
     }
 
     // SGR styling

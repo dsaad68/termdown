@@ -123,7 +123,8 @@ final class LiveGrep {
             case .escape:
                 return nil
             case .mouseScroll(let delta):
-                selected = max(0, min(max(0, hits.count - 1), selected + delta))
+                let d = Terminal.coalesceScroll(delta)
+                selected = max(0, min(max(0, hits.count - 1), selected + d))
             case .mouseClick(_, let y):
                 // A click selects the row; clicking the selected row opens it,
                 // matching the file finder's idiom.

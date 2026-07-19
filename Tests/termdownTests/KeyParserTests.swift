@@ -172,6 +172,28 @@ final class KeyParserTests: XCTestCase {
         XCTAssertEqual(decode(csi("<64;10;5m")), .other)
     }
 
+    // MARK: - Scroll coalescing
+
+    /// A wheel spin queues an event per notch and each one repaints a full
+    /// ~12 KB frame, which is what made fast scrolling flash. Only the position
+    /// the scroll lands on matters, so pending deltas fold into one redraw.
+    func testCoalesceScrollSumsQueuedDeltas() {
+        Terminal.pushBack(.mouseScroll(3))
+        XCTAssertEqual(Terminal.coalesceScroll(3), 6)
+    }
+
+    func testCoalesceScrollWithNothingQueuedIsIdentity() {
+        XCTAssertEqual(Terminal.coalesceScroll(-3), -3)
+    }
+
+    /// The key that ends the drain belongs to the caller's normal dispatch —
+    /// swallowing it would drop a keystroke that arrived during a scroll.
+    func testCoalesceScrollHandsBackTheKeyThatEndedIt() {
+        Terminal.pushBack(.char("j"))
+        XCTAssertEqual(Terminal.coalesceScroll(3), 3)
+        XCTAssertEqual(Terminal.readKey(timeoutMs: 0), .char("j"))
+    }
+
     // MARK: - Unknown sequences
 
     func testUnknownCsiIsOther() {

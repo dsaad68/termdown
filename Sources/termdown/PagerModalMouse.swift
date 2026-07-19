@@ -20,6 +20,8 @@ extension Pager {
     mutating func handleModalMouse(_ key: Terminal.Key) -> Bool {
         switch key {
         case .mouseScroll(let delta):
+            // Already coalesced by the run loop — a handler that may decline the
+            // event must not drain the queue itself.
             return modalScroll(delta)
         case .mouseClick(let x, let y):
             return modalClick(x: x, y: y)

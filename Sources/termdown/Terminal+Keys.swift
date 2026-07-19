@@ -40,6 +40,23 @@ extension Terminal {
     /// Return `key` from the next `readKey` call. Only one key is buffered.
     static func pushBack(_ key: Key) { pushedBack = key }
 
+    /// Collapse a run of already-queued scroll events into a single delta.
+    ///
+    /// A wheel spin or trackpad flick emits one event per notch, and every one
+    /// of them would otherwise repaint a full frame — ~12 KB at a typical
+    /// terminal size, so a fast scroll queues far more redrawing than the eye
+    /// needs or the pty delivers cleanly. Only the position the scroll ends at
+    /// matters, so sum the pending deltas and draw once. The key that ends the
+    /// drain is handed back for the caller's normal dispatch.
+    static func coalesceScroll(_ delta: Int) -> Int {
+        var total = delta
+        while let next = readKey(timeoutMs: 0) {
+            guard case .mouseScroll(let d) = next else { pushBack(next); break }
+            total += d
+        }
+        return total
+    }
+
     /// Read a single logical key press with an optional timeout.
     /// Returns nil if timeout expires before a key is pressed.
     static func readKey(timeoutMs: Int32?) -> Key? {

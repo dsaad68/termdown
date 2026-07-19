@@ -291,8 +291,13 @@ struct Pager {
 
             // On idle, keep a held-at-the-edge drag scrolling: the terminal only
             // reports motion when the pointer actually moves.
-            guard let key = Terminal.readKey(timeoutMs: 100) else { tickAutoScroll(); continue }
+            guard var key = Terminal.readKey(timeoutMs: 100) else { tickAutoScroll(); continue }
             needsRedraw = true
+
+            // Fold a queued scroll burst into one event *before* dispatch. Doing
+            // it inside a handler would drain the queue even when that handler
+            // declines the event, and the summed delta would be lost with it.
+            if case .mouseScroll(let d) = key { key = .mouseScroll(Terminal.coalesceScroll(d)) }
 
             // Mouse events reach the modal handlers first; each keyboard handler
             // below would otherwise swallow them in its `default` branch.

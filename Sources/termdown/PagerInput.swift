@@ -187,6 +187,7 @@ extension Pager {
         case .right, .char("l"):
             hscroll = min(maxHscroll, hscroll + Pager.hStep)
         case .mouseScroll(let delta):
+            // `delta` arrives already coalesced from the run loop.
             top = max(0, min(maxTop, top + delta))   // cursor follows via clampCursorToView()
         case .mouseClick, .mouseDrag, .mouseRelease:
             handleMouseButton(key)

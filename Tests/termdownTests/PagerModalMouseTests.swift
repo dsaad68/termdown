@@ -38,6 +38,18 @@ final class PagerModalMouseTests: XCTestCase {
 
     // MARK: - Search / goto
 
+    /// Scroll coalescing lives in the run loop, not in a handler that can
+    /// decline the event. Draining here and then returning false would consume
+    /// a whole queued burst and hand the normal path only the first notch —
+    /// turning a fast scroll into a nearly stationary one.
+    func testModalMouseDoesNotDrainTheScrollQueue() {
+        var p = makePager()                      // no modal state is active
+        Terminal.pushBack(.mouseScroll(3))
+        XCTAssertFalse(p.handleModalMouse(.mouseScroll(3)), "no modal owns this")
+        XCTAssertEqual(Terminal.readKey(timeoutMs: 0), .mouseScroll(3),
+                       "the queued event must survive for the normal path")
+    }
+
     func testScrollWorksWhileSearching() {
         var p = makePager()
         p.searchMode = true

@@ -110,7 +110,10 @@ struct TerminalMenu {
             case .pageDown:
                 selected = min(filteredItems.count - 1, selected + viewport)
             case .mouseScroll(let delta):
-                selected = max(0, min(filteredItems.count - 1, selected + delta))
+                // A flick queues an event per notch and each would repaint the
+                // whole list; land on the final row and draw once.
+                let d = Terminal.coalesceScroll(delta)
+                selected = max(0, min(filteredItems.count - 1, selected + d))
             case .mouseClick(_, let y):
                 // File rows start just below the header chrome. A click selects the
                 // row; clicking the already-selected row opens it (like Enter).
