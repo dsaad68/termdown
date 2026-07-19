@@ -6,6 +6,79 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Search matches and focused links no longer flatten the line they land on.**
+  Both highlights rebuilt the row from `Ansi.strip`, so a match inside a code
+  block erased its syntax colouring and any OSC 8 hyperlink on the row. They now
+  use `Ansi.bgRange`, which tints the columns while preserving what is under it.
+- **Focused-link highlighting was misaligned on lines with wide characters**,
+  and never drew at all with wrapping off. `LinkInfo.column`/`length` are display
+  columns but were used to index characters. The same confusion is fixed in the
+  link-merge gap probe, which misread the gap between two fragments of one link.
+- **Search highlighting and link focus can now appear together.** They were
+  mutually exclusive, so any non-empty query suppressed link focus even on lines
+  with no match.
+- **Display width now measures grapheme clusters, not scalars.** Emoji
+  sequences were summed component-by-component, so a ZWJ family counted 6
+  columns and a skin-tone thumb 4, while variation-selector emoji (`❤️`, `⚠️`,
+  `✔️`, `➡️`) counted 1 instead of 2 — the under-count reaching 31 of the 220
+  `:shortcode:` mappings. Rows containing any of them padded to the wrong
+  width, drifting the right border and scrollbar column. The enclosed and
+  squared blocks (`🆕`, `🀄`, `🈚`, `🅾`) were under-counted the same way.
+  `wide-emoji: scalar` restores the old behavior for terminals that draw the
+  components separately, and applies to mermaid diagrams as well as document
+  rows so the two are always measured the same way.
+- **Combining marks outside Latin are now zero-width.** Only `U+0300–U+036F`
+  was recognized, so every Hebrew, Arabic, Devanagari and Thai document
+  over-counted. Hebrew points, Arabic marks, Devanagari matras, Thai vowels and
+  the combining supplements are all zero-width now.
+- **The status bar no longer overflows a narrow terminal.** With flags like
+  NOWRAP or "N selected" present the bar could exceed the terminal width;
+  autowrap is off, so it was clipped at the margin along with the frame's right
+  edge. The title and flags elide first.
+- **Mouse tracking survives a nested UI.** Opening the file finder from the
+  pager (`T`) tore tracking down while the pager was still running, killing
+  scroll, click and drag-select for the rest of the session.
+- **Mermaid node shapes other than `[...]` are now parsed.** `A{"Decide"}`,
+  `A("x")`, `A(["x"])`, `A[["x"]]`, `A[("x")]`, `A(("x"))`, `A{{"x"}}` and
+  `A>"x"]` previously fell through the parser, so the raw syntax became the
+  label — a box captioned `A{"Decide"}` rather than one reading `Decide`. Every
+  shape is still *drawn* as a rectangle (as upstream mermaid-ascii does); only
+  the delimiters are now stripped.
+- **A `\n` inside a label no longer splits the statement.** Statement splitting
+  tracked only `[`/`]` depth and ignored quotes entirely, so a multi-line label
+  in `{...}` was cut in half. The tail either became a phantom disconnected node
+  or, when it contained a space, tripped the bare-node-id check and dropped the
+  whole diagram to a code block.
+- **Quoted edge labels** now have their quotes stripped and line breaks
+  flattened; `-->|"fail, retries < 2\n(with feedback)"|` rendered verbatim,
+  escape and all. Edge labels draw inline along a one-row arrow, so a `\n` or
+  `<br>` becomes a space rather than wrapping.
+
+### Added
+- **Mouse text selection**: with `--mouse-select` (or `mouse-select: true`),
+  drag in the viewer to select text character by character — across lines and
+  starting/ending mid-word — copied to the clipboard on release. `y`/`Y`
+  re-copy the selection and any other key clears it; a click that doesn't move
+  still follows the link under it. Off by default and independent of `mouse`,
+  since motion reporting replaces the terminal's own click-drag selection.
+- **Mouse now works in modal states.** Search, goto, the theme picker, sidebar
+  focus and the inline editor consumed the key and continued, so scroll and
+  click were silently dropped. The wheel scrolls the document under the search
+  and goto prompts (the query stays live) and moves the selection in the theme
+  picker and sidebar; a click picks a list row and a second click on the same
+  row commits, positions the caret in the inline editor, or accepts a prompt at
+  the clicked line. The unsaved-changes prompt stays deliberately inert — a
+  modal that answers on a stray click risks discarding work.
+- **Double-click selects a word, triple-click selects the line** (with
+  `--mouse-select`). Word boundaries are display columns, so they hold on lines
+  containing CJK or emoji.
+- **A drag held past the top or bottom edge keeps scrolling.** Terminals only
+  report motion when the pointer moves, so holding still used to stall it.
+- `Ansi.bgRange` tints a display-column range while preserving the SGR
+  attributes underneath, so a selection drawn over a code block keeps its
+  syntax highlighting.
+
 ## [0.1.6] - 2026-07-07
 
 ### Added

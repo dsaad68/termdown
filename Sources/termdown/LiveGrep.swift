@@ -15,6 +15,14 @@ final class LiveGrep {
     private static let resultCap = 500
     private static let accent: Ansi.Color = 39
 
+    /// Rows `draw` emits above the result list (title, prompt, count, blank).
+    /// A click's screen row subtracts this to land on a hit, so it must stay in
+    /// step with `draw` — change one and change the other.
+    static let headerLines = 4
+
+    /// Whether mouse scroll / click are enabled.
+    var mouseEnabled: Bool = false
+
     init(entries: [(url: URL, relativePath: String)]) {
         self.entries = entries
     }
@@ -72,11 +80,19 @@ final class LiveGrep {
         var lastCols = -1
 
         Terminal.hideCursor()
-        defer { Terminal.showCursor() }
+        // Own a tracking scope rather than inheriting whatever the caller left
+        // on: reached via `\` from the pager tracking was already active, but
+        // via `T` → grep it was not, so mouse worked or didn't depending on the
+        // route. The scope stack makes claiming it here safe either way.
+        if mouseEnabled { Terminal.enableMouseTracking() }
+        defer {
+            if mouseEnabled { Terminal.disableMouseTracking() }
+            Terminal.showCursor()
+        }
 
         while true {
             let size = Terminal.size()
-            let viewport = max(1, size.rows - 6) // 4 header rows + 2 footer rows
+            let viewport = max(1, size.rows - LiveGrep.headerLines - 2)
 
             if Terminal.didResize || size.rows != lastRows || size.cols != lastCols {
                 Terminal.didResize = false
@@ -114,6 +130,17 @@ final class LiveGrep {
                 }
             case .escape:
                 return nil
+            case .mouseScroll(let delta):
+                let d = Terminal.coalesceScroll(delta)
+                selected = max(0, min(max(0, hits.count - 1), selected + d))
+            case .mouseClick(_, let y):
+                // A click selects the row; clicking the selected row opens it,
+                // matching the file finder's idiom.
+                if let idx = LiveGrep.hitIndex(atRow: y, scroll: scroll,
+                                               viewport: viewport, count: hits.count) {
+                    if idx == selected { return (hits[idx].url, query) }
+                    selected = idx
+                }
             case .backspace:
                 if !query.isEmpty {
                     query.removeLast()
@@ -130,6 +157,16 @@ final class LiveGrep {
                 break
             }
         }
+    }
+
+    /// Map a 1-based screen row to an index into `hits`, or nil when the click
+    /// landed on the header, the footer, or past the last result. Pure so the
+    /// offset math can be tested without driving the run loop.
+    static func hitIndex(atRow y: Int, scroll: Int, viewport: Int, count: Int) -> Int? {
+        let offset = y - 1 - headerLines
+        guard offset >= 0, offset < viewport else { return nil }
+        let idx = scroll + offset
+        return idx < count ? idx : nil
     }
 
     private func draw(cols: Int, viewport: Int, query: String, hits: [Hit], selected: Int, scroll: Int) {

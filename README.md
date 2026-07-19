@@ -55,8 +55,10 @@ swift run termdown ~/notes    # scan a specific directory
     (via [Chroma]), drawn as a framed card and mapped onto the matte palette
   - **Mermaid diagrams**: ` ```mermaid ` blocks render as ASCII/Unicode art
     (flowcharts and sequence diagrams) via a native Swift port of
-    [mermaid-ascii] — no external tools. Falls back to a highlighted code block
-    for unsupported diagram types
+    [mermaid-ascii] — no external tools. All node shapes are accepted
+    (`[]`, `()`, `{}`, `([])`, `[[]]`, `[()]`, `(())`, `{{}}`, `>]`) and drawn as
+    rectangles; labels may be quoted and may span lines with `\n` or `<br>`.
+    Falls back to a highlighted code block for unsupported diagram types
   - GFM tables drawn with box-drawing borders and column alignment
   - Block quotes (including nested)
   - **GitHub alerts**: `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, etc. as colored callouts
@@ -100,7 +102,9 @@ swift run termdown ~/notes    # scan a specific directory
   cursor** (off by default — `j`/`k` scroll as usual until then). With it shown,
   `j`/`k` move the highlighted line (its source line shows as `L42`), and
   `Shift+↑/↓` (or `Shift+J`/`Shift+K`) **select multiple lines** — `y` copies the
-  selection as raw markdown, `Y` as rendered text. Press `e` to **edit** the block
+  selection as raw markdown, `Y` as rendered text. With `--mouse-select` you can
+  also **drag to select text character by character** across lines, copied to the
+  clipboard on release. Press `e` to **edit** the block
   under the cursor (paragraph, heading, list item, table row, …) as its raw
   markdown **in place** while the rest stays rendered. `Enter` commits the edit to
   the buffer and marks the document **unsaved (●)**; `Ctrl-S` writes it to disk,
@@ -163,6 +167,8 @@ swift run termdown ~/notes    # scan a specific directory
 | Viewer (pager) | `]` / `[`                    | next / previous heading         |
 | Viewer (pager) | `v`                          | show/hide the line cursor (cursor mode) |
 | Viewer (pager) | `Shift-↑`/`↓`, `J`/`K`       | select lines (cursor mode); `y` copies as markdown, `Y` as rendered text |
+| Viewer (pager) | drag (`--mouse-select`)      | select text character by character; copied on release, `y`/`Y` re-copy, any key clears |
+| Viewer (pager) | double / triple click        | select the word / the whole line |
 | Viewer (pager) | `e`                          | edit the block under the cursor (raw markdown); `Enter` commits to buffer, `Esc` cancels |
 | Viewer (pager) | `Ctrl-S`                     | save unsaved edits to the file |
 | Viewer (pager) | `w`                          | toggle line wrap               |
@@ -188,6 +194,8 @@ Options:
   --no-color        Disable ANSI colors
   --mouse           Enable mouse scroll
   --no-mouse        Disable mouse scroll
+  --mouse-select    Enable drag-to-select text (copied on release)
+  --no-mouse-select Disable drag-to-select
   --version, -V     Show version information
   --help, -h        Show help message
 ```
@@ -214,6 +222,8 @@ mouse: false      # true to enable mouse scroll
 | `width` | int | e.g. `80` | Fixes the text column width; omit for auto-detect |
 | `no-color` | bool | `true`/`false` | Disables all ANSI color |
 | `mouse` | bool | `true`/`false` | Mouse scroll in the finder and pager |
+| `wide-emoji` | string | `cluster`/`scalar` | How emoji are measured (default `cluster`: a ZWJ, skin-tone or variation-selector sequence is one two-column glyph). Use `scalar` only if your terminal draws the components separately |
+| `mouse-select` | bool | `true`/`false` | Drag to select text in the pager, copied on release (replaces the terminal's own click-drag selection) |
 | `ignore-patterns` | list | `[a, b, c]` | Extra path patterns to skip during file discovery (beyond the built-in `.git`/`node_modules`/`.build` skips) |
 | `mermaid` | bool | `true`/`false` | Render ` ```mermaid ` blocks as diagrams (default `true`; falls back to a code block on parse failure) |
 | `mermaid-charset` | string | `unicode`/`ascii` | Box-drawing character set for diagrams (default `unicode`) |
@@ -298,10 +308,21 @@ swift run termdown render README.md | less -R
   `F`) only affect the interactive viewer, not `render` output.
 - **Mouse** is off by default. Enable it with `--mouse` on the CLI or
   `mouse: true` in `.termdown.yaml`. It works in both the file list and the
-  viewer (pager): the wheel scrolls, and a **click** follows the link under the
+  viewer (pager), and inside the theme picker, outline sidebar, project search
+  and inline editor: the wheel scrolls or moves the selection, and a **click**
+  picks a row (clicking the highlighted row activates it), positions the editor
+  caret, or follows the link under the
   cursor (pager) or selects a file, and clicking the highlighted file opens it
   (list). Mouse reporting uses SGR 1006 mode; terminals that don't support it
   will just ignore the escape sequences.
+- **Drag-to-select** is a separate opt-in (`--mouse-select` or
+  `mouse-select: true`). Drag in the viewer to select text character by
+  character — across lines, starting and ending mid-word — and it's copied to
+  the clipboard on release; `y`/`Y` re-copy it and any key clears it. A click
+  that doesn't move still follows a link. It's kept separate from `mouse`
+  because it reports pointer motion, which replaces your terminal's own
+  click-drag selection while termdown is running (hold Shift, or Option on
+  macOS, to fall back to it).
 - Live reload monitors the file modification time and reloads when changed.
 
 ## Development

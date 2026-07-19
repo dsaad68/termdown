@@ -20,6 +20,18 @@ struct GraphLabel {
     }
 }
 
+/// Flatten an edge label to a single line. Edge labels are drawn inline along a
+/// one-row arrow, so unlike node labels they cannot wrap — a `<br>` or literal
+/// `\n` has to become a space rather than reaching the canvas as an escape.
+func flattenEdgeLabel(_ raw: String) -> String {
+    var s = raw.replacingOccurrences(
+        of: #"(?i)<br\s*/?>"#, with: " ", options: .regularExpression)
+    s = s.replacingOccurrences(of: "\\n", with: " ")
+    s = s.replacingOccurrences(of: "\n", with: " ")
+    return s.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        .trimmingCharacters(in: .whitespaces)
+}
+
 func newGraphLabel(_ raw: String) -> GraphLabel {
     var normalized = raw.replacingOccurrences(
         of: #"(?i)<br\s*/?>"#, with: "\n", options: .regularExpression)

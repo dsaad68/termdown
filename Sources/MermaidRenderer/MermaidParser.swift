@@ -52,9 +52,9 @@ private func regexGroupsNested(_ pattern: String, _ original: String, _ masked: 
 /// single ASCII placeholder). The operator regexes then only see top-level
 /// operators, so `A["foo & bar"]` and `A["x --> y"]` are treated as labels
 /// rather than syntax.
-private func maskNested(_ line: String) -> String {
+func maskNested(_ line: String) -> String {
     var out = String.UnicodeScalarView()
-    var depth = 0
+    var shapes = ShapeNesting()
     var inQuotes = false
     let neutral = Unicode.Scalar(1)! // SOH — never a meaningful character here
     for scalar in line.unicodeScalars {
@@ -62,14 +62,16 @@ private func maskNested(_ line: String) -> String {
         case "\"":
             inQuotes.toggle()
             out.append(scalar)
-        case "[" where !inQuotes:
-            depth += 1
+        // All shape delimiters, so an operator inside `{a-b}` or `(a>b)` is
+        // masked the same way one inside `[a-b]` already was.
+        case "[", "(", "{":
+            if !inQuotes { shapes.open(scalar) }
             out.append(scalar)
-        case "]" where !inQuotes:
-            if depth > 0 { depth -= 1 }
+        case "]", ")", "}":
+            if !inQuotes { shapes.close(scalar) }
             out.append(scalar)
         case "-", ">", "&", "|":
-            out.append(depth > 0 || inQuotes ? neutral : scalar)
+            out.append(!shapes.isEmpty || inQuotes ? neutral : scalar)
         default:
             out.append(scalar)
         }
@@ -98,7 +100,7 @@ func parseSubgraphHeader(_ header: String) -> TextSubgraph {
 func splitGraphLines(_ mermaid: String) -> [String] {
     var result: [String] = []
     var current = ""
-    var bracketDepth = 0
+    var shapes = ShapeNesting()
     var inQuotes = false
     let chars = Array(mermaid)
     var i = 0
@@ -108,18 +110,26 @@ func splitGraphLines(_ mermaid: String) -> [String] {
         switch c {
         case "\"":
             inQuotes.toggle()
-        case "[":
-            if !inQuotes { bracketDepth += 1 }
-        case "]":
-            if !inQuotes, bracketDepth > 0 { bracketDepth -= 1 }
+        // Every node-shape delimiter counts, not just `[` — a label inside
+        // `{...}`, `(...)` or any compound shape must not be split mid-way.
+        case "[", "(", "{":
+            if !inQuotes, let s = c.unicodeScalars.first { shapes.open(s) }
+        case "]", ")", "}":
+            if !inQuotes, let s = c.unicodeScalars.first { shapes.close(s) }
         case "\n":
-            if bracketDepth == 0 {
+            if shapes.isEmpty {
+                // A quoted label never spans a real newline, so an odd `"` —
+                // easily a `%%` comment or an apostrophe — must not latch and
+                // stop every later split. Scope it to the line that opened it.
+                inQuotes = false
                 result.append(current)
                 current = ""
                 skip = true
             }
         case "\\":
-            if i + 1 < chars.count, chars[i + 1] == "n", bracketDepth == 0 {
+            // A literal `\n` separates statements, but never inside a label —
+            // whether the label is bracketed or merely quoted.
+            if i + 1 < chars.count, chars[i + 1] == "n", shapes.isEmpty, !inQuotes {
                 result.append(current)
                 current = ""
                 i += 1
@@ -135,6 +145,29 @@ func splitGraphLines(_ mermaid: String) -> [String] {
     return result
 }
 
+/// Node-shape delimiters, longest first so `A(["x"])` matches the stadium pair
+/// rather than the round one, and `A{{"x"}}` the hexagon rather than the rhombus.
+///
+/// Every shape is *drawn* as a rectangle — this renderer has no shape model, the
+/// same as upstream mermaid-ascii. Recognizing the delimiters is still required
+/// so the syntax is stripped from the label: without this table `A{"Decide"}`
+/// renders as a box captioned `A{"Decide"}`, braces and quotes included.
+private let nodeShapes: [(open: String, close: String)] = [
+    ("[[", "]]"),   // subroutine
+    ("[(", ")]"),   // cylinder
+    ("([", "])"),   // stadium
+    ("((", "))"),   // circle
+    ("{{", "}}"),   // hexagon
+    ("[/", "/]"),   // parallelogram
+    ("[\\", "\\]"), // parallelogram alt
+    ("[/", "\\]"),  // trapezoid
+    ("[\\", "/]"),  // trapezoid alt
+    ("[", "]"),     // rectangle
+    ("(", ")"),     // round
+    ("{", "}"),     // rhombus
+    (">", "]"),     // asymmetric
+]
+
 func parseNode(_ line: String) -> TextNode {
     var trimmed = line.trimmingCharacters(in: .whitespaces)
     var styleClass = ""
@@ -143,12 +176,16 @@ func parseNode(_ line: String) -> TextNode {
         trimmed = String(trimmed[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
     }
     let name = trimmed
-    if let open = trimmed.range(of: "["),
-       open.lowerBound > trimmed.startIndex,
-       trimmed.hasSuffix("]") {
+    for shape in nodeShapes {
+        guard trimmed.hasSuffix(shape.close),
+              let open = trimmed.range(of: shape.open),
+              open.lowerBound > trimmed.startIndex,
+              let close = trimmed.range(of: shape.close, options: .backwards),
+              open.upperBound <= close.lowerBound
+        else { continue }
         let nm = String(trimmed[..<open.lowerBound]).trimmingCharacters(in: .whitespaces)
-        let beforeClose = trimmed.index(before: trimmed.endIndex)
-        var labelText = String(trimmed[open.upperBound..<beforeClose]).trimmingCharacters(in: .whitespaces)
+        var labelText = String(trimmed[open.upperBound..<close.lowerBound])
+            .trimmingCharacters(in: .whitespaces)
         labelText = trimQuotes(labelText)
         return TextNode(name: nm, label: newGraphLabel(labelText), hasLabel: true, styleClass: styleClass)
     }
@@ -180,7 +217,11 @@ extension GraphProperties {
         if let m = regexGroupsNested(#"^(.+)\s*-->\s*\|(.+)\|\s*(.+)$"#, line, masked) {
             let lhs = parseString(m[1]) ?? [parseNode(m[1])]
             let rhs = parseString(m[3]) ?? [parseNode(m[3])]
-            return setArrowWithLabel(lhs, rhs, label: m[2])
+            // Edge labels may be quoted to protect commas / operators, exactly
+            // like node labels — strip the quotes and flatten any line break so
+            // neither reaches the canvas verbatim.
+            let edgeLabel = flattenEdgeLabel(trimQuotes(m[2].trimmingCharacters(in: .whitespaces)))
+            return setArrowWithLabel(lhs, rhs, label: edgeLabel)
         }
         if let m = regexGroupsNested(#"^(.+)\s*-->\s*(.+)$"#, line, masked) {
             let lhs = parseString(m[1]) ?? [parseNode(m[1])]

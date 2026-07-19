@@ -26,6 +26,29 @@ extension Pager {
     /// The column has no background fill — it shares the document's dark canvas, so
     /// focus reads from the header (accent bar + ↑↓) and the lavender selection
     /// rather than a grey wash. ⌃/⌄ chevrons mark where the outline scrolls offscreen.
+    /// First outline row shown in the sidebar. Shared by the draw and the click
+    /// hit-test so the two cannot disagree about which heading a row holds.
+    func sidebarScroll(top: Int, contentRows: Int,
+                       sidebarFocus: Bool, sidebarCursor: Int) -> Int {
+        let listRows = max(0, contentRows - 1)
+        let maxScroll = max(0, headings.count - listRows)
+        // When focused, keep the cursor row centred; otherwise follow the reading position.
+        let current = headings.lastIndex { $0.lineIndex <= top + Pager.scrolloff }
+        let anchor = sidebarFocus ? sidebarCursor : (current ?? 0)
+        return max(0, min(anchor - listRows / 2, maxScroll))
+    }
+
+    /// Heading index under 1-based screen row `y`, or nil for the panel header
+    /// and empty rows below the list.
+    func sidebarHeadingIndex(atRow y: Int, top: Int, contentRows: Int,
+                             sidebarFocus: Bool, sidebarCursor: Int) -> Int? {
+        let offset = (y - 1) - 1        // screen row → content row → skip header
+        guard offset >= 0, offset < max(0, contentRows - 1) else { return nil }
+        let idx = sidebarScroll(top: top, contentRows: contentRows,
+                                sidebarFocus: sidebarFocus, sidebarCursor: sidebarCursor) + offset
+        return idx < headings.count ? idx : nil
+    }
+
     func sidebarColumn(top: Int, contentRows: Int,
                        sidebarFocus: Bool, sidebarCursor: Int) -> [String] {
         let P = Ansi.Pastel.self
@@ -37,10 +60,8 @@ extension Pager {
 
         // Row 0 is the panel header; the outline list fills the rows beneath it.
         let listRows = max(0, contentRows - 1)
-        let maxScroll = max(0, headings.count - listRows)
-        // When focused, keep the cursor row centred; otherwise follow the reading position.
-        let anchor = sidebarFocus ? sidebarCursor : (current ?? 0)
-        let scroll = max(0, min(anchor - listRows / 2, maxScroll))
+        let scroll = sidebarScroll(top: top, contentRows: contentRows,
+                                   sidebarFocus: sidebarFocus, sidebarCursor: sidebarCursor)
 
         var cells: [String] = [sidebarHeader(focus: sidebarFocus, width: w)]
         for vi in 0..<listRows {

@@ -22,6 +22,8 @@ extension Terminal {
         case ctrlS          // save
         case mouseScroll(Int) // positive = down, negative = up
         case mouseClick(x: Int, y: Int) // left-button press at 1-based (col, row)
+        case mouseDrag(x: Int, y: Int) // motion with the left button held
+        case mouseRelease(x: Int, y: Int) // left-button release
         case other
     }
 
@@ -31,9 +33,34 @@ extension Terminal {
         readKey(timeoutMs: nil)!
     }
 
+    /// A key read ahead of time and handed back. Drag coalescing drains pending
+    /// motion events and must return the one non-drag key that ended the drain.
+    private static var pushedBack: Key?
+
+    /// Return `key` from the next `readKey` call. Only one key is buffered.
+    static func pushBack(_ key: Key) { pushedBack = key }
+
+    /// Collapse a run of already-queued scroll events into a single delta.
+    ///
+    /// A wheel spin or trackpad flick emits one event per notch, and every one
+    /// of them would otherwise repaint a full frame — ~12 KB at a typical
+    /// terminal size, so a fast scroll queues far more redrawing than the eye
+    /// needs or the pty delivers cleanly. Only the position the scroll ends at
+    /// matters, so sum the pending deltas and draw once. The key that ends the
+    /// drain is handed back for the caller's normal dispatch.
+    static func coalesceScroll(_ delta: Int) -> Int {
+        var total = delta
+        while let next = readKey(timeoutMs: 0) {
+            guard case .mouseScroll(let d) = next else { pushBack(next); break }
+            total += d
+        }
+        return total
+    }
+
     /// Read a single logical key press with an optional timeout.
     /// Returns nil if timeout expires before a key is pressed.
     static func readKey(timeoutMs: Int32?) -> Key? {
+        if let k = pushedBack { pushedBack = nil; return k }
         // A nil here means EOF (e.g. Ctrl-D or a closed stdin); treat as Escape
         // so callers exit cleanly instead of spinning.
         guard let b0 = readByte(timeoutMs: timeoutMs) else { return timeoutMs != nil ? nil : .escape }
@@ -62,12 +89,26 @@ extension Terminal {
                             current = 0
                         } else if b == 0x4D /* M */ || b == 0x6D /* m */ {
                             let isPress = (b == 0x4D) // 'M' press, 'm' release
-                            // Buttons 64/65 = scroll up/down (press events only).
-                            if button == 64 && isPress { return .mouseScroll(-3) }
-                            if button == 65 && isPress { return .mouseScroll(3) }
-                            // Left button (0) press = a click at 1-based (x, y).
-                            if button == 0 && isPress { return .mouseClick(x: x, y: y) }
-                            return .other
+                            // The button field packs flags alongside the button
+                            // number: bit 2 = Shift, 3 = Alt, 4 = Ctrl, 5 (32) =
+                            // motion, 6 (64) = wheel. Mask them off so a drag
+                            // (0|32) or a modified click still resolves to its
+                            // button instead of falling through as `.other`.
+                            let motion = (button & 32) != 0
+                            let wheel = (button & 64) != 0
+                            let btn = button & 3
+                            if wheel {
+                                // Only the vertical wheel scrolls: 64/65 are
+                                // up/down, but 66/67 are the horizontal tilt or
+                                // trackpad swipe, and masking those to 2/3 would
+                                // read both directions as "down". There is
+                                // nothing to scroll sideways, so ignore them.
+                                guard isPress, btn < 2 else { return .other }
+                                return .mouseScroll(btn == 0 ? -3 : 3)
+                            }
+                            guard btn == 0 else { return .other }  // left button only
+                            if motion { return .mouseDrag(x: x, y: y) }
+                            return isPress ? .mouseClick(x: x, y: y) : .mouseRelease(x: x, y: y)
                         } else if b >= 0x30 && b <= 0x39 {
                             current = current * 10 + Int(b - 0x30)
                             switch reading {

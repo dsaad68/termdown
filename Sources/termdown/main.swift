@@ -16,6 +16,7 @@ struct Config {
     var themeName: String?
     var noColor: Bool = false
     var mouse: Bool?  // nil = use yaml/default
+    var mouseSelect: Bool?  // nil = use yaml/default
     var directory: String?
     var renderFile: String?
     var showHelp: Bool = false
@@ -53,6 +54,10 @@ while let arg = args.first {
         config.mouse = true
     case "--no-mouse":
         config.mouse = false
+    case "--mouse-select":
+        config.mouseSelect = true
+    case "--no-mouse-select":
+        config.mouseSelect = false
     case "render":
         guard let file = args.first else {
             FileHandle.standardError.write(Data("termdown: render requires a file path\n".utf8))
@@ -88,7 +93,11 @@ if !config.noColor {
 if config.mouse == nil {
     config.mouse = appConfig.mouse ?? false
 }
+if config.mouseSelect == nil {
+    config.mouseSelect = appConfig.mouseSelect ?? false
+}
 let mouseEnabled = config.mouse ?? false
+let mouseSelectEnabled = config.mouseSelect ?? false
 
 // Viewer key rebindings (config `key-<action>: <char>`) → canonical-key translation.
 let keyTranslation = KeyBindings.translation(from: appConfig.keyBindings)
@@ -128,6 +137,9 @@ if config.showHelp {
       --no-color        Disable ANSI colors
       --mouse           Enable mouse scroll (overrides config)
       --no-mouse        Disable mouse scroll (overrides config)
+      --mouse-select    Enable drag-to-select text, copied on release. Replaces
+                        the terminal's own click-drag selection while active
+      --no-mouse-select Disable drag-to-select (overrides config)
       --version, -V     Show version information
       --help, -h        Show this help message
     """)
@@ -141,6 +153,15 @@ if config.showVersion {
 
 // Apply color setting
 Ansi.colorEnabled = !config.noColor
+
+// Emoji width mode: `scalar` restores legacy per-scalar summing for terminals
+// that draw the components of a ZWJ sequence separately. Both measurement
+// tables have to move together — a diagram measured one way inside a document
+// measured the other has its borders off by a cell on every emoji row.
+if appConfig.wideEmoji?.lowercased() == "scalar" {
+    Ansi.emojiWidthMode = .scalar
+    DisplayWidth.emojiWidthMode = .scalar
+}
 
 // Detect 24-bit color support so content + chrome render in true color when the
 // terminal advertises it (most modern terminals set COLORTERM=truecolor/24bit).
@@ -172,6 +193,7 @@ if config.useStdin {
         var pager = Pager(title: "stdin", lines: [])
         pager.fixedWidth = config.width
         pager.mouseEnabled = mouseEnabled
+        pager.mouseSelectEnabled = mouseSelectEnabled
         pager.renderSource = { w in
             AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners,
                          mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(source)
@@ -233,26 +255,6 @@ FolderWatcher.start(root: rootURL)
 
 // MARK: - Main loop: pick a file -> view it -> repeat
 
-/// Short, human-friendly modification time for the picker's secondary column.
-func relativeDate(_ date: Date) -> String {
-    let secs = Date().timeIntervalSince(date)
-    if secs < 60 { return "now" }
-    if secs < 3600 { return "\(Int(secs / 60))m" }
-    if secs < 86400 { return "\(Int(secs / 3600))h" }
-    if secs < 7 * 86400 { return "\(Int(secs / 86400))d" }
-    let fmt = DateFormatter()
-    fmt.dateFormat = "MMM d"
-    return fmt.string(from: date)
-}
-
-func fileDetails(_ entries: [FileScanner.Entry]) -> [String] {
-    entries.map { entry -> String in
-        let attrs = try? FileManager.default.attributesOfItem(atPath: entry.url.path)
-        guard let date = attrs?[.modificationDate] as? Date else { return "" }
-        return relativeDate(date)
-    }
-}
-
 var details = fileDetails(entries)
 
 let homePath = FileManager.default.homeDirectoryForCurrentUser.path
@@ -269,7 +271,8 @@ menu.path = displayPath
 menu.mouseEnabled = mouseEnabled
 
 // Project-wide search across all discovered files (reused from list + pager).
-let liveGrep = LiveGrep(entries: entries.map { ($0.url, $0.relativePath) })
+var liveGrep = LiveGrep(entries: entries.map { ($0.url, $0.relativePath) })
+liveGrep.mouseEnabled = mouseEnabled
 
 // Re-scan the directory after `FolderWatcher` reports a change, syncing
 // `entries`/`details`/`liveGrep` if the file list actually differs (an
@@ -320,6 +323,7 @@ func viewFile(_ url: URL, query: String?) {
     pager.fileURL = url
     pager.fixedWidth = config.width
     pager.mouseEnabled = mouseEnabled
+    pager.mouseSelectEnabled = mouseSelectEnabled
     pager.initialQuery = query
     pager.renderFile = renderFile
     pager.renderText = renderText

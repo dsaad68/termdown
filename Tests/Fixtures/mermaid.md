@@ -21,6 +21,18 @@ B[API] --> C[DB]
 end
 ```
 
+Node shapes other than `[...]`, with multi-line and quoted labels. Every shape
+is drawn as a rectangle, but its delimiters are stripped from the label:
+
+```mermaid
+flowchart LR
+A["formula row:\ninput + gold formula"] --> B["teacher\nrecast question"]
+B --> C{"verify (deterministic):\ncomponents ↔ sub-queries\nbijection; NL-only"}
+C -->|pass| D(["finalize"])
+C -->|"fail, retries < 2\n(with feedback)"| B
+C -->|fail twice| E((rejected))
+```
+
 A sequence diagram:
 
 ```mermaid

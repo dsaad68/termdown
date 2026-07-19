@@ -1,6 +1,6 @@
 import XCTest
 @testable import termdownCore
-import MermaidRenderer
+@testable import MermaidRenderer
 
 /// Integration tests for ```mermaid handling inside the markdown renderer:
 /// diagram rendering, charset selection, the enable flag, and graceful fallback.
@@ -82,5 +82,36 @@ final class MermaidRenderTests: XCTestCase {
         let out = render(flowchart, enabled: false)
         XCTAssertTrue(out.contains("graph LR"), "with mermaid disabled the source should render as code")
         XCTAssertFalse(out.contains("►"))
+    }
+
+    // MARK: - The two width tables must not drift apart
+
+    /// `Ansi` measures the rows and `DisplayWidth` measures the box borders
+    /// drawn inside them. They are deliberate duplicates — MermaidRenderer stays
+    /// dependency-free so it can be vendored alone — which makes a silent
+    /// divergence the failure mode: a diagram sized by one table and padded by
+    /// the other sits a cell off on every row containing the disputed glyph.
+    /// This sweeps the assigned planes so an edit to one table fails loudly.
+    func testWidthTablesAgreeOnEveryScalar() {
+        // Compare the per-cluster measurement, not `width`/`stringWidth`: only
+        // the former strips ANSI escapes, which would report ESC as a false
+        // divergence rather than a table one.
+        var mismatches: [String] = []
+        for v in UInt32(0)...0x3FFFF {
+            guard let scalar = Unicode.Scalar(v) else { continue }
+            let c = Character(scalar)
+            let ansi = Ansi.charWidth(c)
+            let mermaid = DisplayWidth.clusterWidth(c)
+            if ansi != mermaid, mismatches.count < 12 {
+                mismatches.append(String(format: "U+%04X: Ansi=%d DisplayWidth=%d", v, ansi, mermaid))
+            }
+        }
+        XCTAssertEqual(mismatches, [], "width tables diverged")
+    }
+
+    func testWidthTablesAgreeOnEmojiSequences() {
+        for s in ["👨‍👩‍👧", "👍🏽", "❤️", "🇺🇸", "🆕", "✅", "日本語", "🀄", "🈚"] {
+            XCTAssertEqual(Ansi.width(s), DisplayWidth.stringWidth(s), "disagreed on \(s)")
+        }
     }
 }

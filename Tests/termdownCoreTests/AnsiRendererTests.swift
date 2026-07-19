@@ -123,15 +123,31 @@ final class AnsiRendererTests: XCTestCase {
         XCTAssertTrue(urls.contains("other.md"))
 
         // The recorded column range should align with the visible link text.
+        // Sliced by display column, matching what `column`/`length` mean — the
+        // old character indexing agreed only because this fixture is ASCII, and
+        // so certified the confusion it was meant to catch.
         if let example = doc.links.first(where: { $0.url == "https://example.com" }) {
             let plain = Ansi.strip(doc.lines[example.lineIndex])
-            let chars = Array(plain)
-            let lo = example.column
-            let hi = min(example.column + example.length, chars.count)
-            XCTAssertEqual(String(chars[lo..<hi]), "Example")
+            let slice = Ansi.horizontalSlice(plain, start: example.column, width: example.length)
+            XCTAssertEqual(Ansi.strip(slice), "Example")
         } else {
             XCTFail("expected an Example link")
         }
+    }
+
+    /// The same assertion on a line whose link is preceded by wide glyphs, where
+    /// a display column and a character index genuinely diverge.
+    func testCollectLinksColumnsAreDisplayColumnsWithWideText() {
+        let renderer = AnsiRenderer(width: 80, theme: .dark)
+        let doc = renderer.render("日本語 と [Example](https://example.com) です。")
+        guard let link = doc.links.first(where: { $0.url == "https://example.com" }) else {
+            return XCTFail("expected an Example link")
+        }
+        let plain = Ansi.strip(doc.lines[link.lineIndex])
+        let slice = Ansi.horizontalSlice(plain, start: link.column, width: link.length)
+        XCTAssertEqual(Ansi.strip(slice), "Example")
+        // And the column really is past the CJK run, not a character offset.
+        XCTAssertGreaterThanOrEqual(link.column, 8)
     }
 
     func testRenderThematicBreak() {

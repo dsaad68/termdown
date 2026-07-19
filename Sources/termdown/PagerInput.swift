@@ -5,12 +5,23 @@ extension Pager {
 
     // MARK: - Incremental search input
 
+    /// Abandon an incremental search: drop the query with its highlights and put
+    /// the viewport back where `/` was pressed. Shared with the mouse path, so a
+    /// click that dismisses the prompt means the same thing Escape does.
+    mutating func cancelSearch() {
+        searchMode = false
+        searchQuery = ""; searchMatches = []; currentMatchIndex = 0
+        top = searchOrigin
+    }
+
+    mutating func cancelGoto() {
+        gotoMode = false; gotoInput = ""
+    }
+
     mutating func handleSearchMode(_ key: Terminal.Key) {
         switch key {
         case .escape:
-            searchMode = false
-            searchQuery = ""; searchMatches = []; currentMatchIndex = 0
-            top = searchOrigin
+            cancelSearch()
         case .enter:
             searchMode = false
             if !searchMatches.isEmpty {
@@ -34,7 +45,7 @@ extension Pager {
     mutating func handleGotoMode(_ key: Terminal.Key) {
         switch key {
         case .escape:
-            gotoMode = false; gotoInput = ""
+            cancelGoto()
         case .backspace:
             if !gotoInput.isEmpty { gotoInput.removeLast() }
         case .enter:
@@ -82,7 +93,6 @@ extension Pager {
         let row = y - 1
         guard row >= 0, row < contentRows else { return }   // ignore the status bar / gutter
         let lineIndex = top + row
-        let chromeLeft = sidebarActive ? (Pager.sidebarWidth + 2) : Pager.leftMargin
         let contentCol = (x - 1) - chromeLeft + hscroll
         guard contentCol >= 0 else { return }               // a click in the sidebar/margin
         if let i = links.firstIndex(where: {
@@ -159,6 +169,7 @@ extension Pager {
         if case .char(let c) = key, let canonical = keyTranslation[c] {
             key = .char(canonical)
         }
+        dropTextSelection(unless: key)
         switch key {
         case .up, .char("k"):
             navUp(1)
@@ -176,9 +187,10 @@ extension Pager {
         case .right, .char("l"):
             hscroll = min(maxHscroll, hscroll + Pager.hStep)
         case .mouseScroll(let delta):
+            // `delta` arrives already coalesced from the run loop.
             top = max(0, min(maxTop, top + delta))   // cursor follows via clampCursorToView()
-        case .mouseClick(let x, let y):
-            handleClick(x: x, y: y)
+        case .mouseClick, .mouseDrag, .mouseRelease:
+            handleMouseButton(key)
         case .pageDown, .char(" "), .char("f"):
             navDown(contentRows)
         case .pageUp, .char("b"):
@@ -317,8 +329,11 @@ extension Pager {
             }
         case .char("y"):
             // With a live selection, `y` copies it as raw markdown; otherwise it
-            // falls back to copying the nearest code block.
-            if cursorVisible, let sel = selectionRange() {
+            // falls back to copying the nearest code block. A mouse text
+            // selection is character-precise, so it re-copies as rendered text.
+            if let sel = textSelection {
+                copyTextSelection(sel)
+            } else if cursorVisible, let sel = selectionRange() {
                 copySelection(sel, asMarkdown: true)
             } else if let block = nearestCodeBlock(codeBlocks, top: top, rows: contentRows), !block.text.isEmpty {
                 Terminal.copyToClipboard(block.text)
@@ -332,7 +347,9 @@ extension Pager {
         case .char("Y"):
             // With a live selection, `Y` copies it as rendered text; otherwise it
             // falls back to copying the focused / nearest link URL.
-            if cursorVisible, let sel = selectionRange() {
+            if let sel = textSelection {
+                copyTextSelection(sel)
+            } else if cursorVisible, let sel = selectionRange() {
                 copySelection(sel, asMarkdown: false)
             } else if let i = linkFocus ?? firstVisibleLink(top: top, rows: contentRows), i < links.count {
                 Terminal.copyToClipboard(links[i].url)

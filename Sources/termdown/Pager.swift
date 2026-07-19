@@ -64,6 +64,11 @@ struct Pager {
     /// Whether mouse scroll events are enabled.
     var mouseEnabled: Bool = false
 
+    /// Whether drag-to-select is enabled (implies mouse tracking). Off by default
+    /// because motion reporting takes click-drag away from the terminal's own
+    /// text selection.
+    var mouseSelectEnabled: Bool = false
+
     // MARK: - Layout chrome constants
 
     static let leftMargin = 2
@@ -73,6 +78,7 @@ struct Pager {
     static let minColsForSidebar = 60
     static let noWrapWidth = 100_000
     static let hStep = 8           // horizontal scroll step
+    static let multiClickInterval = 0.4   // seconds; double/triple click window
 
     // MARK: - Runtime state (initialized in `run()`; see the doc comment above)
 
@@ -143,6 +149,20 @@ struct Pager {
     // range between this anchor and `cursorLine`. Shift+arrows / Shift+J/K extend
     // it; a plain motion clears it.
     var selectionAnchor: Int?
+    // Character-precise mouse selection (`mouse-select`). Independent of the
+    // line selection above so the keyboard's `y`/`Y` behaviour is untouched.
+    var textSelection: TextSelection?
+    var dragAnchor: TextPoint?
+    var dragMoved = false
+    // Multi-click: a press within `multiClickInterval` on the same cell escalates
+    // to word (2) then line (3) selection.
+    var clickCount = 0
+    var lastClickAt = Date.distantPast
+    var lastClickPoint: TextPoint?
+    // Edge autoscroll while a drag is held still: direction plus the last
+    // reported pointer position, so the selection keeps extending.
+    var autoScrollDir = 0
+    var lastDragPoint: TextPoint?
 
     // Inline edit mode (activated by `e`): the cursor's block becomes an editable
     // raw-markdown field while the rest of the document stays rendered. On Enter
@@ -194,9 +214,12 @@ struct Pager {
     /// Display the content and block until the user exits (q / Esc).
     mutating func run() {
         Terminal.hideCursor()
-        if mouseEnabled { Terminal.enableMouseTracking() }
+        // `mouse-select` needs the pointer even when plain mouse mode is off, so
+        // either setting turns tracking on; only the former asks for motion.
+        let wantsMouse = mouseEnabled || mouseSelectEnabled
+        if wantsMouse { Terminal.enableMouseTracking(drag: mouseSelectEnabled) }
         defer {
-            if mouseEnabled { Terminal.disableMouseTracking() }
+            if wantsMouse { Terminal.disableMouseTracking() }
             Terminal.showCursor()
         }
 
@@ -266,8 +289,19 @@ struct Pager {
 
             pollReload()
 
-            guard let key = Terminal.readKey(timeoutMs: 100) else { continue }
+            // On idle, keep a held-at-the-edge drag scrolling: the terminal only
+            // reports motion when the pointer actually moves.
+            guard var key = Terminal.readKey(timeoutMs: 100) else { tickAutoScroll(); continue }
             needsRedraw = true
+
+            // Fold a queued scroll burst into one event *before* dispatch. Doing
+            // it inside a handler would drain the queue even when that handler
+            // declines the event, and the summed delta would be lost with it.
+            if case .mouseScroll(let d) = key { key = .mouseScroll(Terminal.coalesceScroll(d)) }
+
+            // Mouse events reach the modal handlers first; each keyboard handler
+            // below would otherwise swallow them in its `default` branch.
+            if handleModalMouse(key) { continue }
 
             if editMode { handleEditMode(key); continue }
             if savePromptMode { if handleSavePrompt(key) { return }; continue }

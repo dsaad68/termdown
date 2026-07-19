@@ -187,12 +187,18 @@ public struct AnsiRenderer {
 
         // The renderer emits one OSC 8 run per word; merge adjacent fragments
         // that share a URL (separated only by whitespace) into a single link.
-        let plain = Array(Ansi.strip(line))
+        let plain = Ansi.strip(line)
+        let plainWidth = Ansi.width(plain)
         for link in raw {
             if let last = links.last, last.lineIndex == lineIndex, last.url == link.url {
-                let gapLo = min(last.column + last.length, plain.count)
-                let gapHi = min(link.column, plain.count)
-                let between = gapLo <= gapHi ? String(plain[gapLo..<gapHi]) : "x"
+                // `column`/`length` are display columns, so the gap between two
+                // fragments of one link must be sliced by column too — indexing
+                // characters here misread the gap on any line with wide glyphs
+                // and either merged the wrong fragments or failed to merge.
+                let gapLo = min(last.column + last.length, plainWidth)
+                let gapHi = min(link.column, plainWidth)
+                let between = gapLo <= gapHi
+                    ? Ansi.horizontalSlice(plain, start: gapLo, width: gapHi - gapLo) : "x"
                 if between.allSatisfy({ $0 == " " || $0 == "\t" }) {
                     links[links.count - 1] = LinkInfo(
                         lineIndex: lineIndex, url: last.url, text: last.text + between + link.text,

@@ -48,27 +48,70 @@ enum Terminal {
     static func disableRawMode() {
         guard var saved = savedTermios else { return }
         _ = tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved)
-        disableMouseTracking()
+        forceDisableMouseTracking()
     }
 
     // MARK: - Mouse tracking
 
-    private static var mouseTrackingEnabled = false
+    /// One entry per active `enableMouseTracking` scope, holding whether that
+    /// scope asked for drag reporting.
+    ///
+    /// A stack rather than a flag because UIs nest: the file finder opened from
+    /// inside the pager (`T`) used to hit the idempotence guard on the way in and
+    /// then unconditionally tear tracking down on the way out, leaving the still
+    /// running pager with the mouse dead for the rest of the session.
+    private static var mouseScopes: [Bool] = []
 
-    /// Enable mouse tracking for scroll events (SGR mode).
-    static func enableMouseTracking() {
-        if mouseTrackingEnabled { return }
-        write("\u{1B}[?1000h") // Enable mouse tracking
-        write("\u{1B}[?1006h") // Enable SGR mode for better coordinates
-        mouseTrackingEnabled = true
+    /// Number of active tracking scopes — lets tests assert that nesting balances.
+    static var mouseTrackingDepth: Int { mouseScopes.count }
+
+    /// Enable mouse tracking for scroll events (SGR mode). With `drag`, also turn
+    /// on button-event tracking (`?1002h`) so motion is reported while a button is
+    /// held — what drag-to-select needs. `?1003h` (any motion) would report every
+    /// pointer move and is deliberately not used.
+    ///
+    /// Motion tracking takes click-drag away from the terminal's own text
+    /// selection, so it stays behind the opt-in `mouse-select` setting.
+    ///
+    /// Every call must be balanced by exactly one `disableMouseTracking()`.
+    static func enableMouseTracking(drag: Bool = false) {
+        let wasActive = !mouseScopes.isEmpty
+        let hadDrag = mouseScopes.contains(true)
+        mouseScopes.append(drag)
+        if !wasActive {
+            write("\u{1B}[?1000h") // Enable mouse tracking
+            write("\u{1B}[?1006h") // Enable SGR mode for better coordinates
+        }
+        // Report motion while a button is held.
+        if drag, !hadDrag { write("\u{1B}[?1002h") }
     }
 
-    /// Disable mouse tracking.
+    /// Leave one tracking scope. Modes are only turned off once the last scope
+    /// that wanted them is gone, so an inner UI exiting leaves an outer one's
+    /// tracking intact.
     static func disableMouseTracking() {
-        if !mouseTrackingEnabled { return }
-        write("\u{1B}[?1006l") // Disable SGR mode
-        write("\u{1B}[?1000l") // Disable mouse tracking
-        mouseTrackingEnabled = false
+        guard !mouseScopes.isEmpty else { return }
+        let hadDrag = mouseScopes.contains(true)
+        mouseScopes.removeLast()
+        if hadDrag, !mouseScopes.contains(true) {
+            write("\u{1B}[?1002l") // Disable button-event (drag) tracking
+        }
+        if mouseScopes.isEmpty {
+            write("\u{1B}[?1006l") // Disable SGR mode
+            write("\u{1B}[?1000l") // Disable mouse tracking
+        }
+    }
+
+    /// Tear tracking down regardless of depth. Used by the exit paths only —
+    /// `disableRawMode()`, which the atexit hook and the SIGINT/SIGTERM handlers
+    /// call. Those unwind the process, not a UI scope, so a non-zero depth there
+    /// would leak `?1000h` into the user's shell.
+    static func forceDisableMouseTracking() {
+        guard !mouseScopes.isEmpty else { return }
+        mouseScopes.removeAll()
+        write("\u{1B}[?1006l")
+        write("\u{1B}[?1002l")
+        write("\u{1B}[?1000l")
     }
 
     // MARK: - Alternate screen

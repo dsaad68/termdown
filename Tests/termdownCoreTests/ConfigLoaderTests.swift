@@ -64,4 +64,35 @@ final class ConfigLoaderTests: XCTestCase {
         XCTAssertEqual(base.mouse, true)      // overridden
         XCTAssertEqual(base.width, 80)        // preserved (override didn't set it)
     }
+
+    func testMouseSelectAliases() {
+        XCTAssertEqual(parse("mouse-select: true")?.mouseSelect, true)
+        XCTAssertEqual(parse("mouseselect: true")?.mouseSelect, true)
+        XCTAssertEqual(parse("mouse_select: yes")?.mouseSelect, true)
+        XCTAssertEqual(parse("mouse-select: false")?.mouseSelect, false)
+    }
+
+    func testMouseSelectIsIndependentOfMouse() {
+        // Unset stays nil so the CLI-over-yaml-over-default precedence works,
+        // and it must not be implied by `mouse`.
+        let cfg = parse("mouse: true")
+        XCTAssertEqual(cfg?.mouse, true)
+        XCTAssertNil(cfg?.mouseSelect)
+    }
+
+    func testWideEmojiAliases() {
+        XCTAssertEqual(parse("wide-emoji: scalar")?.wideEmoji, "scalar")
+        XCTAssertEqual(parse("wideemoji: cluster")?.wideEmoji, "cluster")
+        XCTAssertEqual(parse("wide_emoji: scalar")?.wideEmoji, "scalar")
+        XCTAssertNil(parse("mouse: true")?.wideEmoji)
+    }
+
+    func testMouseSelectMerges() {
+        var base = AppConfig()
+        base.mouseSelect = false
+        var override = AppConfig()
+        override.mouseSelect = true
+        base.merge(override)
+        XCTAssertEqual(base.mouseSelect, true)
+    }
 }

@@ -181,6 +181,25 @@ final class PagerLogicTests: XCTestCase {
         XCTAssertEqual(p.searchMatches.count, 3)   // positions 0, 2, 4 (case-insensitive)
     }
 
+    /// Ranges are display columns, since `Ansi.bgRange` paints cells. The scan
+    /// carries a running column rather than re-measuring each match's prefix
+    /// from the start of the line — the columns must come out identical.
+    func testPerformSearchColumnsAccountForWideGlyphs() {
+        var p = makePager()
+        p.plainLines = ["日本x日本x日本"]        // each 日本 spans 2 columns per glyph
+        p.searchQuery = "x"
+        p.performSearch()
+        XCTAssertEqual(p.searchMatches.map(\.range), [4..<5, 9..<10])
+    }
+
+    func testPerformSearchColumnsForAWideQuery() {
+        var p = makePager()
+        p.plainLines = ["ab日本cd日本"]
+        p.searchQuery = "日本"
+        p.performSearch()
+        XCTAssertEqual(p.searchMatches.map(\.range), [2..<6, 8..<12])
+    }
+
     // MARK: - Navigation & tabs (state transitions)
 
     func testNavigateAndGoBack() {
