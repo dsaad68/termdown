@@ -116,18 +116,37 @@ extension AnsiRenderer {
 
         var out: [String] = [top]
         for row in bodyRows {
-            let rowWidth = Ansi.width(row)
-            if rowWidth > inner {
-                // `horizontalSlice` carries the active SGR across the cut, unlike
-                // `Ansi.truncate`, which flattens the row to plain text.
-                let kept = Ansi.horizontalSlice(row, start: 0, width: inner - 1)
-                out.append(leftBar + kept + Ansi.color("\u{2026}", barColor) + rightBar)
-            } else {
-                let pad = inner - rowWidth
-                out.append(leftBar + row + String(repeating: " ", count: pad) + rightBar)
-            }
+            out.append(leftBar + fitRow(row, to: inner, marker: barColor) + rightBar)
         }
         out.append(bottom)
         return out
+    }
+
+    /// Bring one card row to exactly `inner` columns: pad it if short, slice it
+    /// if long.
+    ///
+    /// A sliced row is marked with an ellipsis, but only when the slice actually
+    /// costs something. A mermaid canvas pads every row out to the width of the
+    /// whole drawing, so most rows of an over-wide diagram end in nothing but
+    /// spaces — marking those would put an ellipsis on rows that are visibly
+    /// empty and imply content was lost where none was. The marker has to mean
+    /// "something is missing here" to be worth anything.
+    private func fitRow(_ row: String, to inner: Int, marker: Ansi.Color) -> String {
+        let rowWidth = Ansi.width(row)
+        guard rowWidth > inner else {
+            return row + String(repeating: " ", count: inner - rowWidth)
+        }
+
+        // `horizontalSlice` carries the active SGR across the cut, unlike
+        // `Ansi.truncate`, which flattens the row to plain text.
+        let cut = Ansi.strip(Ansi.horizontalSlice(row, start: inner, width: rowWidth - inner))
+        let losesContent = cut.contains { !$0.isWhitespace }
+
+        // Leave a column for the marker only when one is actually drawn. A
+        // wide glyph straddling the cut can come up a column short, so pad.
+        let keptWidth = losesContent ? inner - 1 : inner
+        let kept = Ansi.horizontalSlice(row, start: 0, width: keptWidth)
+        let pad = String(repeating: " ", count: max(0, keptWidth - Ansi.width(kept)))
+        return kept + pad + (losesContent ? Ansi.color("\u{2026}", marker) : "")
     }
 }

@@ -160,4 +160,30 @@ final class MermaidRenderTests: XCTestCase {
         let body = doc.lines.map { Ansi.strip($0) }.joined(separator: "\n")
         XCTAssertFalse(body.contains("…"), "a diagram that fits should not be clipped:\n\(body)")
     }
+
+    // MARK: - Card row fitting
+
+    /// The card pads short rows and slices long ones, but the ellipsis has to
+    /// mean "content was lost here". A mermaid canvas pads every row out to the
+    /// width of the whole drawing, so an over-wide diagram hands `frameCard`
+    /// rows whose overhang is nothing but spaces.
+    func testCardMarksOnlyRowsThatActuallyLoseContent() {
+        let renderer = AnsiRenderer(width: 20, theme: .dark)
+        let inner = 20 - 4
+
+        let short = "abc"
+        let paddingOnly = String(repeating: "x", count: inner) + "        "
+        let realContent = String(repeating: "x", count: inner) + "     tail"
+
+        let card = renderer.frameCard(label: "t", bodyRows: [short, paddingOnly, realContent], width: 20)
+        let body = card.dropFirst().dropLast().map { Ansi.strip($0) }
+
+        XCTAssertEqual(body.count, 3)
+        for (index, row) in body.enumerated() {
+            XCTAssertEqual(Ansi.width(row), 20, "row \(index) is not the full width")
+        }
+        XCTAssertFalse(body[0].contains("\u{2026}"), "a short row must not be marked: \(body[0])")
+        XCTAssertFalse(body[1].contains("\u{2026}"), "only padding was cut: \(body[1])")
+        XCTAssertTrue(body[2].contains("\u{2026}"), "content was cut and must be marked: \(body[2])")
+    }
 }

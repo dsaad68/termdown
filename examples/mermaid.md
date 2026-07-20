@@ -97,6 +97,10 @@ amount of shrinking gets under it. The diagram is clipped inside an intact
 border and the cut is marked with `…`, rather than being allowed to overflow
 and drag the card's right edge off-screen.
 
+Every clipped row is marked, including ones that look blank — the second node
+is out there past the edge, on exactly those rows. A row that merely ends in
+padding is not marked, so an `…` always means something real is missing.
+
 Seeing `…` means *shorten the edge label or widen the terminal* — it is the one
 case termdown cannot solve on your behalf.
 
