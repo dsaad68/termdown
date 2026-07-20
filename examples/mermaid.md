@@ -93,16 +93,17 @@ A[Parse source] --> B[Build syntax tree] --> C[Resolve symbols] --> D[Emit objec
 
 Edge labels are drawn inline along a one-row arrow, so unlike node labels they
 cannot wrap. An edge label wider than the column is therefore a hard floor: no
-amount of shrinking gets under it. The diagram is clipped inside an intact
-border and the cut is marked with `…`, rather than being allowed to overflow
-and drag the card's right edge off-screen.
+amount of shrinking gets under it.
 
-Every clipped row is marked, including ones that look blank — the second node
-is out there past the edge, on exactly those rows. A row that merely ends in
-padding is not marked, so an `…` always means something real is missing.
+Rather than draw part of a diagram, termdown shows the **source** — the same
+thing it does for an unsupported or malformed diagram. A half-drawn diagram is
+worse than none: you cannot tell which nodes are missing, and a node cut off
+mid-box reads as a rendering fault rather than as a diagram that ran out of
+room.
 
-Seeing `…` means *shorten the edge label or widen the terminal* — it is the one
-case termdown cannot solve on your behalf.
+The block below renders as a diagram in a wide terminal and as source in a
+narrow one. If you are seeing source, *widen the terminal or shorten the edge
+label* — that is the one case termdown cannot solve on your behalf.
 
 ```mermaid
 graph LR

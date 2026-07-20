@@ -161,6 +161,40 @@ final class MermaidRenderTests: XCTestCase {
         XCTAssertFalse(body.contains("…"), "a diagram that fits should not be clipped:\n\(body)")
     }
 
+    // MARK: - Falling back to source when a diagram cannot fit
+
+    /// An edge label is drawn inline along a one-row arrow and cannot wrap, so a
+    /// label wider than the column is a floor no amount of fitting gets under.
+    private static let unfittableDiagram = """
+    ```mermaid
+    graph LR
+    A[Send] -->|connection reset by peer while streaming the response body, \
+    retrying with exponential backoff| B[Ack]
+    ```
+    """
+
+    /// Showing part of a diagram is worse than showing none: which nodes are
+    /// missing is invisible, and a node cut mid-box reads as a rendering fault.
+    /// So it degrades the same way an unsupported diagram already does.
+    func testDiagramThatCannotFitFallsBackToSource() {
+        let out = render(Self.unfittableDiagram)
+        XCTAssertTrue(out.contains("graph LR"), "expected the source, got:\n\(out)")
+        XCTAssertFalse(out.contains("►"), "no partial diagram should be drawn:\n\(out)")
+        XCTAssertFalse(out.contains("…"), "nothing should be marked as clipped:\n\(out)")
+    }
+
+    /// …but only when it genuinely does not fit. Given room, the same source
+    /// must still render as a diagram.
+    func testTheSameDiagramRendersWhenThereIsRoom() {
+        let previous = Ansi.colorEnabled
+        Ansi.colorEnabled = false
+        defer { Ansi.colorEnabled = previous }
+        let out = AnsiRenderer(width: 130, theme: .dark)
+            .render(Self.unfittableDiagram).lines.joined(separator: "\n")
+        XCTAssertTrue(out.contains("►"), "expected a diagram at 130 columns, got:\n\(out)")
+        XCTAssertFalse(out.contains("graph LR"), "source should not appear when it renders")
+    }
+
     // MARK: - Card row fitting
 
     /// The card pads short rows and slices long ones, but the ellipsis has to

@@ -19,10 +19,15 @@ All notable changes to termdown are documented here. The format is based on
   Diagrams now get the card's interior width as a budget. Node labels wrap and
   inter-node spacing tightens until the diagram fits; a left-to-right graph that
   still cannot fit is stacked top-down, which is the only lever large enough to
-  rescue a long horizontal chain. Anything that survives all of that is clipped
-  inside an intact border instead of breaking out of it. Edge labels are drawn
-  inline along a one-row arrow and cannot wrap, so they remain a hard floor on
-  how narrow a diagram can get.
+  rescue a long horizontal chain.
+
+  Edge labels are drawn inline along a one-row arrow and cannot wrap, so they
+  remain a hard floor on how narrow a diagram can get. A diagram that is still
+  too wide after all of that now falls back to showing its source, the same way
+  an unsupported or malformed diagram already does — a partly drawn diagram
+  hides which nodes are missing, and a node cut off mid-box reads as a rendering
+  fault. The same block therefore renders as a diagram in a wide terminal and as
+  source in a narrow one.
 
   Rendering without a width budget is unchanged, which is what keeps the
   upstream mermaid-ascii goldens byte-for-byte identical.

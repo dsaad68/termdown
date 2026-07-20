@@ -27,10 +27,17 @@ extension AnsiRenderer {
             // width. Without this the layout runs at its natural size and any
             // overflow reaches the pager, which truncates it destructively.
             options.maxWidth = codeWidth
-            if let rows = Mermaid.render(source, options: options) {
+            if let rows = Mermaid.render(source, options: options),
+               rows.allSatisfy({ Ansi.width($0) <= codeWidth }) {
                 return frameCard(label: "mermaid", bodyRows: rows.map { Ansi.color($0, theme.codeText) },
                                  width: width)
             }
+            // Wider than the column even after fitting — usually an edge label,
+            // which is drawn inline along a one-row arrow and so cannot wrap.
+            // Showing 60% of a diagram is worse than showing none of it: you
+            // cannot tell which nodes are missing, and a node cut off mid-box
+            // reads as a rendering fault. Fall through to the source instead,
+            // which is what an unsupported diagram already does.
         }
 
         // Tokenize the whole block once (so multi-line strings / comments stay
