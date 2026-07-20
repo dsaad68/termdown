@@ -70,3 +70,6 @@ fastlane/test_output
 .claude/
 
 local-runner/
+
+# Stray asciinema recording (cast v3), not the built binary — see git log
+termdown
