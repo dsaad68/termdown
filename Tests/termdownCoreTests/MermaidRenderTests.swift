@@ -114,4 +114,50 @@ final class MermaidRenderTests: XCTestCase {
             XCTAssertEqual(Ansi.width(s), DisplayWidth.stringWidth(s), "disagreed on \(s)")
         }
     }
+
+    // MARK: - The card never exceeds the document width
+
+    /// Wide enough that it used to overflow an 80-column document by ~53
+    /// columns, which the pager then truncated destructively.
+    private static let wideDiagram = """
+    ```mermaid
+    flowchart LR
+        A[formula row: input + gold formula] --> B[teacher recast question]
+        B --> C[verify deterministic components and sub-queries]
+        C -->|fail, retries < 2 with feedback| B
+        C --> D[Done]
+    ```
+    """
+
+    /// Every row of a rendered document is padded to the full width; autowrap is
+    /// off, so a row wider than that pushes the frame's right border off-screen.
+    /// The mermaid card was the one construct that could produce one.
+    func testMermaidCardNeverExceedsTheDocumentWidth() {
+        for width in [40, 60, 80, 100, 120] {
+            let doc = AnsiRenderer(width: width, theme: .dark).render(Self.wideDiagram)
+            for (index, line) in doc.lines.enumerated() {
+                XCTAssertLessThanOrEqual(Ansi.width(line), width,
+                                         "row \(index) overflowed at width \(width)")
+            }
+        }
+    }
+
+    /// The card is a box: if the borders do not line up the frame looks broken,
+    /// so the top and bottom rules must span the full width exactly.
+    func testMermaidCardBordersSpanTheFullWidth() {
+        let width = 72
+        let doc = AnsiRenderer(width: width, theme: .dark).render(Self.wideDiagram)
+        let top = try? XCTUnwrap(doc.lines.first { Ansi.strip($0).hasPrefix("┌─ mermaid") })
+        let bottom = try? XCTUnwrap(doc.lines.first { Ansi.strip($0).hasPrefix("└") })
+        XCTAssertEqual(Ansi.width(top ?? ""), width)
+        XCTAssertEqual(Ansi.width(bottom ?? ""), width)
+    }
+
+    /// A diagram that fits must not be clipped — the ellipsis marker only ever
+    /// appears when a row genuinely could not be made to fit.
+    func testFittingDiagramIsNotMarkedAsClipped() {
+        let doc = AnsiRenderer(width: 100, theme: .dark).render(Self.wideDiagram)
+        let body = doc.lines.map { Ansi.strip($0) }.joined(separator: "\n")
+        XCTAssertFalse(body.contains("…"), "a diagram that fits should not be clipped:\n\(body)")
+    }
 }

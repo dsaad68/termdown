@@ -74,6 +74,9 @@ final class GraphProperties {
     var paddingY: Int
     var subgraphs: [TextSubgraph] = []
     var useAscii = false
+    /// Available display width, or nil for an unconstrained layout. See
+    /// `MermaidFit.swift`.
+    var maxWidth: Int?
 
     init(styleType: String, boxBorderPadding: Int, paddingX: Int, paddingY: Int) {
         self.styleType = styleType

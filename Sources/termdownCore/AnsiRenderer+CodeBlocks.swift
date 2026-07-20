@@ -23,6 +23,10 @@ extension AnsiRenderer {
             var options = MermaidOptions()
             options.charset = mermaidCharset
             options.colorEnabled = false
+            // The diagram lives inside the card, so it gets the card's interior
+            // width. Without this the layout runs at its natural size and any
+            // overflow reaches the pager, which truncates it destructively.
+            options.maxWidth = codeWidth
             if let rows = Mermaid.render(source, options: options) {
                 return frameCard(label: "mermaid", bodyRows: rows.map { Ansi.color($0, theme.codeText) },
                                  width: width)
@@ -81,19 +85,26 @@ extension AnsiRenderer {
 
     /// Frame already-coloured `bodyRows` as a complete box: a labelled top rule
     /// (`┌─ label ──┐`), full-height left/right borders, and a closing floor
-    /// (`└──┘`). The box spans the full content width and grows to fit any row
-    /// wider than it (e.g. a large diagram), which the pager scrolls horizontally.
-    /// Rows are emitted verbatim — never word-wrapped — so diagram art stays intact.
+    /// (`└──┘`).
+    ///
+    /// The box is exactly `width` columns. It used to grow to fit any row wider
+    /// than it, on the theory that the pager would scroll horizontally — but the
+    /// pager only does that with wrap off, and wrap is the default. With wrap on
+    /// it ran the over-wide row through `Ansi.truncate`, which strips styling and
+    /// appends an ellipsis, so a large diagram lost its border and its colour.
+    /// Clipping here instead keeps the card intact and the invariant that every
+    /// emitted row is exactly the document width.
+    ///
+    /// Rows are never word-wrapped, so diagram art stays intact; a row that
+    /// genuinely cannot fit is sliced (preserving its styling) and marked with
+    /// an ellipsis in the border colour.
     func frameCard(label: String, bodyRows: [String], width: Int) -> [String] {
         let barColor = theme.codeBar
         let leftBar = Ansi.color("\u{2502} ", barColor)  // │ + space
         let rightBar = Ansi.color(" \u{2502}", barColor) // space + │
 
-        var maxContent = 0
-        for row in bodyRows { maxContent = max(maxContent, Ansi.width(row)) }
-
-        let boxW = max(width, maxContent + cardChrome)
-        let inner = boxW - cardChrome
+        let boxW = width
+        let inner = max(1, boxW - cardChrome)
         let dash = "\u{2500}"
 
         let header = label.isEmpty ? "\u{250C}\u{2500}" : "\u{250C}\u{2500} \(label) " // ┌─ / ┌─ label
@@ -105,8 +116,16 @@ extension AnsiRenderer {
 
         var out: [String] = [top]
         for row in bodyRows {
-            let pad = max(0, inner - Ansi.width(row))
-            out.append(leftBar + row + String(repeating: " ", count: pad) + rightBar)
+            let rowWidth = Ansi.width(row)
+            if rowWidth > inner {
+                // `horizontalSlice` carries the active SGR across the cut, unlike
+                // `Ansi.truncate`, which flattens the row to plain text.
+                let kept = Ansi.horizontalSlice(row, start: 0, width: inner - 1)
+                out.append(leftBar + kept + Ansi.color("\u{2026}", barColor) + rightBar)
+            } else {
+                let pad = inner - rowWidth
+                out.append(leftBar + row + String(repeating: " ", count: pad) + rightBar)
+            }
         }
         out.append(bottom)
         return out
