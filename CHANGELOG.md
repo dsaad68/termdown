@@ -6,6 +6,26 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Mouse scroll and drag-to-select are now on by default.** Both `mouse` and
+  `mouse-select` shipped off, so every install had a dead mouse unless the user
+  found the settings. They move together because the file finder and project
+  search gate on `mouse` alone — turning on only `mouse-select` would have left
+  those mouse-dead while the viewer responded. `--no-mouse` / `--no-mouse-select`
+  (or the matching config keys) restore the old behavior. Note that
+  `mouse-select` reports pointer motion, which replaces the terminal's own
+  click-drag selection while termdown runs; hold Shift, or Option on macOS, to
+  fall back to it.
+
+### Added
+- **Existing configs are brought forward when a shipped default changes.** The
+  config file was previously written once, on first run, and never revisited —
+  so a new key or a changed default could never reach anyone who already had
+  one. termdown now stamps a `config-version:` line and, once per bump, appends
+  keys the file has never seen and upgrades any line still holding a superseded
+  default. A value you actually set is left alone, and turning a new default
+  back off is not overruled on the next launch.
+
 ## [0.1.7] - 2026-07-19
 
 ### Fixed

@@ -137,10 +137,12 @@ if config.showHelp {
                         nord, tokyo-night, gruvbox, dracula, matte-rose, matte-slate,
                         frost, mint, dusk, blossom, sand, coral
       --no-color        Disable ANSI colors
-      --mouse           Enable mouse scroll (overrides config)
+      --mouse           Enable mouse scroll (on by default)
       --no-mouse        Disable mouse scroll (overrides config)
-      --mouse-select    Enable drag-to-select text, copied on release. Replaces
-                        the terminal's own click-drag selection while active
+      --mouse-select    Enable drag-to-select text, copied on release (on by
+                        default). Replaces the terminal's own click-drag
+                        selection while active — hold Shift (Option on macOS)
+                        to fall back to it
       --no-mouse-select Disable drag-to-select (overrides config)
       --version, -V     Show version information
       --help, -h        Show this help message

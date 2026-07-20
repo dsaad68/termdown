@@ -102,9 +102,9 @@ swift run termdown ~/notes    # scan a specific directory
   cursor** (off by default — `j`/`k` scroll as usual until then). With it shown,
   `j`/`k` move the highlighted line (its source line shows as `L42`), and
   `Shift+↑/↓` (or `Shift+J`/`Shift+K`) **select multiple lines** — `y` copies the
-  selection as raw markdown, `Y` as rendered text. With `--mouse-select` you can
-  also **drag to select text character by character** across lines, copied to the
-  clipboard on release. Press `e` to **edit** the block
+  selection as raw markdown, `Y` as rendered text. You can also **drag to select
+  text character by character** across lines, copied to the clipboard on release
+  (on by default; `--no-mouse-select` turns it off). Press `e` to **edit** the block
   under the cursor (paragraph, heading, list item, table row, …) as its raw
   markdown **in place** while the rest stays rendered. `Enter` commits the edit to
   the buffer and marks the document **unsaved (●)**; `Ctrl-S` writes it to disk,
@@ -167,7 +167,7 @@ swift run termdown ~/notes    # scan a specific directory
 | Viewer (pager) | `]` / `[`                    | next / previous heading         |
 | Viewer (pager) | `v`                          | show/hide the line cursor (cursor mode) |
 | Viewer (pager) | `Shift-↑`/`↓`, `J`/`K`       | select lines (cursor mode); `y` copies as markdown, `Y` as rendered text |
-| Viewer (pager) | drag (`--mouse-select`)      | select text character by character; copied on release, `y`/`Y` re-copy, any key clears |
+| Viewer (pager) | drag                         | select text character by character; copied on release, `y`/`Y` re-copy, any key clears (`--no-mouse-select` to disable) |
 | Viewer (pager) | double / triple click        | select the word / the whole line |
 | Viewer (pager) | `e`                          | edit the block under the cursor (raw markdown); `Enter` commits to buffer, `Esc` cancels |
 | Viewer (pager) | `Ctrl-S`                     | save unsaved edits to the file |
@@ -192,9 +192,9 @@ Options:
                     nord, tokyo-night, gruvbox, dracula, matte-rose, matte-slate,
                     frost, mint, dusk, blossom, sand, coral
   --no-color        Disable ANSI colors
-  --mouse           Enable mouse scroll
+  --mouse           Enable mouse scroll (on by default)
   --no-mouse        Disable mouse scroll
-  --mouse-select    Enable drag-to-select text (copied on release)
+  --mouse-select    Enable drag-to-select text, copied on release (on by default)
   --no-mouse-select Disable drag-to-select
   --version, -V     Show version information
   --help, -h        Show help message
@@ -210,9 +210,15 @@ On first run termdown automatically creates a global config file at
 theme: dark       # see the full theme list below
 # width: 80      # uncomment to fix column width
 no-color: false
-mouse: false      # true to enable mouse scroll
+mouse: true         # false to hand the mouse back to the terminal
+mouse-select: true  # false to keep the terminal's own click-drag selection
 # ignore-patterns: [vendor, "*.snap", archive]   # extra paths to skip
 ```
+
+termdown also writes a `config-version:` line here. It uses that to bring an
+existing config forward when a shipped default changes — adding keys your file
+has never seen and upgrading a line still holding a superseded default, once.
+Any value you have actually set is left alone.
 
 ### Config keys
 
@@ -221,9 +227,10 @@ mouse: false      # true to enable mouse scroll
 | `theme` | string | see Themes below | Content color palette (unknown values fall back to `dark`) |
 | `width` | int | e.g. `80` | Fixes the text column width; omit for auto-detect |
 | `no-color` | bool | `true`/`false` | Disables all ANSI color |
-| `mouse` | bool | `true`/`false` | Mouse scroll in the finder and pager |
+| `mouse` | bool | `true`/`false` | Mouse scroll in the finder and pager (default `true`) |
 | `wide-emoji` | string | `cluster`/`scalar` | How emoji are measured (default `cluster`: a ZWJ, skin-tone or variation-selector sequence is one two-column glyph). Use `scalar` only if your terminal draws the components separately |
-| `mouse-select` | bool | `true`/`false` | Drag to select text in the pager, copied on release (replaces the terminal's own click-drag selection) |
+| `mouse-select` | bool | `true`/`false` | Drag to select text in the pager, copied on release (default `true`; replaces the terminal's own click-drag selection) |
+| `config-version` | int | written by termdown | Tracks which shipped defaults this file has seen, so a default change reaches existing configs once. Leave it alone |
 | `ignore-patterns` | list | `[a, b, c]` | Extra path patterns to skip during file discovery (beyond the built-in `.git`/`node_modules`/`.build` skips) |
 | `mermaid` | bool | `true`/`false` | Render ` ```mermaid ` blocks as diagrams (default `true`; falls back to a code block on parse failure) |
 | `mermaid-charset` | string | `unicode`/`ascii` | Box-drawing character set for diagrams (default `unicode`) |
@@ -306,8 +313,8 @@ swift run termdown render README.md | less -R
   is disabled under `--no-color`).
 - **Outline sidebar** (`s`) and **wrap/width/follow** controls (`w`, `+`/`-`,
   `F`) only affect the interactive viewer, not `render` output.
-- **Mouse** is off by default. Enable it with `--mouse` on the CLI or
-  `mouse: true` in `.termdown.yaml`. It works in both the file list and the
+- **Mouse** is on by default. Turn it off with `--no-mouse` on the CLI or
+  `mouse: false` in your config. It works in both the file list and the
   viewer (pager), and inside the theme picker, outline sidebar, project search
   and inline editor: the wheel scrolls or moves the selection, and a **click**
   picks a row (clicking the highlighted row activates it), positions the editor
@@ -315,14 +322,15 @@ swift run termdown render README.md | less -R
   cursor (pager) or selects a file, and clicking the highlighted file opens it
   (list). Mouse reporting uses SGR 1006 mode; terminals that don't support it
   will just ignore the escape sequences.
-- **Drag-to-select** is a separate opt-in (`--mouse-select` or
-  `mouse-select: true`). Drag in the viewer to select text character by
-  character — across lines, starting and ending mid-word — and it's copied to
-  the clipboard on release; `y`/`Y` re-copy it and any key clears it. A click
-  that doesn't move still follows a link. It's kept separate from `mouse`
-  because it reports pointer motion, which replaces your terminal's own
-  click-drag selection while termdown is running (hold Shift, or Option on
-  macOS, to fall back to it).
+- **Drag-to-select** is also on by default (`--no-mouse-select` or
+  `mouse-select: false` to turn it off). Drag in the viewer to select text
+  character by character — across lines, starting and ending mid-word — and it's
+  copied to the clipboard on release; `y`/`Y` re-copy it and any key clears it.
+  A click that doesn't move still follows a link. It stays a **separate** key
+  from `mouse` because it additionally reports pointer motion, which replaces
+  your terminal's own click-drag selection while termdown is running — hold
+  Shift, or Option on macOS, to fall back to it. Copying goes through OSC 52, so
+  it works over SSH.
 - Live reload monitors the file modification time and reloads when changed.
 
 ## Development
