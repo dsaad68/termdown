@@ -24,6 +24,10 @@ public struct AppConfig: Codable {
     public var mermaid: Bool?
     /// Mermaid box-drawing character set: "unicode" (default) or "ascii".
     public var mermaidCharset: String?
+    /// Treat a bare file path as `render <file>` (default false), so
+    /// `termdown notes.md` works without the subcommand. Opt-in because it
+    /// changes what an existing invocation means.
+    public var bareRender: Bool?
     /// Viewer key overrides: action name → key (from `key-<action>: <char>`).
     public var keyBindings: [String: String]?
 
@@ -92,6 +96,12 @@ public struct AppConfig: Codable {
     # mermaid-charset: Box-drawing characters for diagrams: unicode or ascii.
     mermaid-charset: unicode
 
+    # bare-render: Treat a bare file path as `render <file>`, so `termdown
+    # notes.md` prints the rendered file and exits instead of erroring
+    # (true/false, default false). A bare *directory* still opens the file
+    # picker either way.
+    bare-render: false
+
     # Custom viewer keys: key-<action>: <char> binds a key to a viewer action
     # (the default key keeps working too). Actions: scroll-down/up, page-down/up,
     # half-down/up, top, bottom, search, next-match, prev-match, project-search,
@@ -156,6 +166,7 @@ public struct AppConfig: Codable {
         if let v = other.ignorePatterns { ignorePatterns = v }
         if let v = other.mermaid        { mermaid = v }
         if let v = other.mermaidCharset { mermaidCharset = v }
+        if let v = other.bareRender     { bareRender = v }
         if let v = other.keyBindings {
             if keyBindings == nil { keyBindings = v }
             else { v.forEach { keyBindings?[$0.key] = $0.value } }   // merge per binding
@@ -344,6 +355,8 @@ public struct AppConfig: Codable {
                 cfg.mermaid = parseBool(value)
             case "mermaid-charset", "mermaidcharset", "mermaid_charset":
                 cfg.mermaidCharset = value.lowercased()
+            case "bare-render", "barerender", "bare_render":
+                cfg.bareRender = parseBool(value)
             case "ignore-patterns", "ignorepatterns", "ignore_patterns":
                 // Inline sequence: [a, b, c] or bare comma-separated list
                 let inner = value.hasPrefix("[") ? String(value.dropFirst().dropLast()) : value

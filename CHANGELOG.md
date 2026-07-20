@@ -7,6 +7,9 @@ All notable changes to termdown are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **A nonexistent path now says so.** Any argument that was not a directory
+  reported "is not a directory", including a plain typo. Missing paths get their
+  own message, and a real file points at `render` and at `bare-render`.
 - **Mouse scroll and drag-to-select are now on by default.** Both `mouse` and
   `mouse-select` shipped off, so every install had a dead mouse unless the user
   found the settings. They move together because the file finder and project
@@ -18,6 +21,12 @@ All notable changes to termdown are documented here. The format is based on
   fall back to it.
 
 ### Added
+- **`bare-render` config key** (default `false`). With it on, `termdown
+  notes.md` behaves as `termdown render notes.md` instead of failing with
+  "is not a directory" — the `render` verb becomes optional for the common
+  case. A bare *directory* still opens the file picker, and a path that does
+  not exist still errors rather than being read as a document. Off by default
+  because it changes what an existing invocation means.
 - **12 new color themes**, bringing the total to 29. Ports: `solarized-dark`,
   `solarized-light`, `everforest`, `kanagawa`, `one-dark`, `monokai`,
   `ayu-mirage`, `night-owl`. Custom pastels extending the existing families:

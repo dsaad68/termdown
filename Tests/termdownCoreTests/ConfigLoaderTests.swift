@@ -95,4 +95,28 @@ final class ConfigLoaderTests: XCTestCase {
         base.merge(override)
         XCTAssertEqual(base.mouseSelect, true)
     }
+
+    func testBareRenderAliases() {
+        XCTAssertEqual(parse("bare-render: true")?.bareRender, true)
+        XCTAssertEqual(parse("barerender: true")?.bareRender, true)
+        XCTAssertEqual(parse("bare_render: yes")?.bareRender, true)
+        XCTAssertEqual(parse("bare-render: false")?.bareRender, false)
+        XCTAssertNil(parse("theme: dark")?.bareRender)
+    }
+
+    func testBareRenderMerges() {
+        var base = AppConfig()
+        base.bareRender = false
+        var override = AppConfig()
+        override.bareRender = true
+        base.merge(override)
+        XCTAssertEqual(base.bareRender, true)
+    }
+
+    func testConfigVersionParses() {
+        XCTAssertEqual(parse("config-version: 2")?.configVersion, 2)
+        XCTAssertEqual(parse("config_version: 7")?.configVersion, 7)
+        XCTAssertNil(parse("theme: dark")?.configVersion)
+        XCTAssertNil(parse("config-version: banana")?.configVersion)
+    }
 }

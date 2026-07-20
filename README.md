@@ -186,13 +186,18 @@ swift run termdown ~/notes    # scan a specific directory
 ```sh
 termdown [options] [directory]
 termdown render <file.md>
+termdown <file.md>            # with `bare-render: true` in config
 termdown -                    # read from stdin
 
 Options:
   --width N         Set terminal width (default: auto-detect)
-  --theme NAME      Set color theme: dark, light, mono, catppuccin, rose-pine,
-                    nord, tokyo-night, gruvbox, dracula, matte-rose, matte-slate,
-                    frost, mint, dusk, blossom, sand, coral
+  --theme NAME      Set color theme. Base: dark, light, mono. Ports:
+                    catppuccin, rose-pine, nord, tokyo-night, gruvbox,
+                    dracula, solarized-dark, solarized-light, everforest,
+                    kanagawa, one-dark, monokai, ayu-mirage, night-owl.
+                    Pastels: matte-rose, matte-slate, matte-moss, frost,
+                    mint, dusk, glacier, blossom, sand, coral, ember,
+                    terracotta
   --no-color        Disable ANSI colors
   --mouse           Enable mouse scroll (on by default)
   --no-mouse        Disable mouse scroll
@@ -236,6 +241,7 @@ Any value you have actually set is left alone.
 | `ignore-patterns` | list | `[a, b, c]` | Extra path patterns to skip during file discovery (beyond the built-in `.git`/`node_modules`/`.build` skips) |
 | `mermaid` | bool | `true`/`false` | Render ` ```mermaid ` blocks as diagrams (default `true`; falls back to a code block on parse failure) |
 | `mermaid-charset` | string | `unicode`/`ascii` | Box-drawing character set for diagrams (default `unicode`) |
+| `bare-render` | bool | `true`/`false` | Treat a bare file path as `render <file>`, so `termdown notes.md` prints the rendered file and exits (default `false`). A bare directory still opens the picker |
 
 **Themes:** `dark`, `light`, `mono`; ports: `catppuccin`, `rose-pine`, `nord`,
 `tokyo-night`, `gruvbox`, `dracula`, `solarized-dark`, `solarized-light`,

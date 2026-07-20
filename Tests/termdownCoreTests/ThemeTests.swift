@@ -62,19 +62,19 @@ final class ThemeTests: XCTestCase {
         }
     }
 
-    /// The `--help` text and the config template both enumerate theme names by
-    /// hand; a name that drifts out of either is unreachable in practice.
-    func testEveryRegisteredNameIsDocumented() throws {
+    /// The config template enumerates theme names by hand, so a name that drifts
+    /// out of it is undiscoverable for anyone reading their own config file.
+    /// (The `--help` list is covered in `CommandLineOptionsTests`, where the
+    /// executable module — and so the text itself — is importable.)
+    func testEveryRegisteredNameIsInTheConfigTemplate() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let help = try String(contentsOf: root.appendingPathComponent("Sources/termdown/main.swift"),
-                              encoding: .utf8)
-        let config = try String(
+        let source = try String(
             contentsOf: root.appendingPathComponent("Sources/termdownCore/ConfigLoader.swift"),
             encoding: .utf8)
+        // The template is a private literal, so match against the file text.
         for (name, _) in Theme.all {
-            XCTAssertTrue(help.contains(name), "\(name) missing from --help theme list")
-            XCTAssertTrue(config.contains(name), "\(name) missing from the config template")
+            XCTAssertTrue(source.contains(name), "\(name) missing from the config template")
         }
     }
 

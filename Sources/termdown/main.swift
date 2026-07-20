@@ -7,74 +7,15 @@ import Glibc
 import termdownCore
 import MermaidRenderer
 
-let arguments = CommandLine.arguments
-
 // MARK: - Argument parsing
 
-struct Config {
-    var width: Int?
-    var themeName: String?
-    var noColor: Bool = false
-    var mouse: Bool?  // nil = use yaml/default
-    var mouseSelect: Bool?  // nil = use yaml/default
-    var directory: String?
-    var renderFile: String?
-    var showHelp: Bool = false
-    var showVersion: Bool = false
-    var useStdin: Bool = false
-}
-
-var config = Config()
-var args = arguments.dropFirst()
-
-while let arg = args.first {
-    args = args.dropFirst()
-    switch arg {
-    case "--help", "-h":
-        config.showHelp = true
-    case "--version", "-V":
-        config.showVersion = true
-    case "--width":
-        guard let w = args.first, let width = Int(w) else {
-            FileHandle.standardError.write(Data("termdown: --width requires a number\n".utf8))
-            exit(1)
-        }
-        config.width = width
-        args = args.dropFirst()
-    case "--theme":
-        guard let theme = args.first else {
-            FileHandle.standardError.write(Data("termdown: --theme requires a name\n".utf8))
-            exit(1)
-        }
-        config.themeName = theme
-        args = args.dropFirst()
-    case "--no-color":
-        config.noColor = true
-    case "--mouse":
-        config.mouse = true
-    case "--no-mouse":
-        config.mouse = false
-    case "--mouse-select":
-        config.mouseSelect = true
-    case "--no-mouse-select":
-        config.mouseSelect = false
-    case "render":
-        guard let file = args.first else {
-            FileHandle.standardError.write(Data("termdown: render requires a file path\n".utf8))
-            exit(1)
-        }
-        config.renderFile = file
-        args = args.dropFirst()
-    case "-":
-        config.useStdin = true
-    default:
-        if !arg.hasPrefix("--") && !arg.hasPrefix("-") {
-            config.directory = arg
-        } else {
-            FileHandle.standardError.write(Data("termdown: unknown option \(arg)\n".utf8))
-            exit(1)
-        }
-    }
+var config: Config
+switch Config.parse(CommandLine.arguments.dropFirst()) {
+case .success(let parsed):
+    config = parsed
+case .failure(let message, let code):
+    FileHandle.standardError.write(Data((message + "\n").utf8))
+    exit(code)
 }
 
 // MARK: - Load config file and merge with CLI arguments
@@ -101,6 +42,22 @@ if config.mouseSelect == nil {
 let mouseEnabled = config.mouse ?? true
 let mouseSelectEnabled = config.mouseSelect ?? true
 
+// `bare-render`: a positional argument naming a file rather than a directory is
+// treated as `render <file>`. Gated on the file already existing and not being a
+// directory, so `termdown ~/notes` keeps opening the picker and a typo still
+// reaches the "no such file or directory" error below rather than being read as
+// a document. This cannot live in the parse loop above — `appConfig` is not
+// loaded yet there — and must run before the stdin auto-detect, which branches
+// on `config.renderFile == nil`.
+if config.renderFile == nil, let positional = config.directory, appConfig.bareRender ?? false {
+    var isDirectory: ObjCBool = false
+    if FileManager.default.fileExists(atPath: positional, isDirectory: &isDirectory),
+       !isDirectory.boolValue {
+        config.renderFile = positional
+        config.directory = nil
+    }
+}
+
 // Viewer key rebindings (config `key-<action>: <char>`) → canonical-key translation.
 let keyTranslation = KeyBindings.translation(from: appConfig.keyBindings)
 
@@ -126,31 +83,7 @@ let mermaidCharset: MermaidCharset = (appConfig.mermaidCharset == "ascii") ? .as
 // MARK: - Help and version
 
 if config.showHelp {
-    print("""
-    termdown — browse & render markdown in your terminal
-    USAGE: termdown [options] [directory]
-           termdown render <file.md>
-           termdown -                    (read from stdin)
-    OPTIONS:
-      --width N         Set terminal width (default: auto-detect)
-      --theme NAME      Set color theme. Base: dark, light, mono. Ports:
-                        catppuccin, rose-pine, nord, tokyo-night, gruvbox,
-                        dracula, solarized-dark, solarized-light, everforest,
-                        kanagawa, one-dark, monokai, ayu-mirage, night-owl.
-                        Pastels: matte-rose, matte-slate, matte-moss, frost,
-                        mint, dusk, glacier, blossom, sand, coral, ember,
-                        terracotta
-      --no-color        Disable ANSI colors
-      --mouse           Enable mouse scroll (on by default)
-      --no-mouse        Disable mouse scroll (overrides config)
-      --mouse-select    Enable drag-to-select text, copied on release (on by
-                        default). Replaces the terminal's own click-drag
-                        selection while active — hold Shift (Option on macOS)
-                        to fall back to it
-      --no-mouse-select Disable drag-to-select (overrides config)
-      --version, -V     Show version information
-      --help, -h        Show this help message
-    """)
+    print(Config.usage)
     exit(0)
 }
 
@@ -244,8 +177,19 @@ let rootPath = config.directory ?? FileManager.default.currentDirectoryPath
 let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true).standardizedFileURL
 
 var isDir: ObjCBool = false
-guard FileManager.default.fileExists(atPath: rootURL.path, isDirectory: &isDir), isDir.boolValue else {
-    FileHandle.standardError.write(Data("termdown: '\(rootURL.path)' is not a directory\n".utf8))
+guard FileManager.default.fileExists(atPath: rootURL.path, isDirectory: &isDir) else {
+    FileHandle.standardError.write(Data("termdown: '\(rootURL.path)': no such file or directory\n".utf8))
+    exit(1)
+}
+guard isDir.boolValue else {
+    // Reachable only with `bare-render` off — with it on, an existing file was
+    // already promoted to `renderFile` above.
+    FileHandle.standardError.write(Data("""
+    termdown: '\(rootURL.path)' is not a directory
+    Use `termdown render \(rootPath)` to render a single file, or set \
+    `bare-render: true` in your config to allow this form.
+
+    """.utf8))
     exit(1)
 }
 
