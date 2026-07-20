@@ -142,4 +142,171 @@ final class MermaidFitTests: XCTestCase {
         let rows = render(simple, maxWidth: 40)
         XCTAssertLessThanOrEqual(widest(rows), 40)
     }
+
+    // MARK: - Every rung of the ladder is reachable
+
+    /// Two adjacent rungs render identically whenever no label is near the
+    /// tighter cap — rungs 4 and 5 also share a padding, so they tie outright.
+    /// Treating that plateau as "the floor" abandoned the ladder before its last
+    /// and narrowest rung, and the caller then showed raw source for a diagram
+    /// that had a fitting layout one step further down.
+    func testAPlateauDoesNotAbandonTheLadder() {
+        // Labels are all ≤13 columns, so the cap does nothing; only the padding
+        // moves, and it takes the final rung to reach 32.
+        let plateau = """
+        flowchart TD
+            A[Start here] --> B[Left branch]
+            A --> C[Right branch]
+            B --> D[The end]
+            C --> D
+        """
+        XCTAssertLessThanOrEqual(widest(render(plateau, maxWidth: 32)), 32)
+    }
+
+    // MARK: - Subgraphs
+
+    /// `setSubgraphs` builds its own labels from the parse output, so wrapping
+    /// only `g.nodes` beforehand left a subgraph title untouched by every rung.
+    /// A diagram held open by a long title never narrowed at all.
+    func testSubgraphTitlesWrapToo() {
+        let titled = """
+        flowchart TD
+            subgraph A very long subgraph title that will never be wrapped at all
+            X[One] --> Y[Two]
+            end
+        """
+        XCTAssertGreaterThan(widest(render(titled, maxWidth: nil)), 40, "fixture is not wide enough to test")
+        XCTAssertLessThanOrEqual(widest(render(titled, maxWidth: 40)), 40)
+    }
+
+    /// A subgraph frame is drawn in the gap beside its boxes. Squeezed to a
+    /// single column it lands in the same column as the node walls and the
+    /// renderer merges the two into `┤`/`├` tees — a diagram that fits the
+    /// budget and is unreadable. Fitting is judged on width alone, so the floor
+    /// has to be part of the plan rather than something the search discovers.
+    func testSubgraphFramesKeepTheirOwnColumn() {
+        let framed = """
+        flowchart LR
+            A[Ingest documents] --> B
+            subgraph P[Pipeline stage]
+            B[Chunk and embed] --> C[Index vectors]
+            end
+            C --> D[Serve queries]
+        """
+        for budget in stride(from: 40, through: 110, by: 2) {
+            let joined = render(framed, maxWidth: budget).joined(separator: "\n")
+            XCTAssertFalse(joined.contains("\u{2524} \u{250C}"),
+                           "subgraph wall merged into a node box at budget \(budget):\n\(joined)")
+            XCTAssertFalse(joined.contains("\u{251C}\u{25BA}\u{2502}"),
+                           "arrowhead merged into a box wall at budget \(budget):\n\(joined)")
+        }
+    }
+
+    // MARK: - Measurement
+
+    /// `colorEnabled` is true by default on the public options, and a styled
+    /// span carries an SGR prefix and reset. Counting those as visible columns
+    /// made every rung look like an overflow, so a diagram that already fit came
+    /// back squeezed to the tightest layout for nothing.
+    func testDiagramWidthIgnoresEscapeSequences() {
+        XCTAssertEqual(diagramWidth("\u{1B}[38;2;1;2;3mabc\u{1B}[0m"), 3)
+        XCTAssertEqual(diagramWidth("\u{1B}[31mab\u{1B}[0m\n\u{1B}[32mabcd\u{1B}[0m"), 4)
+        XCTAssertEqual(diagramWidth("plain"), 5)
+    }
+
+    /// A colored render must reach the same fitting decision as an uncolored
+    /// one — the escapes are invisible, so they cannot change the layout.
+    func testColorDoesNotChangeTheChosenLayout() {
+        func rendered(color: Bool) -> String? {
+            var options = MermaidOptions()
+            options.colorEnabled = color
+            options.maxWidth = 60
+            return Mermaid.render(wideFlow, options: options)?.joined(separator: "\n")
+        }
+        let plain = rendered(color: false) ?? ""
+        let colored = rendered(color: true) ?? ""
+        XCTAssertFalse(plain.isEmpty)
+        XCTAssertEqual(plain.split(separator: "\n").count, colored.split(separator: "\n").count,
+                       "color changed the layout")
+    }
+
+    // MARK: - Sequence diagrams
+
+    private let wideSequence = """
+    sequenceDiagram
+        participant Browser
+        participant Gateway
+        participant Auth
+        participant Orders
+        participant Payments
+        participant Ledger
+        Browser->>Gateway: POST /checkout
+        Gateway->>Auth: verify
+        Auth-->>Gateway: ok
+        Orders->>Payments: charge
+        Payments->>Ledger: record
+    """
+
+    /// A sequence layout grows with the participant count and got no fitting at
+    /// all, while still facing the caller's width check — so anything past about
+    /// four participants degraded to raw source in an ordinary terminal, which
+    /// the framed-card change turned into a regression against the old renderer.
+    func testWideSequenceDiagramFitsItsBudget() {
+        XCTAssertGreaterThan(widest(render(wideSequence, maxWidth: nil)), 80,
+                             "fixture is not wide enough to test")
+        for budget in [76, 80, 100] {
+            XCTAssertLessThanOrEqual(widest(render(wideSequence, maxWidth: budget)), budget,
+                                     "sequence diagram overflowed a \(budget)-column budget")
+        }
+    }
+
+    /// The same guarantee flowcharts get: no budget means the layout is exactly
+    /// what it was before fitting existed. The sequence goldens depend on it.
+    func testSequenceWithNoBudgetIsUntouched() {
+        let natural = render(wideSequence, maxWidth: nil)
+        XCTAssertEqual(render(wideSequence, maxWidth: 500), natural)
+        XCTAssertEqual(render(wideSequence, maxWidth: 0), natural, "0 must mean unconstrained")
+    }
+
+    /// Tightening may only ever narrow.
+    func testSequenceFittingNeverWidens() {
+        let natural = widest(render(wideSequence, maxWidth: nil))
+        for budget in [40, 60, 80] {
+            XCTAssertLessThanOrEqual(widest(render(wideSequence, maxWidth: budget)), natural)
+        }
+    }
+
+    /// Message labels are drawn inline along a one-row arrow, so a budget under
+    /// the participant boxes themselves cannot be met. It must still terminate
+    /// and return the narrowest attempt rather than nothing.
+    func testImpossiblyNarrowSequenceBudgetStillReturnsSomething() {
+        let rows = render(wideSequence, maxWidth: 10)
+        XCTAssertFalse(rows.isEmpty)
+        XCTAssertLessThan(widest(rows), widest(render(wideSequence, maxWidth: nil)))
+    }
+
+    // MARK: - Wrapping preserves the author's spacing
+
+    /// Splitting on whitespace and re-joining with single spaces is a content
+    /// change, not a re-flow: it deletes indentation and column alignment. And
+    /// because it only happens under a budget, the same label came out aligned
+    /// in a wide terminal and flush-left in a narrow one.
+    func testWrapKeepsIndentationAndColumnGaps() {
+        let label = newGraphLabel("col A          col B<br>    indented continuation line here")
+        let wrapped = label.wrapped(to: 32)
+
+        XCTAssertTrue(wrapped.lines.contains { $0.contains("col A          col B") },
+                      "a run of spaces was collapsed: \(wrapped.lines)")
+        XCTAssertTrue(wrapped.lines.contains { $0.hasPrefix("    indented") },
+                      "leading indentation was dropped: \(wrapped.lines)")
+    }
+
+    /// …but indentation is not worth an overflow, which is the failure the whole
+    /// file exists to prevent.
+    func testWrapDropsIndentationRatherThanOverflow() {
+        let wrapped = newGraphLabel("          padded").wrapped(to: 10)
+        for line in wrapped.lines {
+            XCTAssertLessThanOrEqual(DisplayWidth.stringWidth(line), 10, "overflowed: \(line)")
+        }
+    }
 }

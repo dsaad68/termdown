@@ -22,9 +22,7 @@ private struct SequenceLayout {
     var selfMessageWidth: Int
 }
 
-private func calculateLayout(_ sd: ParsedSequence) -> SequenceLayout {
-    let participantSpacing = defaultParticipantSpacing
-
+private func calculateLayout(_ sd: ParsedSequence, participantSpacing: Int) -> SequenceLayout {
     let widths = sd.participants.map { p -> Int in
         max(DisplayWidth.stringWidth(p.label) + boxPaddingLeftRight, minBoxWidth)
     }
@@ -178,9 +176,10 @@ private func renderSelfMessage(_ msg: SequenceMessage, _ layout: SequenceLayout,
     return lines
 }
 
-func renderSequenceDiagram(_ sd: ParsedSequence, useAscii: Bool) -> String {
+func renderSequenceDiagram(_ sd: ParsedSequence, useAscii: Bool,
+                           participantSpacing: Int = defaultParticipantSpacing) -> String {
     let chars = useAscii ? sequenceASCII : sequenceUnicode
-    let layout = calculateLayout(sd)
+    let layout = calculateLayout(sd, participantSpacing: participantSpacing)
     var lines: [String] = []
 
     lines.append(buildLine(sd, layout) { i in
@@ -214,9 +213,41 @@ func renderSequenceDiagram(_ sd: ParsedSequence, useAscii: Bool) -> String {
 
 /// Bridge for the public entry point (drops the trailing newline so the framing
 /// matches graph output).
+///
+/// Honours `options.maxWidth` by tightening the gaps between lifelines, the one
+/// lever a sequence layout has: box widths come from the participant names and
+/// message labels are drawn inline along a one-row arrow, so neither can be
+/// narrowed without losing text. Without this a sequence diagram got no fitting
+/// at all while still facing the caller's width check, so anything past about
+/// four participants degraded to raw source in an ordinary terminal.
 func renderSequence(_ source: String, options: MermaidOptions) -> String? {
     guard let sd = try? parseSequence(source) else { return nil }
-    var out = renderSequenceDiagram(sd, useAscii: options.charset == .ascii)
-    if out.hasSuffix("\n") { out.removeLast() }
-    return out
+    let useAscii = options.charset == .ascii
+
+    func render(spacing: Int) -> String {
+        var out = renderSequenceDiagram(sd, useAscii: useAscii, participantSpacing: spacing)
+        if out.hasSuffix("\n") { out.removeLast() }
+        return out
+    }
+
+    let natural = render(spacing: defaultParticipantSpacing)
+    guard let budget = options.maxWidth, budget > 0, diagramWidth(natural) > budget else {
+        return natural
+    }
+
+    // Participant boxes and message labels set a floor spacing cannot get under.
+    // Hand back the narrowest attempt in that case and let the caller decide —
+    // it is the same contract the flowchart fitter has.
+    var narrowest = natural
+    var narrowestWidth = diagramWidth(natural)
+    for spacing in stride(from: defaultParticipantSpacing - 1, through: 1, by: -1) {
+        let rendered = render(spacing: spacing)
+        let width = diagramWidth(rendered)
+        if width <= budget { return rendered }
+        if width < narrowestWidth {
+            narrowest = rendered
+            narrowestWidth = width
+        }
+    }
+    return narrowest
 }
