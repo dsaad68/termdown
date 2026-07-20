@@ -29,8 +29,34 @@ All notable changes to termdown are documented here. The format is based on
   fault. The same block therefore renders as a diagram in a wide terminal and as
   source in a narrow one.
 
+  Node labels keep the spacing they were written with — indentation and runs of
+  spaces used to align columns inside a label survive a fold that does not land
+  on them.
+
+  Subgraph frames keep a column of their own on each side. Squeezed flush
+  against the node boxes they merged into them, drawing shared `┤`/`├` walls: a
+  diagram that fit the width and could not be read.
+
+  Sequence diagrams are fitted too, by tightening the gaps between lifelines.
+  Their width grows with the participant count, so without this anything past
+  about four participants dropped to raw source in an 80-column terminal.
+
   Rendering without a width budget is unchanged, which is what keeps the
   upstream mermaid-ascii goldens byte-for-byte identical.
+- **A long fence info string no longer breaks the card frame.** The card's top
+  rule carries whatever follows the opening fence, so ```` ```json
+  title="config/production.json" linenos ```` drew a rule wider than the card
+  while every other row stayed at the text width — the border ran off the right
+  edge in the viewer, and the pager stripped its styling. The label is now
+  truncated to fit.
+- **A deeply nested code block no longer renders empty.** List indentation can
+  floor a block's width below the card's own chrome. The wrapper and the frame
+  disagreed about the minimum, so the text was wrapped to fit and then sliced
+  back to nothing, leaving a card of ellipses. Below the width a frame needs,
+  the block now renders without the box rather than without the code.
+- **A wide glyph on the card's right edge is marked when it is clipped.** A CJK
+  character straddling the boundary was dropped with no ellipsis, so the card
+  looked complete while a character had been deleted from it.
 
 ### Changed
 - **A nonexistent path now says so.** Any argument that was not a directory
@@ -44,7 +70,8 @@ All notable changes to termdown are documented here. The format is based on
   (or the matching config keys) restore the old behavior. Note that
   `mouse-select` reports pointer motion, which replaces the terminal's own
   click-drag selection while termdown runs; hold Shift, or Option on macOS, to
-  fall back to it.
+  fall back to it. This is the default for a config termdown writes; an existing
+  config keeps whatever it already says (see the migration note below).
 
 ### Added
 - **`bare-render` config key** (default `false`). With it on, `termdown
@@ -59,13 +86,23 @@ All notable changes to termdown are documented here. The format is based on
   `matte-moss`, `glacier`, `ember`, `terracotta`. Theme definitions moved out of
   `Theme.swift` into `Theme+Ports.swift` and per-family files, the same split
   `Ansi.swift` already uses to stay under the file-length lint ceiling.
-- **Existing configs are brought forward when a shipped default changes.** The
-  config file was previously written once, on first run, and never revisited —
-  so a new key or a changed default could never reach anyone who already had
-  one. termdown now stamps a `config-version:` line and, once per bump, appends
-  keys the file has never seen and upgrades any line still holding a superseded
-  default. A value you actually set is left alone, and turning a new default
-  back off is not overruled on the next launch.
+- **New config keys reach existing configs.** The config file was previously
+  written once, on first run, and never revisited, so a key introduced later
+  stayed invisible to anyone who already had one. termdown now stamps a
+  `config-version:` line and, once per bump, appends the keys a file has never
+  seen — with their documentation, in place, leaving everything else untouched.
+
+  It only ever *adds*. A value already in the file is never rewritten, even when
+  it matches an old default: `mouse: false` chosen deliberately and `mouse:
+  false` left alone are the same five characters, so treating the second as
+  editable means silently overruling the first. A changed default therefore
+  reaches fresh installs through the template; on an existing config, delete the
+  key or set it yourself. A key added as a sub-setting of something you have
+  turned off is added off — `mouse-select` will not switch itself on inside a
+  config with `mouse: false`.
+
+  Writes follow a symlink rather than replacing it, so a config symlinked into a
+  dotfiles repo stays linked.
 
 ## [0.1.7] - 2026-07-19
 
