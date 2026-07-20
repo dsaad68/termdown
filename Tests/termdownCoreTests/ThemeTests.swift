@@ -40,15 +40,41 @@ final class ThemeTests: XCTestCase {
 
     func testAllThemesAreCompleteAndRegistered() {
         XCTAssertTrue(Theme.all.contains { $0.name == "dark" })
-        XCTAssertGreaterThanOrEqual(Theme.all.count, 17)
+        XCTAssertGreaterThanOrEqual(Theme.all.count, 29)
         for (name, theme) in Theme.all {
             XCTAssertEqual(theme.heading.count, 6, "\(name) must define 6 heading levels")
         }
     }
 
     func testCustomPastelFamiliesResolve() {
-        for name in ["matte-rose", "matte-slate", "frost", "mint", "dusk", "blossom", "sand", "coral"] {
+        for name in ["matte-rose", "matte-slate", "matte-moss",
+                     "frost", "mint", "dusk", "glacier",
+                     "blossom", "sand", "coral", "ember", "terracotta"] {
             XCTAssertNotNil(Theme.named(name), name)
+        }
+    }
+
+    func testPortedPalettesResolve() {
+        for name in ["catppuccin", "rose-pine", "nord", "tokyo-night", "gruvbox", "dracula",
+                     "solarized-dark", "solarized-light", "everforest", "kanagawa",
+                     "one-dark", "monokai", "ayu-mirage", "night-owl"] {
+            XCTAssertNotNil(Theme.named(name), name)
+        }
+    }
+
+    /// The `--help` text and the config template both enumerate theme names by
+    /// hand; a name that drifts out of either is unreachable in practice.
+    func testEveryRegisteredNameIsDocumented() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let help = try String(contentsOf: root.appendingPathComponent("Sources/termdown/main.swift"),
+                              encoding: .utf8)
+        let config = try String(
+            contentsOf: root.appendingPathComponent("Sources/termdownCore/ConfigLoader.swift"),
+            encoding: .utf8)
+        for (name, _) in Theme.all {
+            XCTAssertTrue(help.contains(name), "\(name) missing from --help theme list")
+            XCTAssertTrue(config.contains(name), "\(name) missing from the config template")
         }
     }
 

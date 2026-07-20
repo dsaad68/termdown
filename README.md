@@ -110,12 +110,14 @@ swift run termdown ~/notes    # scan a specific directory
   the buffer and marks the document **unsaved (●)**; `Ctrl-S` writes it to disk,
   and quitting with unsaved changes prompts to **Save / Discard / Cancel**.
 - **Live reload**: automatically reloads when file changes
-- **Color themes** (17): dark, light, mono; popular ports (catppuccin, rose-pine,
-  nord, tokyo-night, gruvbox, dracula); and custom true-color pastels across matte,
-  cold and warm families (matte-rose, matte-slate, frost, mint, dusk, blossom,
-  sand, coral). Press `p` in the viewer for a live-preview **theme selector** that
-  saves your pick. 24-bit color is used automatically when the terminal supports
-  it (`COLORTERM`)
+- **Color themes** (29): dark, light, mono; popular ports (catppuccin, rose-pine,
+  nord, tokyo-night, gruvbox, dracula, solarized-dark, solarized-light,
+  everforest, kanagawa, one-dark, monokai, ayu-mirage, night-owl); and custom
+  true-color pastels across matte, cold and warm families (matte-rose,
+  matte-slate, matte-moss, frost, mint, dusk, glacier, blossom, sand, coral,
+  ember, terracotta). Press `p` in the viewer for a live-preview **theme
+  selector** that saves your pick. 24-bit color is used automatically when the
+  terminal supports it (`COLORTERM`)
 - **Configurable**: supports `.termdown.yaml` (project root or home dir) for default settings
 - **Tests**: comprehensive test coverage for core functionality
 
@@ -236,9 +238,15 @@ Any value you have actually set is left alone.
 | `mermaid-charset` | string | `unicode`/`ascii` | Box-drawing character set for diagrams (default `unicode`) |
 
 **Themes:** `dark`, `light`, `mono`; ports: `catppuccin`, `rose-pine`, `nord`,
-`tokyo-night`, `gruvbox`, `dracula`; custom pastels: matte (`matte-rose`,
-`matte-slate`), cold (`frost`, `mint`, `dusk`), warm (`blossom`, `sand`, `coral`).
-Press `p` in the viewer to preview/switch live.
+`tokyo-night`, `gruvbox`, `dracula`, `solarized-dark`, `solarized-light`,
+`everforest`, `kanagawa`, `one-dark`, `monokai`, `ayu-mirage`, `night-owl`;
+custom pastels: matte (`matte-rose`, `matte-slate`, `matte-moss`), cold
+(`frost`, `mint`, `dusk`, `glacier`), warm (`blossom`, `sand`, `coral`, `ember`,
+`terracotta`). Press `p` in the viewer to preview/switch live.
+
+A theme colors the **document** only — the TUI chrome (status bar, sidebar,
+menus) keeps its own fixed palette. The light themes (`light`,
+`solarized-light`) therefore still sit inside dark chrome.
 
 **Custom viewer keys.** Bind a key to a viewer action with `key-<action>: <char>`
 (the action's default key keeps working; overrides add a key). This applies to

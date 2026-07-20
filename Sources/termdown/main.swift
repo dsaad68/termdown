@@ -133,9 +133,13 @@ if config.showHelp {
            termdown -                    (read from stdin)
     OPTIONS:
       --width N         Set terminal width (default: auto-detect)
-      --theme NAME      Set color theme: dark, light, mono, catppuccin, rose-pine,
-                        nord, tokyo-night, gruvbox, dracula, matte-rose, matte-slate,
-                        frost, mint, dusk, blossom, sand, coral
+      --theme NAME      Set color theme. Base: dark, light, mono. Ports:
+                        catppuccin, rose-pine, nord, tokyo-night, gruvbox,
+                        dracula, solarized-dark, solarized-light, everforest,
+                        kanagawa, one-dark, monokai, ayu-mirage, night-owl.
+                        Pastels: matte-rose, matte-slate, matte-moss, frost,
+                        mint, dusk, glacier, blossom, sand, coral, ember,
+                        terracotta
       --no-color        Disable ANSI colors
       --mouse           Enable mouse scroll (on by default)
       --no-mouse        Disable mouse scroll (overrides config)

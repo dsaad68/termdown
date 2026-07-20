@@ -48,9 +48,14 @@ public struct AppConfig: Codable {
     # file has already seen. Leave it alone.
     config-version: 2
 
-    # theme: Color theme to use. Options: dark, light, mono, catppuccin, rose-pine,
-    #        nord, tokyo-night, gruvbox, dracula, matte-rose, matte-slate, frost,
-    #        mint, dusk, blossom, sand, coral
+    # theme: Color theme to use.
+    #   base:    dark, light, mono
+    #   ports:   catppuccin, rose-pine, nord, tokyo-night, gruvbox, dracula,
+    #            solarized-dark, solarized-light, everforest, kanagawa, one-dark,
+    #            monokai, ayu-mirage, night-owl
+    #   pastels: matte-rose, matte-slate, matte-moss, frost, mint, dusk, glacier,
+    #            blossom, sand, coral, ember, terracotta
+    # Press `p` in the viewer to preview and switch live.
     theme: dark
 
     # width: Text column width. 0 = auto-detect from terminal size.

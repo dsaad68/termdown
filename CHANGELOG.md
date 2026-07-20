@@ -18,6 +18,12 @@ All notable changes to termdown are documented here. The format is based on
   fall back to it.
 
 ### Added
+- **12 new color themes**, bringing the total to 29. Ports: `solarized-dark`,
+  `solarized-light`, `everforest`, `kanagawa`, `one-dark`, `monokai`,
+  `ayu-mirage`, `night-owl`. Custom pastels extending the existing families:
+  `matte-moss`, `glacier`, `ember`, `terracotta`. Theme definitions moved out of
+  `Theme.swift` into `Theme+Ports.swift` and per-family files, the same split
+  `Ansi.swift` already uses to stay under the file-length lint ceiling.
 - **Existing configs are brought forward when a shipped default changes.** The
   config file was previously written once, on first run, and never revisited —
   so a new key or a changed default could never reach anyone who already had
