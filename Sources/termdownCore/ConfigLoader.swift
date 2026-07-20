@@ -3,6 +3,10 @@ import Foundation
 /// Configuration loaded from ~/.config/termdown/config.yaml (global) merged with
 /// an optional project-local .termdown.yaml (which takes priority key-by-key).
 public struct AppConfig: Codable {
+    /// Which generation of shipped defaults this file has already been through.
+    /// Absent (or lower than `currentConfigVersion`) means `migrate` still has
+    /// work to do. Never read for behavior — only for migration.
+    public var configVersion: Int?
     public var theme: String?
     public var width: Int?
     public var noColor: Bool?
@@ -32,9 +36,18 @@ public struct AppConfig: Codable {
             .appendingPathComponent(".config/termdown/config.yaml")
     }()
 
+    /// Bumped whenever a shipped default changes in a way existing configs should
+    /// pick up. `migrate` compares it against the `config-version:` line in the
+    /// user's file and upgrades once; see `migrate(_:)`.
+    static let currentConfigVersion = 2
+
     private static let defaultConfigContent = """
     # termdown configuration
     # ---------------------
+    # config-version: written by termdown so it knows which shipped defaults this
+    # file has already seen. Leave it alone.
+    config-version: 2
+
     # theme: Color theme to use. Options: dark, light, mono, catppuccin, rose-pine,
     #        nord, tokyo-night, gruvbox, dracula, matte-rose, matte-slate, frost,
     #        mint, dusk, blossom, sand, coral
@@ -46,15 +59,15 @@ public struct AppConfig: Codable {
     # no-color: Disable all ANSI colors (true/false).
     no-color: false
 
-    # mouse: Enable mouse scroll in the viewer and file list (true/false).
-    # Note: enabling mouse scroll prevents native text selection in the terminal.
-    # In tmux, hold Option (macOS) or Shift to select text while mouse is on.
-    mouse: false
+    # mouse: Mouse scroll in the viewer and file list (true/false, default true).
+    # Set false to hand the mouse back to the terminal entirely.
+    mouse: true
 
     # mouse-select: Drag with the mouse to select text, copied on release
-    # (true/false). Separate from `mouse` because it reports pointer motion,
-    # which replaces the terminal's own click-drag selection entirely.
-    mouse-select: false
+    # (true/false, default true). This reports pointer motion, which replaces the
+    # terminal's own click-drag selection — hold Shift (or Option on macOS) to
+    # fall back to it, or set this to false.
+    mouse-select: true
 
     # wide-emoji: How emoji are measured — "cluster" (default) treats a ZWJ
     # sequence, skin-tone or variation-selector emoji as one two-column glyph.
@@ -96,9 +109,12 @@ public struct AppConfig: Codable {
     public static func load() -> AppConfig {
         let fm = FileManager.default
 
-        // Create global config on first run.
+        // Create global config on first run; otherwise bring an older one up to
+        // the current generation of shipped defaults.
         if !fm.fileExists(atPath: globalConfigPath.path) {
             createDefaultConfig()
+        } else {
+            migrate(globalConfigPath)
         }
 
         // 1. Load global config as the base.
@@ -125,6 +141,7 @@ public struct AppConfig: Codable {
 
     /// Overwrite only the fields that `other` explicitly sets (non-nil).
     mutating func merge(_ other: AppConfig) {
+        if let v = other.configVersion  { configVersion = v }
         if let v = other.theme          { theme = v }
         if let v = other.width          { width = v }
         if let v = other.noColor        { noColor = v }
@@ -162,6 +179,99 @@ public struct AppConfig: Codable {
         }
         try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    // MARK: - Migration
+
+    /// A default that changed after this config file was written, and the value
+    /// the old template shipped — so a line still holding the old default can be
+    /// told apart from one the user actually chose.
+    private struct DefaultChange {
+        let key: String
+        let staleValue: String
+        let newValue: String
+        let comment: [String]
+    }
+
+    /// Defaults introduced in config-version 2: mouse scroll and drag-to-select
+    /// both ship on now. A file predating the `mouse-select` key never had the
+    /// line at all; one written by v0.1.7 has it set to the old default.
+    private static let version2Changes: [DefaultChange] = [
+        DefaultChange(key: "mouse", staleValue: "false", newValue: "true", comment: [
+            "# mouse: Mouse scroll in the viewer and file list (true/false, default true).",
+            "# Set false to hand the mouse back to the terminal entirely.",
+        ]),
+        DefaultChange(key: "mouse-select", staleValue: "false", newValue: "true", comment: [
+            "# mouse-select: Drag with the mouse to select text, copied on release",
+            "# (true/false, default true). This reports pointer motion, which replaces the",
+            "# terminal's own click-drag selection — hold Shift (or Option on macOS) to",
+            "# fall back to it, or set this to false.",
+        ]),
+    ]
+
+    /// Bring an existing config up to `currentConfigVersion`, once. Adds keys the
+    /// file has never seen and upgrades any line still holding a superseded
+    /// default; a value the user has actually chosen is left alone. Comments,
+    /// key order and unrelated keys are all preserved.
+    ///
+    /// Path-injectable for the same reason `writeTheme` is — tests must never
+    /// touch the real config.
+    static func migrate(_ url: URL) {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        let version = parseYAML(Data(text.utf8))?.configVersion ?? 1
+        guard version < currentConfigVersion else { return }
+
+        var lines = text.components(separatedBy: "\n")
+        for change in version2Changes {
+            if let i = lines.firstIndex(where: { activeKey($0) == change.key }) {
+                // Only rewrite a line that still holds the superseded default.
+                if activeValue(lines[i]) == change.staleValue {
+                    lines[i] = "\(change.key): \(change.newValue)"
+                }
+            } else {
+                if lines.last?.isEmpty == false { lines.append("") }
+                lines.append(contentsOf: change.comment)
+                lines.append("\(change.key): \(change.newValue)")
+            }
+        }
+
+        // Stamp last, so a crash mid-migration just replays next launch.
+        if let i = lines.firstIndex(where: { activeKey($0) == "config-version" }) {
+            lines[i] = "config-version: \(currentConfigVersion)"
+        } else {
+            if lines.last?.isEmpty == false { lines.append("") }
+            lines.append("# config-version: written by termdown so it knows which shipped defaults")
+            lines.append("# this file has already seen. Leave it alone.")
+            lines.append("config-version: \(currentConfigVersion)")
+        }
+
+        try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    /// The key a line sets, or nil for a blank or commented line. Mirrors what
+    /// `parseYAML` considers active so migration and parsing never disagree.
+    private static func activeKey(_ line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("#"),
+              let colon = trimmed.firstIndex(of: ":") else { return nil }
+        return String(trimmed[trimmed.startIndex..<colon]).trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    /// The value a line sets, with any inline comment and surrounding quotes
+    /// stripped — the same normalization `parseYAML` applies.
+    private static func activeValue(_ line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("#"),
+              let colon = trimmed.firstIndex(of: ":") else { return nil }
+        var value = String(trimmed[trimmed.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
+        if let hash = value.firstIndex(of: "#") {
+            value = String(value[value.startIndex..<hash]).trimmingCharacters(in: .whitespaces)
+        }
+        if (value.hasPrefix("\"") && value.hasSuffix("\"")) ||
+            (value.hasPrefix("'") && value.hasSuffix("'")), value.count >= 2 {
+            value = String(value.dropFirst().dropLast())
+        }
+        return value.lowercased()
     }
 
     private static func createDefaultConfig() {
@@ -211,6 +321,8 @@ public struct AppConfig: Codable {
             }
             guard !value.isEmpty else { continue }
             switch key {
+            case "config-version", "configversion", "config_version":
+                cfg.configVersion = Int(value)
             case "theme":
                 cfg.theme = value
             case "width":

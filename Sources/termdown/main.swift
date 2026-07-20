@@ -89,15 +89,17 @@ if config.width == nil {
 if !config.noColor {
     config.noColor = appConfig.noColor ?? false
 }
-// CLI flag wins; fall back to yaml; default = false (off)
+// CLI flag wins; fall back to yaml; default = true (on). Both keys move together
+// so the finder and the viewer behave the same: `TerminalMenu`/`LiveGrep` gate on
+// `mouse` alone, so shipping only `mouse-select` would leave the finder mouse-dead.
 if config.mouse == nil {
-    config.mouse = appConfig.mouse ?? false
+    config.mouse = appConfig.mouse ?? true
 }
 if config.mouseSelect == nil {
-    config.mouseSelect = appConfig.mouseSelect ?? false
+    config.mouseSelect = appConfig.mouseSelect ?? true
 }
-let mouseEnabled = config.mouse ?? false
-let mouseSelectEnabled = config.mouseSelect ?? false
+let mouseEnabled = config.mouse ?? true
+let mouseSelectEnabled = config.mouseSelect ?? true
 
 // Viewer key rebindings (config `key-<action>: <char>`) → canonical-key translation.
 let keyTranslation = KeyBindings.translation(from: appConfig.keyBindings)
