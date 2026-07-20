@@ -10,9 +10,24 @@ extension AnsiRenderer {
     /// right.
     private var cardChrome: Int { 4 }
 
+    /// Interior width of a card drawn at `width` columns, or nil when `width`
+    /// cannot hold the chrome plus a single column of content.
+    ///
+    /// Both the wrapper and `frameCard` size themselves from this so the two can
+    /// never disagree. They used to floor differently — `max(4, width - chrome)`
+    /// when wrapping, `max(1, width - chrome)` when framing — so a deeply nested
+    /// block (list indentation floors the content width at 4) was wrapped to 4
+    /// columns and then sliced back to nothing, emitting a card whose every row
+    /// was just an ellipsis.
+    func cardInterior(for width: Int) -> Int? {
+        let inner = width - cardChrome
+        return inner >= 1 ? inner : nil
+    }
+
     func renderCodeBlock(_ code: CodeBlock, width: Int) -> [String] {
         let lang = code.language?.trimmingCharacters(in: .whitespaces)
-        let codeWidth = max(4, width - cardChrome)
+        // Too narrow to frame: the block still renders, just without the box.
+        let codeWidth = cardInterior(for: width) ?? max(1, width)
 
         var source = code.code
         if source.hasSuffix("\n") { source.removeLast() }
@@ -107,14 +122,20 @@ extension AnsiRenderer {
     /// an ellipsis in the border colour.
     func frameCard(label: String, bodyRows: [String], width: Int) -> [String] {
         let barColor = theme.codeBar
+
+        // No room for chrome plus content. A box drawn here would hold nothing,
+        // so emit the rows bare rather than an empty frame.
+        guard let inner = cardInterior(for: width) else {
+            return bodyRows.map { fitRow($0, to: max(1, width), marker: barColor) }
+        }
+
         let leftBar = Ansi.color("\u{2502} ", barColor)  // │ + space
         let rightBar = Ansi.color(" \u{2502}", barColor) // space + │
 
         let boxW = width
-        let inner = max(1, boxW - cardChrome)
         let dash = "\u{2500}"
 
-        let header = label.isEmpty ? "\u{250C}\u{2500}" : "\u{250C}\u{2500} \(label) " // ┌─ / ┌─ label
+        let header = cardHeader(label, boxW: boxW)
         let headerW = Ansi.width(header)
         let top = Ansi.color(header + String(repeating: dash, count: max(0, boxW - headerW - 1))
             + "\u{2510}", barColor) // ┐
@@ -127,6 +148,47 @@ extension AnsiRenderer {
         }
         out.append(bottom)
         return out
+    }
+
+    /// The card's opening rule, `┌─ label `, with the label truncated to fit.
+    ///
+    /// The label is the fence's info string, which is arbitrary author text —
+    /// ```` ```json title="config/production.json" linenos ```` is a perfectly
+    /// ordinary fence. Left unbounded it produces a top rule wider than the
+    /// card, which pushes the frame's right border off-screen in the viewer
+    /// (autowrap is off) and gets its styling stripped by the pager: exactly the
+    /// damage the exact-width card exists to prevent.
+    private func cardHeader(_ label: String, boxW: Int) -> String {
+        let corner = "\u{250C}\u{2500}" // ┌─
+        guard !label.isEmpty else { return corner }
+
+        let decorated = "\(corner) \(label) "
+        let budget = boxW - 2 // leave at least one dash and the closing ┐
+        if Ansi.width(decorated) <= budget { return decorated }
+
+        // What remains for the label itself once the corner and its two
+        // surrounding spaces are paid for.
+        let room = budget - Ansi.width(corner) - 2
+        guard room >= 1 else { return corner }
+        return "\(corner) \(Ansi.truncate(label, to: room)) "
+    }
+
+    /// Whether anything but whitespace sits at or beyond column `inner`.
+    ///
+    /// Walks the plain text rather than inspecting the sliced-off tail, because
+    /// `Ansi.horizontalSlice` substitutes a space for a double-width glyph that
+    /// the cut lands inside — so a CJK character straddling the card's right
+    /// edge reads as blank in the tail, and testing it there would drop the
+    /// character while reporting nothing was lost. A straddling glyph cannot be
+    /// drawn, so it counts as lost.
+    private func contentLost(beyond inner: Int, in row: String) -> Bool {
+        var col = 0
+        for ch in Ansi.strip(row) {
+            let w = Ansi.charWidth(ch)
+            if col + w > inner, !ch.isWhitespace { return true }
+            col += w
+        }
+        return false
     }
 
     /// Bring one card row to exactly `inner` columns: pad it if short, slice it
@@ -144,10 +206,7 @@ extension AnsiRenderer {
             return row + String(repeating: " ", count: inner - rowWidth)
         }
 
-        // `horizontalSlice` carries the active SGR across the cut, unlike
-        // `Ansi.truncate`, which flattens the row to plain text.
-        let cut = Ansi.strip(Ansi.horizontalSlice(row, start: inner, width: rowWidth - inner))
-        let losesContent = cut.contains { !$0.isWhitespace }
+        let losesContent = contentLost(beyond: inner, in: row)
 
         // Leave a column for the marker only when one is actually drawn. A
         // wide glyph straddling the cut can come up a column short, so pad.
