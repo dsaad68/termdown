@@ -71,9 +71,13 @@ final class ConfigWriteTests: XCTestCase {
         XCTAssertTrue(written.contains("# termdown configuration"), written)
     }
 
-    /// A v0.1.7 config: both keys are present holding the superseded default, so
-    /// both get upgraded rather than left off forever.
-    func testMigrateUpgradesStaleShippedDefaults() throws {
+    /// Migration adds keys; it never edits a value the file already states.
+    ///
+    /// It used to rewrite any line still holding the superseded default, reading
+    /// that as "never touched". Nothing in the file supports that inference — a
+    /// deliberate `mouse: false` is byte-identical to an untouched one — so the
+    /// rule silently overrode people who had turned the mouse off on purpose.
+    func testMigrateNeverRewritesAValueTheFileAlreadySets() throws {
         let url = tempConfig()
         defer { try? FileManager.default.removeItem(at: url) }
         try """
@@ -86,9 +90,87 @@ final class ConfigWriteTests: XCTestCase {
 
         let written = try String(contentsOf: url, encoding: .utf8)
         let cfg = try parse(url)
-        XCTAssertEqual(cfg?.mouse, true, written)
-        XCTAssertEqual(cfg?.mouseSelect, true, written)
-        XCTAssertEqual(cfg?.noColor, false, written)  // an unrelated false stays false
+        XCTAssertEqual(cfg?.mouse, false, written)
+        XCTAssertEqual(cfg?.mouseSelect, false, written)
+        XCTAssertEqual(cfg?.noColor, false, written)
+    }
+
+    /// A new sub-setting must not switch itself on inside something the user has
+    /// switched off: `mouse-select` reports pointer motion, so adding it as
+    /// `true` to a config with `mouse: false` would take back the terminal's own
+    /// click-drag selection from someone who explicitly asked to keep it.
+    func testMigrateAddsASubordinateKeyOffWhenItsParentIsOff() throws {
+        let url = tempConfig()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try "mouse: false\n".write(to: url, atomically: true, encoding: .utf8)
+
+        AppConfig.migrate(url)
+
+        let written = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertEqual(try parse(url)?.mouseSelect, false, written)
+    }
+
+    /// `parseYAML` accepts `mouse_select` and `mouseselect` too. Matching only
+    /// the canonical spelling appended a second `mouse-select:` line — and since
+    /// parsing is last-line-wins, that duplicate silently overrode the user's.
+    func testMigrateRecognizesAliasSpellings() throws {
+        for alias in ["mouse_select", "mouseselect"] {
+            let url = tempConfig()
+            defer { try? FileManager.default.removeItem(at: url) }
+            try "theme: nord\n\(alias): false\n".write(to: url, atomically: true, encoding: .utf8)
+
+            AppConfig.migrate(url)
+
+            let written = try String(contentsOf: url, encoding: .utf8)
+            XCTAssertEqual(try parse(url)?.mouseSelect, false, written)
+            XCTAssertFalse(written.contains("mouse-select:"),
+                           "appended a duplicate alongside \(alias):\n\(written)")
+        }
+    }
+
+    /// A symlinked config is the ordinary dotfiles arrangement. `atomically:
+    /// true` renames a temp file over the destination, which replaces the link
+    /// with a regular file and orphans the tracked original — so the repo the
+    /// user edits stops driving their config, silently.
+    func testMigrateWritesThroughASymlink() throws {
+        let fm = FileManager.default
+        let real = tempConfig()
+        let link = tempConfig()
+        defer {
+            try? fm.removeItem(at: real)
+            try? fm.removeItem(at: link)
+        }
+        try "mouse: false\n".write(to: real, atomically: true, encoding: .utf8)
+        try fm.createSymbolicLink(at: link, withDestinationURL: real)
+
+        AppConfig.migrate(link)
+
+        let type = try fm.attributesOfItem(atPath: link.path)[.type] as? FileAttributeType
+        XCTAssertEqual(type, .typeSymbolicLink, "the symlink was replaced by a regular file")
+
+        let written = try String(contentsOf: real, encoding: .utf8)
+        XCTAssertTrue(written.contains("config-version: 2"), "migration missed the real file:\n\(written)")
+        XCTAssertTrue(written.contains("mouse: false"), written)
+    }
+
+    /// `writeTheme` writes the same file from the theme picker, so it has to
+    /// follow a symlink for the same reason.
+    func testWriteThemeWritesThroughASymlink() throws {
+        let fm = FileManager.default
+        let real = tempConfig()
+        let link = tempConfig()
+        defer {
+            try? fm.removeItem(at: real)
+            try? fm.removeItem(at: link)
+        }
+        try "theme: dark\n".write(to: real, atomically: true, encoding: .utf8)
+        try fm.createSymbolicLink(at: link, withDestinationURL: real)
+
+        AppConfig.writeTheme("nord", to: link)
+
+        let type = try fm.attributesOfItem(atPath: link.path)[.type] as? FileAttributeType
+        XCTAssertEqual(type, .typeSymbolicLink, "the symlink was replaced by a regular file")
+        XCTAssertTrue(try String(contentsOf: real, encoding: .utf8).contains("theme: nord"))
     }
 
     /// Migration must not fight a user who has deliberately turned the new
@@ -139,15 +221,20 @@ final class ConfigWriteTests: XCTestCase {
         XCTAssertTrue(written.contains("# mouse: false"), written)  // comment preserved
     }
 
-    /// An inline trailing comment must not hide the value from the staleness check.
-    func testMigrateSeesValueBehindInlineComment() throws {
+    /// An inline trailing comment must not hide the key from the scan (or a
+    /// duplicate gets appended), and the user's note has to survive — it is
+    /// often the only record of *why* a setting was changed.
+    func testMigrateKeepsALineAndItsInlineComment() throws {
         let url = tempConfig()
         defer { try? FileManager.default.removeItem(at: url) }
-        try "mouse: false  # I turned this off\n".write(to: url, atomically: true, encoding: .utf8)
+        let line = "mouse: false  # off on purpose, tmux copy breaks otherwise"
+        try "\(line)\n".write(to: url, atomically: true, encoding: .utf8)
 
         AppConfig.migrate(url)
 
-        XCTAssertEqual(try parse(url)?.mouse, true)
+        let written = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(written.contains(line), "the line and its comment were rewritten:\n\(written)")
+        XCTAssertEqual(try parse(url)?.mouse, false, written)
     }
 
     /// A missing file is not an error — `load()` creates one in that case.

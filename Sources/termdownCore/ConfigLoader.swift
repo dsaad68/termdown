@@ -45,7 +45,7 @@ public struct AppConfig: Codable {
     /// user's file and upgrades once; see `migrate(_:)`.
     static let currentConfigVersion = 2
 
-    private static let defaultConfigContent = """
+    static let defaultConfigContent = """
     # termdown configuration
     # ---------------------
     # config-version: written by termdown so it knows which shipped defaults this
@@ -171,130 +171,6 @@ public struct AppConfig: Codable {
             if keyBindings == nil { keyBindings = v }
             else { v.forEach { keyBindings?[$0.key] = $0.value } }   // merge per binding
         }
-    }
-
-    // MARK: - Helpers
-
-    /// Persist the chosen `theme` to the global config, replacing the active
-    /// `theme:` line in place (comments and other keys are preserved) or
-    /// appending one if absent. Used by the in-app theme selector.
-    public static func setTheme(_ name: String) {
-        writeTheme(name, to: globalConfigPath)
-    }
-
-    /// Path-injectable core of `setTheme` so it can be tested without touching the
-    /// user's real config.
-    static func writeTheme(_ name: String, to url: URL) {
-        let fm = FileManager.default
-        var lines = (try? String(contentsOf: url, encoding: .utf8))
-            .map { $0.components(separatedBy: "\n") } ?? []
-        if let i = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("theme:") }) {
-            lines[i] = "theme: \(name)"
-        } else {
-            lines.append("theme: \(name)")
-        }
-        try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
-    }
-
-    // MARK: - Migration
-
-    /// A default that changed after this config file was written, and the value
-    /// the old template shipped — so a line still holding the old default can be
-    /// told apart from one the user actually chose.
-    private struct DefaultChange {
-        let key: String
-        let staleValue: String
-        let newValue: String
-        let comment: [String]
-    }
-
-    /// Defaults introduced in config-version 2: mouse scroll and drag-to-select
-    /// both ship on now. A file predating the `mouse-select` key never had the
-    /// line at all; one written by v0.1.7 has it set to the old default.
-    private static let version2Changes: [DefaultChange] = [
-        DefaultChange(key: "mouse", staleValue: "false", newValue: "true", comment: [
-            "# mouse: Mouse scroll in the viewer and file list (true/false, default true).",
-            "# Set false to hand the mouse back to the terminal entirely.",
-        ]),
-        DefaultChange(key: "mouse-select", staleValue: "false", newValue: "true", comment: [
-            "# mouse-select: Drag with the mouse to select text, copied on release",
-            "# (true/false, default true). This reports pointer motion, which replaces the",
-            "# terminal's own click-drag selection — hold Shift (or Option on macOS) to",
-            "# fall back to it, or set this to false.",
-        ]),
-    ]
-
-    /// Bring an existing config up to `currentConfigVersion`, once. Adds keys the
-    /// file has never seen and upgrades any line still holding a superseded
-    /// default; a value the user has actually chosen is left alone. Comments,
-    /// key order and unrelated keys are all preserved.
-    ///
-    /// Path-injectable for the same reason `writeTheme` is — tests must never
-    /// touch the real config.
-    static func migrate(_ url: URL) {
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }
-        let version = parseYAML(Data(text.utf8))?.configVersion ?? 1
-        guard version < currentConfigVersion else { return }
-
-        var lines = text.components(separatedBy: "\n")
-        for change in version2Changes {
-            if let i = lines.firstIndex(where: { activeKey($0) == change.key }) {
-                // Only rewrite a line that still holds the superseded default.
-                if activeValue(lines[i]) == change.staleValue {
-                    lines[i] = "\(change.key): \(change.newValue)"
-                }
-            } else {
-                if lines.last?.isEmpty == false { lines.append("") }
-                lines.append(contentsOf: change.comment)
-                lines.append("\(change.key): \(change.newValue)")
-            }
-        }
-
-        // Stamp last, so a crash mid-migration just replays next launch.
-        if let i = lines.firstIndex(where: { activeKey($0) == "config-version" }) {
-            lines[i] = "config-version: \(currentConfigVersion)"
-        } else {
-            if lines.last?.isEmpty == false { lines.append("") }
-            lines.append("# config-version: written by termdown so it knows which shipped defaults")
-            lines.append("# this file has already seen. Leave it alone.")
-            lines.append("config-version: \(currentConfigVersion)")
-        }
-
-        try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
-    }
-
-    /// The key a line sets, or nil for a blank or commented line. Mirrors what
-    /// `parseYAML` considers active so migration and parsing never disagree.
-    private static func activeKey(_ line: String) -> String? {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, !trimmed.hasPrefix("#"),
-              let colon = trimmed.firstIndex(of: ":") else { return nil }
-        return String(trimmed[trimmed.startIndex..<colon]).trimmingCharacters(in: .whitespaces).lowercased()
-    }
-
-    /// The value a line sets, with any inline comment and surrounding quotes
-    /// stripped — the same normalization `parseYAML` applies.
-    private static func activeValue(_ line: String) -> String? {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, !trimmed.hasPrefix("#"),
-              let colon = trimmed.firstIndex(of: ":") else { return nil }
-        var value = String(trimmed[trimmed.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
-        if let hash = value.firstIndex(of: "#") {
-            value = String(value[value.startIndex..<hash]).trimmingCharacters(in: .whitespaces)
-        }
-        if (value.hasPrefix("\"") && value.hasSuffix("\"")) ||
-            (value.hasPrefix("'") && value.hasSuffix("'")), value.count >= 2 {
-            value = String(value.dropFirst().dropLast())
-        }
-        return value.lowercased()
-    }
-
-    private static func createDefaultConfig() {
-        let fm = FileManager.default
-        let dir = globalConfigPath.deletingLastPathComponent()
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        try? defaultConfigContent.write(to: globalConfigPath, atomically: true, encoding: .utf8)
     }
 
     private static func loadFile(_ url: URL) -> AppConfig? {

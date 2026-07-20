@@ -222,10 +222,14 @@ mouse-select: true  # false to keep the terminal's own click-drag selection
 # ignore-patterns: [vendor, "*.snap", archive]   # extra paths to skip
 ```
 
-termdown also writes a `config-version:` line here. It uses that to bring an
-existing config forward when a shipped default changes — adding keys your file
-has never seen and upgrading a line still holding a superseded default, once.
-Any value you have actually set is left alone.
+termdown also writes a `config-version:` line here. It uses that to add keys your
+file has never seen — once, so a setting introduced in a later release does not
+stay invisible just because your config predates it. It never edits a value your
+file already states, even one that matches an old default: nothing in the file
+distinguishes a setting you chose from one you left alone, so the only safe
+assumption is that you meant it. Changed *defaults* therefore apply to fresh
+installs; to pick one up on an existing config, delete the key or set it
+yourself.
 
 ### Config keys
 
