@@ -7,28 +7,29 @@
 # What remains are correctness / smell rules tuned to the codebase.
 
 excluded:
-  - .build
-  - Tests/Fixtures
-  - Release
+- .build
+- Tests/Fixtures
+- Release
+- local-runner
 
 disabled_rules:
-  - trailing_comma          # SwiftFormat owns trailing commas (mandatory)
-  - opening_brace           # brace placement owned by SwiftFormat
-  - todo                    # TODO/FIXME notes are allowed
-  - blanket_disable_command
-  - colon                   # palette tables are colon-aligned on purpose
-  - comma                   # dense numeric/tuple tables (e.g. the 256-color cube)
-  - statement_position      # vertical `} \n else if` branch layout is intentional
-  - function_parameter_count # draw helpers pass render state as many params by design
+- trailing_comma # SwiftFormat owns trailing commas (mandatory)
+- opening_brace # brace placement owned by SwiftFormat
+- todo # TODO/FIXME notes are allowed
+- blanket_disable_command
+- colon # palette tables are colon-aligned on purpose
+- comma # dense numeric/tuple tables (e.g. the 256-color cube)
+- statement_position # vertical `} \n else if` branch layout is intentional
+- function_parameter_count # draw helpers pass render state as many params by design
 
 identifier_name:
   min_length:
-    warning: 1              # x, y, r, g, b, fg, bg … are intentional
+    warning: 1 # x, y, r, g, b, fg, bg … are intentional
     error: 1
   max_length:
     warning: 50
     error: 60
-  validates_start_with_lowercase: off   # allow the `P` (= Ansi.Pastel) alias
+  validates_start_with_lowercase: off # allow the `P` (= Ansi.Pastel) alias
 
 type_name:
   min_length:
