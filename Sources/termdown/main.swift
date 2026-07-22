@@ -159,125 +159,14 @@ guard isDir.boolValue else {
     exit(1)
 }
 
-// MARK: - Discover markdown files
+// MARK: - Browse the folder
 
-var entries = FileScanner.scan(root: rootURL, ignorePatterns: appConfig.ignorePatterns ?? [])
-guard !entries.isEmpty else {
+let session = FolderSession(root: rootURL, env: env)
+guard !session.isEmpty else {
+    // Checked before the alternate screen, so the message survives on the
+    // normal one.
     print("No markdown files found under \(rootURL.path)")
     exit(0)
 }
 
-// Watch the folder so newly added/removed files show up in the picker
-// without restarting termdown.
-FolderWatcher.start(root: rootURL)
-
-// MARK: - Main loop: pick a file -> view it -> repeat
-
-var details = fileDetails(entries)
-
-let homePath = FileManager.default.homeDirectoryForCurrentUser.path
-let displayPath = rootURL.path.hasPrefix(homePath)
-    ? "~" + String(rootURL.path.dropFirst(homePath.count))
-    : rootURL.path
-
-var menu = TerminalMenu(
-    title: "termdown",
-    items: entries.map { $0.relativePath },
-    details: details
-)
-menu.path = displayPath
-menu.mouseEnabled = mouseEnabled
-
-// Project-wide search across all discovered files (reused from list + pager).
-var liveGrep = LiveGrep(entries: entries.map { ($0.url, $0.relativePath) })
-liveGrep.mouseEnabled = mouseEnabled
-
-// Re-scan the directory after `FolderWatcher` reports a change, syncing
-// `entries`/`details`/`liveGrep` if the file list actually differs (an
-// FSEvents firing can also be a same-file mtime touch with no list change).
-@discardableResult
-func refreshEntries() -> Bool {
-    let rescanned = FileScanner.scan(root: rootURL, ignorePatterns: appConfig.ignorePatterns ?? [])
-    guard rescanned.map(\.relativePath) != entries.map(\.relativePath) else { return false }
-    entries = rescanned
-    details = fileDetails(entries)
-    liveGrep.updateEntries(entries.map { ($0.url, $0.relativePath) })
-    return true
-}
-
-menu.onFolderChanged = {
-    refreshEntries() ? (items: entries.map { $0.relativePath }, details: details) : nil
-}
-
-// Resolve a [[wikilink]] page name to one of the discovered files — matching by
-// filename (with or without extension) or relative path, case-insensitively.
-let resolveWikilink: (String) -> URL? = { name in
-    let needle = name.lowercased()
-    let needleStem = (needle as NSString).deletingPathExtension
-    return entries.first { entry in
-        let file = entry.url.lastPathComponent.lowercased()
-        let stem = (file as NSString).deletingPathExtension
-        let rel = entry.relativePath.lowercased()
-        let relStem = (rel as NSString).deletingPathExtension
-        return file == needle || stem == needleStem || rel == needle || relStem == needleStem
-    }?.url
-}
-
-/// Open a file in the pager (which then handles in-app link/grep navigation).
-func viewFile(_ url: URL, query: String?) {
-    var pager = Pager(title: url.lastPathComponent, lines: [])
-    pager.fileURL = url
-    pager.fixedWidth = config.width
-    pager.mouseEnabled = mouseEnabled
-    pager.mouseSelectEnabled = mouseSelectEnabled
-    pager.initialQuery = query
-    pager.renderFile = { renderContext.renderFile($0, width: $1) }
-    pager.renderText = { renderContext.render($0, width: $1) }
-    pager.resolveWikilink = resolveWikilink
-    pager.keyTranslation = keyTranslation
-    pager.onProjectSearch = { liveGrep.run() }
-    // Theme selector (`p`): preview swaps the active theme live; save persists it.
-    pager.currentThemeName = renderContext.themeName
-    pager.onPreviewTheme = { renderContext.previewTheme($0) }
-    pager.onSaveTheme = { renderContext.saveTheme($0) }
-    pager.bannerOn = renderContext.headingBanners
-    pager.onToggleHeadingBanners = { renderContext.headingBanners = $0 }
-    pager.onNewTab = {
-        // Reuse the file finder (and grep) to choose a document for a new tab;
-        // `.quit` here means the user cancelled, so no tab is opened. The "New tab"
-        // context swaps the launch wordmark for a slim header so it's clearly a
-        // picker, not the app relaunching.
-        switch menu.run(initialSelection: lastSelection, context: "New tab") {
-        case .open(let index):
-            lastSelection = index
-            return entries[index].url
-        case .grep:
-            return liveGrep.run()?.url
-        case .quit:
-            return nil
-        }
-    }
-    pager.run()
-}
-
-Terminal.enableRawMode()
-Terminal.enterAltScreen()
-
-var lastSelection = 0
-menuLoop: while true {
-    switch menu.run(initialSelection: lastSelection) {
-    case .quit:
-        break menuLoop
-    case .open(let index):
-        lastSelection = index
-        viewFile(entries[index].url, query: nil)
-    case .grep:
-        if let result = liveGrep.run() {
-            viewFile(result.url, query: result.query)
-        }
-    }
-}
-
-Terminal.exitAltScreen()
-Terminal.disableRawMode()
-Terminal.showCursor()
+withTerminalUI { session.runPicker() }
