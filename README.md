@@ -64,6 +64,10 @@ swift run termdown ~/notes    # scan a specific directory
     Falls back to a highlighted code block for unsupported diagram types, and for
     a diagram no layout can fit: an edge label is drawn inline along a one-row
     arrow and cannot wrap, so it sets a hard floor
+  - **Line breaks** follow CommonMark: consecutive lines are one paragraph and
+    re-flow together, so three commands written on three lines render as one
+    wrapped run. End a line with two spaces or a backslash for a hard break —
+    or use a list or a blank line — to keep them apart
   - GFM tables drawn with box-drawing borders and column alignment
   - Block quotes (including nested)
   - **GitHub alerts**: `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, etc. as colored callouts
@@ -189,12 +193,19 @@ swift run termdown ~/notes    # scan a specific directory
 ### Command-line options
 
 ```sh
-termdown [options] [directory]
-termdown render <file.md>
-termdown <file.md>            # with `bare-render: true` in config
+termdown                      # file picker over the current directory
+termdown DIR                  # file picker over DIR
+termdown FILE.md              # open FILE.md in the viewer
+                              #   (renders to stdout with `bare-render: true`)
+termdown -o FILE.md           # always open in the viewer
+termdown -r FILE.md           # always render to stdout
+termdown render FILE.md       # older spelling of -r
 termdown -                    # read from stdin
 
 Options:
+  -o, --open PATH   Open PATH in the viewer whatever `bare-render` says
+                    (a directory opens the file picker)
+  -r, --render PATH Render PATH to stdout and exit, whatever `bare-render` says
   --width N         Set terminal width (default: auto-detect)
   --theme NAME      Set color theme. Base: dark, light, mono. Ports:
                     catppuccin, rose-pine, nord, tokyo-night, gruvbox,
@@ -250,7 +261,7 @@ yourself.
 | `ignore-patterns` | list | `[a, b, c]` | Extra path patterns to skip during file discovery (beyond the built-in `.git`/`node_modules`/`.build` skips) |
 | `mermaid` | bool | `true`/`false` | Render ` ```mermaid ` blocks as diagrams (default `true`; falls back to a code block on parse failure) |
 | `mermaid-charset` | string | `unicode`/`ascii` | Box-drawing character set for diagrams (default `unicode`) |
-| `bare-render` | bool | `true`/`false` | Treat a bare file path as `render <file>`, so `termdown notes.md` prints the rendered file and exits (default `false`). A bare directory still opens the picker |
+| `bare-render` | bool | `true`/`false` | What a bare file path does: `false` (default) opens `termdown notes.md` in the viewer, `true` renders it to stdout and exits. `-o`/`-r` override it either way; a bare directory opens the picker regardless |
 
 **Themes:** `dark`, `light`, `mono`; ports: `catppuccin`, `rose-pine`, `nord`,
 `tokyo-night`, `gruvbox`, `dracula`, `solarized-dark`, `solarized-light`,
@@ -277,34 +288,40 @@ Rebindable actions: `scroll-down`, `scroll-up`, `page-down`, `page-up`,
 `project-search`, `open-link`, `new-tab`, `theme`, `sidebar`, `wrap`, `follow`,
 `banner`, `fold`, `fold-all`, `next-heading`, `prev-heading`, `edit`, `cursor`, `contents`, `help`, `quit`.
 
-**Rendering a file straight to stdout.** By default only `termdown render
-notes.md` does that — a bare `termdown notes.md` errors, because a positional
-argument means "directory to browse". Set `bare-render` to make the `render`
-verb optional:
+**What a bare path does.** `termdown notes.md` opens the file in the viewer, and
+`termdown ~/notes` opens the file picker over that folder. `bare-render` flips
+what a bare *file* means:
 
 ```yaml
 bare-render: true
 ```
 
-`termdown notes.md` then prints the rendered document and exits, exactly as
-`termdown render notes.md` does. Three things deliberately do not change:
+With it on, `termdown notes.md` prints the rendered document to stdout and exits
+instead. Everything else is unchanged: a bare directory still opens the picker, a
+typo still fails with `no such file or directory`, and `termdown` with no
+argument still opens the picker over the current directory.
 
-- a bare **directory** still opens the file picker, so `termdown ~/notes` is
-  unaffected — the shortcut only fires for a path that exists and is not a
-  directory
-- a **typo** still fails with `no such file or directory` rather than being read
-  as a document
-- `termdown` with no argument still opens the picker over the current directory
+Two flags override the setting in either direction, so neither behaviour is
+reachable only by editing a config file:
 
-It ships off because it changes what an existing command means: `termdown
-foo.md` errors today, and a script may depend on that.
+| | `bare-render: false` (default) | `bare-render: true` |
+|---|---|---|
+| `termdown FILE.md` | opens the viewer | renders to stdout |
+| `termdown -o FILE.md` | opens the viewer | opens the viewer |
+| `termdown -r FILE.md` | renders to stdout | renders to stdout |
+| `termdown DIR` | file picker | file picker |
 
-Output keeps ANSI color when stdout is a terminal; pipe or redirect it and you
-get escape codes in the text, so add `--no-color` when capturing to a file.
+`termdown render FILE.md` is an older spelling of `-r` and still works.
 
-If your config predates the key, migration appends it as `bare-render: false` on
-the next launch — flip that. Adding the line yourself works too, and migration
-will leave your value alone.
+A file opened directly gets the folder features of the directory it sits in —
+project search, new tabs and wikilinks all resolve against its neighbours — but
+`q` leaves termdown rather than dropping you into a picker you did not ask for.
+Note that the folder scan skips hidden files, `node_modules` and `.build`, so a
+file opened from one of those will not find itself in its own project search.
+
+Rendered output keeps ANSI color when stdout is a terminal; pipe or redirect it
+and you get escape codes in the text, so add `--no-color` when capturing to a
+file.
 
 Booleans accept `true`/`yes`/`on`/`1` as true. The config reader is **flat**:
 `key: value` lines only, so `ignore-patterns` must be inline (`[...]` or a
@@ -331,8 +348,9 @@ width: 100
 Useful for piping or quick previews:
 
 ```sh
-swift run termdown render path/to/file.md
-swift run termdown render README.md | less -R
+termdown -r path/to/file.md
+termdown -r README.md | less -R
+termdown -r README.md --no-color > README.txt   # plain text, no escape codes
 ```
 
 ## Notes
