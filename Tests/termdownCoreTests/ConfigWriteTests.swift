@@ -67,7 +67,7 @@ final class ConfigWriteTests: XCTestCase {
         XCTAssertEqual(cfg?.mouseSelect, true, written)       // appended
         XCTAssertEqual(cfg?.mouse, true, written)             // untouched
         XCTAssertEqual(cfg?.theme, "dracula", written)        // untouched
-        XCTAssertEqual(cfg?.configVersion, 2, written)        // stamped
+        XCTAssertEqual(cfg?.configVersion, AppConfig.currentConfigVersion, written)  // stamped
         XCTAssertTrue(written.contains("# termdown configuration"), written)
     }
 
@@ -149,7 +149,8 @@ final class ConfigWriteTests: XCTestCase {
         XCTAssertEqual(type, .typeSymbolicLink, "the symlink was replaced by a regular file")
 
         let written = try String(contentsOf: real, encoding: .utf8)
-        XCTAssertTrue(written.contains("config-version: 2"), "migration missed the real file:\n\(written)")
+        XCTAssertTrue(written.contains("config-version: \(AppConfig.currentConfigVersion)"),
+                      "migration missed the real file:\n\(written)")
         XCTAssertTrue(written.contains("mouse: false"), written)
     }
 
@@ -182,7 +183,7 @@ final class ConfigWriteTests: XCTestCase {
 
         AppConfig.migrate(url)
         // The user turns them back off.
-        try "config-version: 2\nmouse: false\nmouse-select: false\n"
+        try "config-version: \(AppConfig.currentConfigVersion)\nmouse: false\nmouse-select: false\n"
             .write(to: url, atomically: true, encoding: .utf8)
         AppConfig.migrate(url)
 
@@ -242,5 +243,94 @@ final class ConfigWriteTests: XCTestCase {
         let url = tempConfig()
         AppConfig.migrate(url)
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    // MARK: - Generations
+
+    /// Only the generations above the file's own version are offered. The old
+    /// code applied one flat list to any file below the current version, which
+    /// was invisible while there was exactly one version to apply — and would
+    /// have resurrected a key the user deliberately deleted the moment the
+    /// constant moved.
+    func testAKeyDeletedAfterAnEarlierMigrationStaysDeleted() throws {
+        let url = tempConfig()
+        defer { try? FileManager.default.removeItem(at: url) }
+        // A v2 file whose owner removed `mouse-select` on purpose.
+        try "config-version: 2\nmouse: true\n".write(to: url, atomically: true, encoding: .utf8)
+
+        AppConfig.migrate(url)
+
+        let written = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(written.contains("mouse-select"),
+                       "a v2 key was re-offered to a v2 file:\n\(written)")
+        XCTAssertTrue(written.contains("bare-render"), "the v3 key should still arrive:\n\(written)")
+    }
+
+    /// A file predating every stamp gets the whole history at once.
+    func testAVersionlessConfigGetsEveryKey() throws {
+        let url = tempConfig()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try "theme: nord\n".write(to: url, atomically: true, encoding: .utf8)
+
+        AppConfig.migrate(url)
+
+        let cfg = try parse(url)
+        XCTAssertEqual(cfg?.mouse, true)
+        XCTAssertEqual(cfg?.mouseSelect, true)
+        XCTAssertEqual(cfg?.bareRender, false)
+        XCTAssertEqual(cfg?.configVersion, AppConfig.currentConfigVersion)
+        XCTAssertEqual(cfg?.theme, "nord")
+    }
+
+    /// `bare-render` shipped in the v0.1.8 template but was in no migration
+    /// list, so no existing config had ever seen it.
+    func testBareRenderReachesAnExistingConfig() throws {
+        let url = tempConfig()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try "config-version: 2\nmouse: true\nmouse-select: true\n"
+            .write(to: url, atomically: true, encoding: .utf8)
+
+        AppConfig.migrate(url)
+
+        let written = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertEqual(try parse(url)?.bareRender, false, written)
+        let settingLines = written.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#") && $0.contains("bare-render:") }
+        XCTAssertEqual(settingLines.count, 1, "appended more than once:\n\(written)")
+    }
+
+    /// An existing value is preserved, whichever spelling it uses.
+    func testAnExistingBareRenderChoiceSurvives() throws {
+        for spelling in ["bare-render", "bare_render", "barerender"] {
+            let url = tempConfig()
+            defer { try? FileManager.default.removeItem(at: url) }
+            try "config-version: 2\n\(spelling): true\n".write(to: url, atomically: true, encoding: .utf8)
+
+            AppConfig.migrate(url)
+
+            let written = try String(contentsOf: url, encoding: .utf8)
+            XCTAssertEqual(try parse(url)?.bareRender, true, written)
+            XCTAssertFalse(written.contains("bare-render: false"),
+                           "appended a contradicting duplicate for \(spelling):\n\(written)")
+        }
+    }
+
+    /// A file already at the current version is left exactly alone.
+    func testACurrentConfigIsUntouched() throws {
+        let url = tempConfig()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let original = "config-version: \(AppConfig.currentConfigVersion)\ntheme: nord\n"
+        try original.write(to: url, atomically: true, encoding: .utf8)
+
+        AppConfig.migrate(url)
+
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), original)
+    }
+
+    /// Bumping the constant and forgetting the template is a one-line mistake
+    /// that would make every fresh install migrate on its first run.
+    func testTheShippedTemplateIsStampedWithTheCurrentVersion() {
+        let cfg = AppConfig.parseYAML(Data(AppConfig.defaultConfigContent.utf8))
+        XCTAssertEqual(cfg?.configVersion, AppConfig.currentConfigVersion)
     }
 }
