@@ -123,7 +123,22 @@ case .render(let file):
 
 case .view(let file):
     let url = URL(fileURLWithPath: file).standardizedFileURL
-    let session = FolderSession(root: url.deletingLastPathComponent(), env: env)
+    // Refuse to open a document that cannot be read, rather than dropping the
+    // user into a blank pager and exiting 0. `termdown cover.png` and a
+    // permission-denied file both land here.
+    guard (try? String(contentsOf: url, encoding: .utf8)) != nil else {
+        FileHandle.standardError.write(Data("termdown: cannot read \(url.path)\n".utf8))
+        exit(1)
+    }
+    // A viewer needs a terminal to draw on. With stdout redirected there is
+    // nothing to page, and entering raw mode would leave the tty silent and
+    // unresponsive while frames poured into the file — so render instead, which
+    // is what the user can actually have used the output for.
+    guard isatty(STDOUT_FILENO) != 0 else {
+        renderToStdout(file, env: env)
+    }
+    let session = FolderSession(root: url.deletingLastPathComponent(), env: env,
+                                announceScan: true)
     withTerminalUI { session.view(url) }
 
 case .picker(let directory):

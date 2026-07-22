@@ -114,4 +114,35 @@ final class FitTests: XCTestCase {
     func testEmptyInput() {
         XCTAssertEqual(Ansi.fittedHint([], separator: sep, width: 40), "")
     }
+
+    // MARK: - clip
+
+    /// The reason `clip` exists rather than always slicing: a string that fits
+    /// is returned byte-for-byte, so OSC 8 hyperlinks survive. `horizontalSlice`
+    /// documents that it drops OSC sequences, so routing every line through a
+    /// slice silently un-clicks every link in the document.
+    func testClipLeavesAFittingStringUntouched() {
+        let link = "\u{1B}]8;;https://example.com\u{1B}\\click me\u{1B}]8;;\u{1B}\\"
+        XCTAssertEqual(Ansi.clip(link, to: 40), link)
+        XCTAssertTrue(Ansi.clip(link, to: 40).contains("https://example.com"))
+    }
+
+    /// …and never pads, unlike `fit`.
+    func testClipDoesNotPad() {
+        XCTAssertEqual(Ansi.clip("ab", to: 10), "ab")
+    }
+
+    /// A cut row is marked, so the reader knows the line continues.
+    func testClipMarksTheCut() {
+        XCTAssertEqual(Ansi.clip("abcdefgh", to: 5), "abcd\u{2026}")
+    }
+
+    func testClipNeverExceedsTheTarget() {
+        for input in ["", "abc", String(repeating: "x", count: 40), "日本語のテキスト"] {
+            for target in 1...20 {
+                XCTAssertLessThanOrEqual(Ansi.width(Ansi.clip(input, to: target)), target,
+                                         "clip(\"\(input)\", to: \(target))")
+            }
+        }
+    }
 }

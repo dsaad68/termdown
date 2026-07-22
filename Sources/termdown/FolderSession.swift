@@ -24,9 +24,18 @@ final class FolderSession {
     private var grep = LiveGrep(entries: [])
     private var lastSelection = 0
 
-    init(root: URL, env: AppEnvironment) {
+    /// `announceScan` is set when the session was opened on a single file, so
+    /// the first folder feature triggers the scan with the viewer already on
+    /// screen. `termdown ~/notes.md` roots the session on the whole home
+    /// directory, and walking it can take seconds — long enough that a silent
+    /// freeze reads as a hang. The picker path scans before the alternate
+    /// screen is up and needs no such notice.
+    private let announceScan: Bool
+
+    init(root: URL, env: AppEnvironment, announceScan: Bool = false) {
         self.root = root
         self.env = env
+        self.announceScan = announceScan
     }
 
     // MARK: - Scanning
@@ -38,6 +47,9 @@ final class FolderSession {
         guard !scanned else { return entries }
         scanned = true
 
+        if announceScan {
+            Terminal.render(["", "  Scanning \(displayPath)\u{2026}", ""])
+        }
         entries = FileScanner.scan(root: root, ignorePatterns: env.ignorePatterns)
         details = fileDetails(entries)
 

@@ -106,30 +106,38 @@ extension TerminalMenu {
         let taglineText = context == nil ? "markdown viewer" : "pick a file"
         let versionText = context == nil ? "v" + appVersion : ""
         let dot = Ansi.color("  \u{00B7}  ", P.borderDim)
+        let dotW = 5
 
-        var subRight = ""
-        for candidate in [[taglineText, versionText], [versionText], []] {
-            let parts = candidate.filter { !$0.isEmpty }
-            let plain = parts.joined(separator: "  \u{00B7}  ")
-            // Room for the count, a gap of 2, and the trailing space.
-            if parts.isEmpty || Ansi.width(plain) + Ansi.width(countText) + 6 <= inner {
-                subRight = parts.enumerated().map { index, text in
-                    (index == 0 ? "" : dot)
-                        + Ansi.color(text, index == 0 && context != nil ? P.accentDim
-                                     : (text == versionText ? P.textDim : P.accentDim))
-                }.joined()
-                break
-            }
+        // Priority order, most useful first: the file count, then the folder
+        // path (the only thing that says *which* termdown window this is), then
+        // the version, then the static tagline. The right-hand side used to be
+        // chosen first, which inverted this — on a 48-column terminal it kept
+        // "markdown viewer · v0.1.8" and dropped the path entirely.
+        //
+        // A minimum of 12 columns for the path: shorter than that elides to
+        // little more than an ellipsis, which is worth less than the room.
+        let countW = Ansi.width(countText)
+        let pathW = path.isEmpty ? 0 : min(Ansi.width(path), max(0, inner - countW - 3 - dotW - 2))
+        let showPath = pathW >= 12
+        var spent = 3 + countW + 1 + (showPath ? pathW + dotW : 0)
+
+        var rightParts: [String] = []
+        if !versionText.isEmpty, spent + dotW + Ansi.width(versionText) + 2 <= inner {
+            rightParts.append(versionText)
+            spent += dotW + Ansi.width(versionText)
+        }
+        if spent + dotW + Ansi.width(taglineText) + 2 <= inner {
+            rightParts.insert(taglineText, at: 0)
         }
 
+        let subRight = rightParts.enumerated().map { index, text in
+            (index == 0 ? "" : dot)
+                + Ansi.color(text, text == versionText ? P.textDim : P.accentDim)
+        }.joined()
+
         var sub = "   "
-        if !path.isEmpty {
-            // What is left for the path once the count, the right side and the
-            // separators are paid for.
-            let room = inner - Ansi.width(subRight) - Ansi.width(countText) - 3 - 5 - 3
-            if room >= 4 {
-                sub += Ansi.color(Ansi.truncate(path, to: room), P.textDim) + dot
-            }
+        if showPath {
+            sub += Ansi.color(Ansi.clip(path, to: pathW), P.textDim) + dot
         }
         sub += Ansi.color(countText, P.tealAccent)
 
@@ -172,7 +180,23 @@ extension TerminalMenu {
         // Hints are dropped, not cut: `? he\u{2026}` is noise, one hint fewer is not.
         // Least useful last — the unfocused legend is a fixed 42 columns, so it
         // used to run past the border on anything narrower than about 78.
-        let leftPart = " " + caret + typed
+        // The field scrolls to keep the caret in view instead of being cut from
+        // the right, which removed the block cursor and the characters just
+        // typed — so the field looked frozen while the list below kept
+        // filtering, and you could not see what you were typing.
+        var leftPart = " " + caret + typed
+        let leftRoom = max(0, innerSearch - 2)
+        if Ansi.width(leftPart) > leftRoom {
+            let caretPrefix = " " + caret
+            let prefixW = Ansi.width(caretPrefix)
+            let tailRoom = max(0, leftRoom - prefixW)
+            // Show the tail of what was typed, with the cut marked on the left.
+            let typedW = Ansi.width(typed)
+            let elided = Ansi.color("\u{2026}", P.borderDim)
+            leftPart = caretPrefix + elided
+                + Ansi.horizontalSlice(typed, start: typedW - max(0, tailRoom - 1),
+                                       width: max(0, tailRoom - 1))
+        }
         let hintSegments = searching
             ? [Ansi.color("\u{21B5} open", P.textDim), Ansi.color("Esc done", P.textDim)]
             : [Ansi.color("/ search", P.textDim), Ansi.color("\u{2191}\u{2193} move", P.textDim),
@@ -205,7 +229,7 @@ extension TerminalMenu {
             for i in 0..<viewport {
                 if i == 1 {
                     let msg = Ansi.color("   No matching files", P.textDim)
-                    out.append(bv + Ansi.pad(msg, to: inner) + bv)
+                    out.append(bv + Ansi.fit(msg, to: inner) + bv)
                 } else {
                     out.append(bv + String(repeating: " ", count: inner) + bv)
                 }
@@ -225,12 +249,20 @@ extension TerminalMenu {
         }
 
         // ── Bottom border with pagination pill ──
-        if filteredItems.count > viewport {
-            let cur = min(selected + 1, filteredItems.count)
-            let pag = " \(cur)\u{200A}/\u{200A}\(filteredItems.count) "
+        let pagCur = min(selected + 1, filteredItems.count)
+        let pagText = " \(pagCur)\u{200A}/\u{200A}\(filteredItems.count) "
+        // The pill needs its own text plus the four glyphs around it; below that
+        // there is no room for a counter and the border goes back to plain.
+        if filteredItems.count > viewport, Ansi.width(pagText) + 4 <= cols {
+            let pag = pagText
             let pagW = Ansi.width(pag)
-            let leftD = max(1, (inner - pagW) / 2)
-            let rightD = max(0, inner - leftD - pagW)
+            // The row carries four glyphs (╰ ┤ ├ ╯), not two, so the dashes get
+            // `inner - pagW - 2`. Budgeting for two made this row two columns
+            // too wide at *every* terminal size, in the ordinary case of a
+            // folder with more files than fit the viewport.
+            let dashes = max(0, inner - pagW - 2)
+            let leftD = dashes / 2
+            let rightD = dashes - leftD
             out.append(Ansi.color("\u{2570}" + String(repeating: "\u{2500}", count: leftD) + "\u{2524}", P.borderDim)
                        + Ansi.color(pag, P.accentDim)
                        + Ansi.color("\u{251C}" + String(repeating: "\u{2500}", count: rightD) + "\u{256F}", P.borderDim))

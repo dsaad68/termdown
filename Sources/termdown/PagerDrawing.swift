@@ -70,10 +70,14 @@ extension Pager {
             var cell = ""
             if lineIdx < total {
                 let display = view[lineIdx]
-                // Both modes slice: `truncate` flattens its input to plain text
-                // when it fires, so at narrow widths — where nearly every line
-                // truncates — the viewer lost all of its syntax colour.
-                cell = Ansi.horizontalSlice(display, start: wrapOn ? 0 : hscroll, width: available)
+                // `clip` leaves a line that already fits completely alone, and
+                // cuts the rest through `horizontalSlice`. Both halves matter:
+                // `truncate` used to flatten a cut line to plain text, losing
+                // every syntax colour at narrow widths, while slicing
+                // unconditionally rebuilds even lines that fit — and a rebuild
+                // drops OSC 8 hyperlinks, so links stopped being clickable.
+                cell = wrapOn ? Ansi.clip(display, to: available)
+                              : Ansi.horizontalSlice(display, start: hscroll, width: available)
                 // Current-line cursor / selection / edit field: a full-width matte
                 // highlight across the content column (degrades to the gutter
                 // marker under --no-color).

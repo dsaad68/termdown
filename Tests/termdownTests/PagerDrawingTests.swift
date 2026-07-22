@@ -315,4 +315,43 @@ final class PagerDrawingTests: XCTestCase {
                                     linkFocus: nil, copyFlash: nil)
         XCTAssertEqual(base.map { Ansi.strip($0) }, tinted.map { Ansi.strip($0) })
     }
+
+    /// Wrap mode must not rebuild a line that already fits: `horizontalSlice`
+    /// drops OSC sequences, so slicing unconditionally stripped the OSC 8
+    /// hyperlink off every link in the document and left the text unclickable.
+    func testWrapModeKeepsHyperlinksIntact() {
+        let link = "\u{1B}]8;;https://example.com\u{1B}\\click me\u{1B}]8;;\u{1B}\\"
+        var p = Pager(title: "doc.md", lines: [])
+        p.lines = [link]
+        p.plainLines = ["click me"]
+        let frame = p.buildFrame(
+            top: 0, contentRows: 2, cols: 80, maxTop: 0, available: 76,
+            sidebarActive: false, sidebarFocus: false, sidebarCursor: 0,
+            wrapOn: true, hscroll: 0, followMode: false,
+            reloadFlashActive: false, title: "doc.md",
+            searchQuery: "", searchMatches: [], currentMatchIndex: 0,
+            searchMode: false, gotoMode: false, gotoInput: "",
+            linkFocus: nil, copyFlash: nil)
+        XCTAssertTrue(frame.joined().contains("https://example.com"),
+                      "the OSC 8 hyperlink was stripped from the frame")
+    }
+
+    /// A line the viewport cannot show is marked, so the reader knows it
+    /// continues rather than reading a sentence that stops mid-word.
+    func testAClippedLineIsMarked() {
+        var p = Pager(title: "doc.md", lines: [])
+        let long = String(repeating: "word ", count: 60)
+        p.lines = [long]
+        p.plainLines = [long]
+        let frame = p.buildFrame(
+            top: 0, contentRows: 2, cols: 40, maxTop: 0, available: 36,
+            sidebarActive: false, sidebarFocus: false, sidebarCursor: 0,
+            wrapOn: true, hscroll: 0, followMode: false,
+            reloadFlashActive: false, title: "doc.md",
+            searchQuery: "", searchMatches: [], currentMatchIndex: 0,
+            searchMode: false, gotoMode: false, gotoInput: "",
+            linkFocus: nil, copyFlash: nil)
+        XCTAssertTrue(frame.map { Ansi.strip($0) }.joined().contains("\u{2026}"),
+                      "a clipped line carried no overflow marker")
+    }
 }

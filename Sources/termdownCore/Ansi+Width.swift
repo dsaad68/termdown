@@ -201,9 +201,23 @@ extension Ansi {
     public static func fit(_ s: String, to target: Int, align: TextAlign = .left) -> String {
         guard target > 0 else { return "" }
         if width(s) <= target { return pad(s, to: target, align: align) }
+        return pad(clip(s, to: target), to: target, align: align)
+    }
+
+    /// Cut a (possibly styled) string down to `target` columns, marking the cut
+    /// with an ellipsis. Never pads — for callers that must not gain trailing
+    /// spaces.
+    ///
+    /// A string that already fits is returned **untouched**, which matters more
+    /// than it looks: slicing rebuilds the string and `horizontalSlice` drops
+    /// OSC sequences, so routing every line through a slice silently strips
+    /// OSC 8 hyperlinks from content that never needed cutting.
+    public static func clip(_ s: String, to target: Int) -> String {
+        guard target > 0 else { return "" }
+        if width(s) <= target { return s }
         // Spend a column on the ellipsis only when there is one to spare.
         guard target > 1 else { return horizontalSlice(s, start: 0, width: target) }
-        return pad(horizontalSlice(s, start: 0, width: target - 1) + "\u{2026}", to: target, align: align)
+        return horizontalSlice(s, start: 0, width: target - 1) + "\u{2026}"
     }
 
     /// Join key-legend segments, dropping trailing ones until the result fits
