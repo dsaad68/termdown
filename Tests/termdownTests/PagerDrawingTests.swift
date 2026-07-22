@@ -214,7 +214,10 @@ final class PagerDrawingTests: XCTestCase {
         ]
         for (contentName, lines) in corpus {
             for (stateName, apply) in states {
-                for cols in [40, 60, 80, 120] {
+                // Below 24 the `max(20, …)` content floor exceeds the screen,
+                // which is where the frame used to come apart. The sweep
+                // started at 40 and so never reached it.
+                for cols in [10, 16, 20, 22, 24, 30, 40, 60, 80, 120] {
                     for wrapOn in [true, false] {
                         var p = Pager(title: "doc.md", lines: [])
                         p.lines = lines

@@ -106,4 +106,70 @@ final class TerminalMenuDrawTests: XCTestCase {
                            detailFor: [:], context: nil)
         XCTAssertEqual(frame.count, rows)
     }
+
+    // MARK: - Every row is exactly `cols` wide
+
+    /// Autowrap is off, so a row wider than the terminal does not wrap: it clips
+    /// at the right margin and takes the frame's border with it. This file had
+    /// no width assertions at all, which is how the picker header (a fixed ~53
+    /// columns) and the find-box hint (a fixed ~79) went unnoticed.
+    func testEveryRowIsExactlyColsWide() {
+        let m = sampleMenu()
+        for cols in [4, 6, 10, 14, 18, 20, 24, 30, 40, 52, 60, 78, 80, 120] {
+            for searching in [false, true] {
+                for context in [nil, "New tab"] as [String?] {
+                    for query in ["", "read"] {
+                        let frame = m.draw(selected: 0, top: 0, viewport: 3, rows: 14, cols: cols,
+                                           query: query, searching: searching,
+                                           filteredItems: filtered(m.items),
+                                           detailFor: ["a.md": "1d", "docs/b.md": "2h"],
+                                           context: context)
+                        for (index, row) in frame.enumerated() {
+                            XCTAssertEqual(
+                                Ansi.width(row), cols,
+                                """
+                                row \(index) is \(Ansi.width(row)) not \(cols) \
+                                (searching: \(searching), context: \(context ?? "nil"), \
+                                query: '\(query)')
+                                \(Ansi.strip(row))
+                                """)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A folder path is unbounded, so it must be elided rather than allowed to
+    /// push the header past the border.
+    func testALongPathDoesNotWidenTheHeader() {
+        var m = sampleMenu()
+        m.path = "~/very/deeply/nested/project/with/an/extremely/long/folder/path/indeed/notes"
+        for cols in [30, 60, 80, 120] {
+            let frame = m.draw(selected: 0, top: 0, viewport: 3, rows: 14, cols: cols,
+                               query: "", searching: false, filteredItems: filtered(m.items),
+                               detailFor: [:], context: nil)
+            for row in frame {
+                XCTAssertEqual(Ansi.width(row), cols, "at \(cols): \(Ansi.strip(row))")
+            }
+        }
+    }
+
+    /// Hints are dropped rather than cut, so a narrow terminal shows fewer of
+    /// them — never a truncated stub like `? he…`.
+    func testHintsAreDroppedNotTruncated() {
+        let m = sampleMenu()
+        let narrow = m.draw(selected: 0, top: 0, viewport: 3, rows: 14, cols: 40,
+                            query: "", searching: false, filteredItems: filtered(m.items),
+                            detailFor: [:], context: nil)
+            .map { Ansi.strip($0) }.joined(separator: "\n")
+        XCTAssertFalse(narrow.contains("? he\u{2026}"), narrow)
+        XCTAssertFalse(narrow.contains("sear\u{2026}"), narrow)
+
+        let wide = m.draw(selected: 0, top: 0, viewport: 3, rows: 14, cols: 100,
+                          query: "", searching: false, filteredItems: filtered(m.items),
+                          detailFor: [:], context: nil)
+            .map { Ansi.strip($0) }.joined(separator: "\n")
+        XCTAssertTrue(wide.contains("? help"), "the full legend should survive at 100: \(wide)")
+    }
 }

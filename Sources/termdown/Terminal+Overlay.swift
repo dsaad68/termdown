@@ -135,6 +135,19 @@ extension Terminal {
                  startRow: g.startRow, startCol: g.startCol, boxW: g.boxW, boxH: g.boxH)
     }
 
+    /// Fit an overlay hint to `width`, dropping whole segments rather than
+    /// cutting one: `Esc clo…` is noise, one hint fewer is not. The position
+    /// counter goes first — it is the only part that is not a key binding — and
+    /// hints are dropped from the right, so the least useful goes next.
+    ///
+    /// `scrollNote` is appended to the hint but is not counted when `innerW` is
+    /// computed, so it could push the row past the border at any width.
+    private static func fittedOverlayHint(_ hint: String, scrollNote: String, width: Int) -> String {
+        if Ansi.width(hint + scrollNote) <= width { return hint + scrollNote }
+        return Ansi.fittedHint(hint.components(separatedBy: " \u{00B7} "),
+                               separator: " \u{00B7} ", width: width)
+    }
+
     private static func paintBox(title: String, items: [String], selectable: Bool, hint: String,
                                  selected: Int, scroll: Int, listH: Int, innerW: Int,
                                  startRow: Int, startCol: Int, boxW: Int, boxH: Int) {
@@ -146,7 +159,12 @@ extension Terminal {
         func put(_ row: Int, _ col: Int, _ s: String) { buf += "\u{1B}[\(row);\(col)H" + s }
 
         // ── Top border with pastel title bar ──
-        let titleText = " \(title) "
+        // Only the dashes used to be clamped, so a title wider than the box
+        // pushed the closing corner off the screen — and `innerW` is capped at
+        // `cols - 4`, which actively creates that case on a narrow terminal.
+        let titleText = Ansi.width(" \(title) ") <= max(0, boxW - 3)
+            ? " \(title) "
+            : Ansi.fit(" \(title) ", to: max(0, boxW - 3))
         let titleW = Ansi.width(titleText)
         let dashes = max(0, boxW - 2 - titleW)
         let leftDash = 1
@@ -178,7 +196,11 @@ extension Terminal {
         // ── Hint row ──
         if !hint.isEmpty {
             let scrollNote = items.count > listH ? "  \(selected + 1)/\(items.count)" : ""
-            let hintText = Ansi.pad(hint + scrollNote, to: innerW)
+            // `scrollNote` is not counted when `innerW` is computed, so this
+            // overflowed even at wide widths whenever the hint was the widest
+            // element. The position counter is the first thing to give.
+            let hintText = Ansi.pad(fittedOverlayHint(hint, scrollNote: scrollNote, width: innerW),
+                                    to: innerW)
             let hintRow = startRow + 1 + listH
             put(hintRow, startCol, v + " " + Ansi.dim(hintText) + " " + v + shadowChar)
         }
@@ -303,17 +325,30 @@ extension Terminal {
         func put(_ row: Int, _ col: Int, _ s: String) { buf += "\u{1B}[\(row);\(col)H" + s }
 
         // ── Top border with the panes drawn as tabs ──
+        // `chipsW` was accumulated but only ever used to clamp the *dashes* —
+        // the chips themselves were emitted whole, so a wide tab strip ran past
+        // the closing corner. Drop whole tabs instead of cutting one in half; a
+        // half-drawn tab name reads as corruption. The active pane always stays.
         var chips = ""
         var chipsW = 0
+        let chipRoom = max(0, boxW - 3)
         for (i, p) in panes.enumerated() {
-            if i > 0 { chips += Ansi.color("·", border); chipsW += 1 }
             let label = " \(p.name) "
+            let sepW = chipsW > 0 ? 1 : 0
+            guard chipsW + sepW + Ansi.width(label) <= chipRoom || i == activePane else { continue }
+            if chipsW > 0 { chips += Ansi.color("·", border); chipsW += 1 }
             chipsW += Ansi.width(label)
             if i == activePane {
                 chips += Ansi.wrap(label, [1] + Ansi.fg(P.headerFg) + Ansi.bg(P.headerBg))
             } else {
                 chips += Ansi.color(label, P.textDim)
             }
+        }
+        // The active tab is kept unconditionally, so it can still be the one
+        // thing that overruns; clamp the assembled strip as a backstop.
+        if chipsW > chipRoom {
+            chips = Ansi.fit(chips, to: chipRoom)
+            chipsW = chipRoom
         }
         let dashes = max(0, boxW - 2 - chipsW)
         let rightDash = max(0, dashes - 1)
@@ -341,7 +376,11 @@ extension Terminal {
         // ── Hint row ──
         if !hint.isEmpty {
             let scrollNote = items.count > listH ? "  \(selected + 1)/\(items.count)" : ""
-            let hintText = Ansi.pad(hint + scrollNote, to: innerW)
+            // `scrollNote` is not counted when `innerW` is computed, so this
+            // overflowed even at wide widths whenever the hint was the widest
+            // element. The position counter is the first thing to give.
+            let hintText = Ansi.pad(fittedOverlayHint(hint, scrollNote: scrollNote, width: innerW),
+                                    to: innerW)
             let hintRow = startRow + 1 + listH
             put(hintRow, startCol, v + " " + Ansi.dim(hintText) + " " + v + shadowChar)
         }

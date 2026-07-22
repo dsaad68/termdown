@@ -187,6 +187,44 @@ extension Ansi {
         }
     }
 
+    /// Bring a (possibly styled) string to exactly `target` visible columns:
+    /// pad it if short, cut it if long.
+    ///
+    /// `pad` only ever grows. Every caller that needs a hard clamp was
+    /// hand-rolling one — or, far more often, forgetting to, and composing
+    /// `left + gap + right` before handing it to `pad` as though `pad` would
+    /// rein it in. Autowrap is off, so an over-wide row does not wrap: it clips
+    /// at the right margin and takes the frame's border with it.
+    ///
+    /// Cuts through `horizontalSlice` rather than `truncate`, so styling
+    /// survives — `truncate` flattens its input to plain text.
+    public static func fit(_ s: String, to target: Int, align: TextAlign = .left) -> String {
+        guard target > 0 else { return "" }
+        if width(s) <= target { return pad(s, to: target, align: align) }
+        // Spend a column on the ellipsis only when there is one to spare.
+        guard target > 1 else { return horizontalSlice(s, start: 0, width: target) }
+        return pad(horizontalSlice(s, start: 0, width: target - 1) + "\u{2026}", to: target, align: align)
+    }
+
+    /// Join key-legend segments, dropping trailing ones until the result fits
+    /// `width`. Returns "" when not even the first segment fits.
+    ///
+    /// Hints are the one thing that must not simply be cut: `? help` sliced to
+    /// `? he…` is noise, whereas dropping it entirely just means a narrow
+    /// terminal shows fewer hints. Order segments most-important-first.
+    ///
+    /// Never pads — callers place the result inside a row they pad themselves.
+    public static func fittedHint(_ segments: [String], separator: String, width: Int) -> String {
+        guard width > 0 else { return "" }
+        var kept = segments
+        while !kept.isEmpty {
+            let joined = kept.joined(separator: separator)
+            if self.width(joined) <= width { return joined }
+            kept.removeLast()
+        }
+        return ""
+    }
+
     /// Return the visible columns `[start, start + width)` of a styled string,
     /// preserving SGR (color/style) attributes that are active at the slice
     /// start. OSC sequences (e.g. hyperlinks) are dropped — used for no-wrap

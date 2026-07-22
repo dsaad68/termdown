@@ -70,8 +70,10 @@ extension Pager {
             var cell = ""
             if lineIdx < total {
                 let display = view[lineIdx]
-                cell = wrapOn ? Ansi.truncate(display, to: available)
-                              : Ansi.horizontalSlice(display, start: hscroll, width: available)
+                // Both modes slice: `truncate` flattens its input to plain text
+                // when it fires, so at narrow widths — where nearly every line
+                // truncates — the viewer lost all of its syntax colour.
+                cell = Ansi.horizontalSlice(display, start: wrapOn ? 0 : hscroll, width: available)
                 // Current-line cursor / selection / edit field: a full-width matte
                 // highlight across the content column (degrades to the gutter
                 // marker under --no-color).
@@ -114,7 +116,10 @@ extension Pager {
                                                    : String(repeating: " ", count: Pager.leftMargin)
                 row = gutter + cell
             }
-            row = Ansi.pad(row, to: max(0, cols - 1))
+            // `available` is floored at 20 (Pager.swift), so on a terminal
+            // narrower than about 24 it is *wider than the screen* and the
+            // assembled row overruns. `fit` clamps; `pad` only grew.
+            row = Ansi.fit(row, to: max(0, cols - 1))
             if scrollable {
                 let thumb = vi >= thumbStart && vi < thumbEnd
                 row += thumb ? Ansi.color("\u{2503}", P.accent) : Ansi.color("\u{250A}", P.borderDim) // ┃ thumb, ┊ track

@@ -173,7 +173,12 @@ final class LiveGrep {
         var out: [String] = []
         out.append(Terminal.bold(Terminal.cyan("Project search")))
         out.append("grep> \(query)█")
-        out.append(Terminal.dim("\(hits.count) match(es) · ↑↓ move · Enter open · Esc cancel"))
+        // Segments are dropped, not cut, so a narrow terminal shows fewer key
+        // hints rather than a truncated one. The match count stays: it is the
+        // only part that is information rather than a reminder.
+        out.append(Terminal.dim(Ansi.fittedHint(
+            ["\(hits.count) match(es)", "↑↓ move", "Enter open", "Esc cancel"],
+            separator: " · ", width: cols)))
         out.append("")
 
         let end = min(scroll + viewport, hits.count)
