@@ -68,3 +68,10 @@ fastlane/screenshots/**/*.png
 fastlane/test_output
 
 .claude/
+
+local-runner/
+
+# Stray asciinema recording (cast v3), not the built binary — see git log.
+# Anchored: an unanchored `termdown` also matches the Sources/termdown/
+# directory, which silently hides every new file in the executable target.
+/termdown

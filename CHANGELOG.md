@@ -6,6 +6,106 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-07-22
+
+### Fixed
+- **Mermaid diagrams no longer overflow the text column.** The renderer was
+  never told how much width it had, so it always laid out at the diagram's
+  natural size — the flowchart in `Tests/Fixtures/mermaid.md` came out 133
+  columns wide at any requested width. The card then *grew* to fit it, on the
+  assumption that the pager would scroll horizontally, but the pager only does
+  that with wrap off; with wrap on (the default) it ran each over-wide row
+  through a truncation that strips styling, so the diagram lost its border and
+  its color and picked up a stray ellipsis per row.
+
+  Diagrams now get the card's interior width as a budget. Node labels wrap and
+  inter-node spacing tightens until the diagram fits; a left-to-right graph that
+  still cannot fit is stacked top-down, which is the only lever large enough to
+  rescue a long horizontal chain.
+
+  Edge labels are drawn inline along a one-row arrow and cannot wrap, so they
+  remain a hard floor on how narrow a diagram can get. A diagram that is still
+  too wide after all of that now falls back to showing its source, the same way
+  an unsupported or malformed diagram already does — a partly drawn diagram
+  hides which nodes are missing, and a node cut off mid-box reads as a rendering
+  fault. The same block therefore renders as a diagram in a wide terminal and as
+  source in a narrow one.
+
+  Node labels keep the spacing they were written with — indentation and runs of
+  spaces used to align columns inside a label survive a fold that does not land
+  on them.
+
+  Subgraph frames keep a column of their own on each side. Squeezed flush
+  against the node boxes they merged into them, drawing shared `┤`/`├` walls: a
+  diagram that fit the width and could not be read.
+
+  Sequence diagrams are fitted too, by tightening the gaps between lifelines.
+  Their width grows with the participant count, so without this anything past
+  about four participants dropped to raw source in an 80-column terminal.
+
+  Rendering without a width budget is unchanged, which is what keeps the
+  upstream mermaid-ascii goldens byte-for-byte identical.
+- **A long fence info string no longer breaks the card frame.** The card's top
+  rule carries whatever follows the opening fence, so ```` ```json
+  title="config/production.json" linenos ```` drew a rule wider than the card
+  while every other row stayed at the text width — the border ran off the right
+  edge in the viewer, and the pager stripped its styling. The label is now
+  truncated to fit.
+- **A deeply nested code block no longer renders empty.** List indentation can
+  floor a block's width below the card's own chrome. The wrapper and the frame
+  disagreed about the minimum, so the text was wrapped to fit and then sliced
+  back to nothing, leaving a card of ellipses. Below the width a frame needs,
+  the block now renders without the box rather than without the code.
+- **A wide glyph on the card's right edge is marked when it is clipped.** A CJK
+  character straddling the boundary was dropped with no ellipsis, so the card
+  looked complete while a character had been deleted from it.
+
+### Changed
+- **A nonexistent path now says so.** Any argument that was not a directory
+  reported "is not a directory", including a plain typo. Missing paths get their
+  own message, and a real file points at `render` and at `bare-render`.
+- **Mouse scroll and drag-to-select are now on by default.** Both `mouse` and
+  `mouse-select` shipped off, so every install had a dead mouse unless the user
+  found the settings. They move together because the file finder and project
+  search gate on `mouse` alone — turning on only `mouse-select` would have left
+  those mouse-dead while the viewer responded. `--no-mouse` / `--no-mouse-select`
+  (or the matching config keys) restore the old behavior. Note that
+  `mouse-select` reports pointer motion, which replaces the terminal's own
+  click-drag selection while termdown runs; hold Shift, or Option on macOS, to
+  fall back to it. This is the default for a config termdown writes; an existing
+  config keeps whatever it already says (see the migration note below).
+
+### Added
+- **`bare-render` config key** (default `false`). With it on, `termdown
+  notes.md` behaves as `termdown render notes.md` instead of failing with
+  "is not a directory" — the `render` verb becomes optional for the common
+  case. A bare *directory* still opens the file picker, and a path that does
+  not exist still errors rather than being read as a document. Off by default
+  because it changes what an existing invocation means.
+- **12 new color themes**, bringing the total to 29. Ports: `solarized-dark`,
+  `solarized-light`, `everforest`, `kanagawa`, `one-dark`, `monokai`,
+  `ayu-mirage`, `night-owl`. Custom pastels extending the existing families:
+  `matte-moss`, `glacier`, `ember`, `terracotta`. Theme definitions moved out of
+  `Theme.swift` into `Theme+Ports.swift` and per-family files, the same split
+  `Ansi.swift` already uses to stay under the file-length lint ceiling.
+- **New config keys reach existing configs.** The config file was previously
+  written once, on first run, and never revisited, so a key introduced later
+  stayed invisible to anyone who already had one. termdown now stamps a
+  `config-version:` line and, once per bump, appends the keys a file has never
+  seen — with their documentation, in place, leaving everything else untouched.
+
+  It only ever *adds*. A value already in the file is never rewritten, even when
+  it matches an old default: `mouse: false` chosen deliberately and `mouse:
+  false` left alone are the same five characters, so treating the second as
+  editable means silently overruling the first. A changed default therefore
+  reaches fresh installs through the template; on an existing config, delete the
+  key or set it yourself. A key added as a sub-setting of something you have
+  turned off is added off — `mouse-select` will not switch itself on inside a
+  config with `mouse: false`.
+
+  Writes follow a symlink rather than replacing it, so a config symlinked into a
+  dotfiles repo stays linked.
+
 ## [0.1.7] - 2026-07-19
 
 ### Fixed
@@ -213,7 +313,10 @@ Initial release.
 - Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
   updates the Homebrew tap.
 
-[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/dsaad68/termdown/releases/tag/v0.1.8
+[0.1.7]: https://github.com/dsaad68/termdown/releases/tag/v0.1.7
+[0.1.6]: https://github.com/dsaad68/termdown/releases/tag/v0.1.6
 [0.1.5]: https://github.com/dsaad68/termdown/releases/tag/v0.1.5
 [0.1.4]: https://github.com/dsaad68/termdown/releases/tag/v0.1.4
 [0.1.2]: https://github.com/dsaad68/termdown/releases/tag/v0.1.2

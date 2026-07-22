@@ -40,15 +40,41 @@ final class ThemeTests: XCTestCase {
 
     func testAllThemesAreCompleteAndRegistered() {
         XCTAssertTrue(Theme.all.contains { $0.name == "dark" })
-        XCTAssertGreaterThanOrEqual(Theme.all.count, 17)
+        XCTAssertGreaterThanOrEqual(Theme.all.count, 29)
         for (name, theme) in Theme.all {
             XCTAssertEqual(theme.heading.count, 6, "\(name) must define 6 heading levels")
         }
     }
 
     func testCustomPastelFamiliesResolve() {
-        for name in ["matte-rose", "matte-slate", "frost", "mint", "dusk", "blossom", "sand", "coral"] {
+        for name in ["matte-rose", "matte-slate", "matte-moss",
+                     "frost", "mint", "dusk", "glacier",
+                     "blossom", "sand", "coral", "ember", "terracotta"] {
             XCTAssertNotNil(Theme.named(name), name)
+        }
+    }
+
+    func testPortedPalettesResolve() {
+        for name in ["catppuccin", "rose-pine", "nord", "tokyo-night", "gruvbox", "dracula",
+                     "solarized-dark", "solarized-light", "everforest", "kanagawa",
+                     "one-dark", "monokai", "ayu-mirage", "night-owl"] {
+            XCTAssertNotNil(Theme.named(name), name)
+        }
+    }
+
+    /// The config template enumerates theme names by hand, so a name that drifts
+    /// out of it is undiscoverable for anyone reading their own config file.
+    /// (The `--help` list is covered in `CommandLineOptionsTests`, where the
+    /// executable module — and so the text itself — is importable.)
+    func testEveryRegisteredNameIsInTheConfigTemplate() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/termdownCore/ConfigLoader.swift"),
+            encoding: .utf8)
+        // The template is a private literal, so match against the file text.
+        for (name, _) in Theme.all {
+            XCTAssertTrue(source.contains(name), "\(name) missing from the config template")
         }
     }
 

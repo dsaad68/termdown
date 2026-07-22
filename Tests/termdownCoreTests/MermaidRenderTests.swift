@@ -114,4 +114,110 @@ final class MermaidRenderTests: XCTestCase {
             XCTAssertEqual(Ansi.width(s), DisplayWidth.stringWidth(s), "disagreed on \(s)")
         }
     }
+
+    // MARK: - The card never exceeds the document width
+
+    /// Wide enough that it used to overflow an 80-column document by ~53
+    /// columns, which the pager then truncated destructively.
+    private static let wideDiagram = """
+    ```mermaid
+    flowchart LR
+        A[formula row: input + gold formula] --> B[teacher recast question]
+        B --> C[verify deterministic components and sub-queries]
+        C -->|fail, retries < 2 with feedback| B
+        C --> D[Done]
+    ```
+    """
+
+    /// Every row of a rendered document is padded to the full width; autowrap is
+    /// off, so a row wider than that pushes the frame's right border off-screen.
+    /// The mermaid card was the one construct that could produce one.
+    func testMermaidCardNeverExceedsTheDocumentWidth() {
+        for width in [40, 60, 80, 100, 120] {
+            let doc = AnsiRenderer(width: width, theme: .dark).render(Self.wideDiagram)
+            for (index, line) in doc.lines.enumerated() {
+                XCTAssertLessThanOrEqual(Ansi.width(line), width,
+                                         "row \(index) overflowed at width \(width)")
+            }
+        }
+    }
+
+    /// The card is a box: if the borders do not line up the frame looks broken,
+    /// so the top and bottom rules must span the full width exactly.
+    func testMermaidCardBordersSpanTheFullWidth() {
+        let width = 72
+        let doc = AnsiRenderer(width: width, theme: .dark).render(Self.wideDiagram)
+        let top = try? XCTUnwrap(doc.lines.first { Ansi.strip($0).hasPrefix("┌─ mermaid") })
+        let bottom = try? XCTUnwrap(doc.lines.first { Ansi.strip($0).hasPrefix("└") })
+        XCTAssertEqual(Ansi.width(top ?? ""), width)
+        XCTAssertEqual(Ansi.width(bottom ?? ""), width)
+    }
+
+    /// A diagram that fits must not be clipped — the ellipsis marker only ever
+    /// appears when a row genuinely could not be made to fit.
+    func testFittingDiagramIsNotMarkedAsClipped() {
+        let doc = AnsiRenderer(width: 100, theme: .dark).render(Self.wideDiagram)
+        let body = doc.lines.map { Ansi.strip($0) }.joined(separator: "\n")
+        XCTAssertFalse(body.contains("…"), "a diagram that fits should not be clipped:\n\(body)")
+    }
+
+    // MARK: - Falling back to source when a diagram cannot fit
+
+    /// An edge label is drawn inline along a one-row arrow and cannot wrap, so a
+    /// label wider than the column is a floor no amount of fitting gets under.
+    private static let unfittableDiagram = """
+    ```mermaid
+    graph LR
+    A[Send] -->|connection reset by peer while streaming the response body, \
+    retrying with exponential backoff| B[Ack]
+    ```
+    """
+
+    /// Showing part of a diagram is worse than showing none: which nodes are
+    /// missing is invisible, and a node cut mid-box reads as a rendering fault.
+    /// So it degrades the same way an unsupported diagram already does.
+    func testDiagramThatCannotFitFallsBackToSource() {
+        let out = render(Self.unfittableDiagram)
+        XCTAssertTrue(out.contains("graph LR"), "expected the source, got:\n\(out)")
+        XCTAssertFalse(out.contains("►"), "no partial diagram should be drawn:\n\(out)")
+        XCTAssertFalse(out.contains("…"), "nothing should be marked as clipped:\n\(out)")
+    }
+
+    /// …but only when it genuinely does not fit. Given room, the same source
+    /// must still render as a diagram.
+    func testTheSameDiagramRendersWhenThereIsRoom() {
+        let previous = Ansi.colorEnabled
+        Ansi.colorEnabled = false
+        defer { Ansi.colorEnabled = previous }
+        let out = AnsiRenderer(width: 130, theme: .dark)
+            .render(Self.unfittableDiagram).lines.joined(separator: "\n")
+        XCTAssertTrue(out.contains("►"), "expected a diagram at 130 columns, got:\n\(out)")
+        XCTAssertFalse(out.contains("graph LR"), "source should not appear when it renders")
+    }
+
+    // MARK: - Card row fitting
+
+    /// The card pads short rows and slices long ones, but the ellipsis has to
+    /// mean "content was lost here". A mermaid canvas pads every row out to the
+    /// width of the whole drawing, so an over-wide diagram hands `frameCard`
+    /// rows whose overhang is nothing but spaces.
+    func testCardMarksOnlyRowsThatActuallyLoseContent() {
+        let renderer = AnsiRenderer(width: 20, theme: .dark)
+        let inner = 20 - 4
+
+        let short = "abc"
+        let paddingOnly = String(repeating: "x", count: inner) + "        "
+        let realContent = String(repeating: "x", count: inner) + "     tail"
+
+        let card = renderer.frameCard(label: "t", bodyRows: [short, paddingOnly, realContent], width: 20)
+        let body = card.dropFirst().dropLast().map { Ansi.strip($0) }
+
+        XCTAssertEqual(body.count, 3)
+        for (index, row) in body.enumerated() {
+            XCTAssertEqual(Ansi.width(row), 20, "row \(index) is not the full width")
+        }
+        XCTAssertFalse(body[0].contains("\u{2026}"), "a short row must not be marked: \(body[0])")
+        XCTAssertFalse(body[1].contains("\u{2026}"), "only padding was cut: \(body[1])")
+        XCTAssertTrue(body[2].contains("\u{2026}"), "content was cut and must be marked: \(body[2])")
+    }
 }

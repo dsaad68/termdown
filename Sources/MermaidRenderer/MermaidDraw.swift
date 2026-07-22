@@ -184,13 +184,90 @@ extension Graph {
 }
 
 func drawMap(_ properties: GraphProperties, colorEnabled: Bool) -> String {
+    // Unconstrained: lay out once, exactly as before.
+    guard let budget = properties.maxWidth, budget > 0 else {
+        return drawMap(properties, colorEnabled: colorEnabled, plan: .natural(paddingX: properties.paddingX))
+    }
+
+    // Constrained: try increasingly tight plans and take the first that fits.
+    //
+    // `narrowest` is the fallback when nothing does, since it loses the least to
+    // clipping. Every rung is tried — layout is cheap at diagram sizes — because
+    // two adjacent rungs often render identically (rungs differing only in label
+    // cap produce the same drawing when no label is near the cap), and treating
+    // that plateau as the floor used to abandon the ladder before its tightest
+    // rung. A diagram that fits only at the last rung was then reported as
+    // unfittable and shown as raw source.
+    struct Attempt {
+        var fitted: String?
+        var narrowest: String?
+        var narrowestWidth = Int.max
+    }
+
+    func attempt(_ ladder: [FitPlan]) -> Attempt {
+        var result = Attempt()
+        for plan in ladder {
+            let rendered = drawMap(properties, colorEnabled: colorEnabled, plan: plan)
+            let renderedWidth = diagramWidth(rendered)
+            if renderedWidth <= budget {
+                result.fitted = rendered
+                return result
+            }
+            // Strictly narrower only: on a tie the earlier — less damaged — plan
+            // keeps the slot.
+            if renderedWidth < result.narrowestWidth {
+                result.narrowest = rendered
+                result.narrowestWidth = renderedWidth
+            }
+        }
+        return result
+    }
+
+    let minPaddingX = legiblePaddingX(properties)
+    let asWritten = attempt(FitPlan.ladder(naturalPaddingX: properties.paddingX,
+                                           minPaddingX: minPaddingX))
+    if let fitted = asWritten.fitted { return fitted }
+
+    // Last resort for a left-to-right graph: stack it top-down instead. Width
+    // then grows with the widest single node rather than with the whole chain,
+    // which is the only lever big enough to rescue a long horizontal flow.
+    //
+    // It genuinely changes how the diagram reads, so it is tried only after
+    // everything else has failed, and its result is used *only* if it fits. A
+    // top-down layout that still overflows would be both surprising and no
+    // better, so in that case the original direction's narrowest render wins.
+    if properties.graphDirection == "LR" {
+        let stacked = attempt(FitPlan.ladder(naturalPaddingX: properties.paddingX,
+                                             minPaddingX: minPaddingX,
+                                             direction: "TD"))
+        if let fitted = stacked.fitted { return fitted }
+    }
+
+    return asWritten.narrowest ?? ""
+}
+
+private func drawMap(_ properties: GraphProperties, colorEnabled: Bool, plan: FitPlan) -> String {
     let g = mkGraph(properties)
+    // `setStyleClasses` copies paddingX/paddingY/graphDirection off `properties`,
+    // so the plan's overrides have to be applied after it, not before.
     g.setStyleClasses(properties)
-    g.paddingX = properties.paddingX
+    g.paddingX = plan.paddingX
     g.paddingY = properties.paddingY
+    if let direction = plan.direction { g.graphDirection = direction }
     g.useAscii = properties.useAscii
     g.colorEnabled = colorEnabled
     g.setSubgraphs(properties.subgraphs)
+    if let cap = plan.labelWidthCap {
+        // `mkGraph` builds fresh nodes and `GraphLabel` is a value type, so this
+        // cannot leak into the next attempt.
+        //
+        // After `setSubgraphs`, which builds its own `Subgraph` objects with
+        // labels taken straight from the parse output — wrapping only the nodes
+        // beforehand left a subgraph title immune to every rung of the ladder,
+        // so a diagram held open by a long title never narrowed at all.
+        for node in g.nodes { node.label = node.label.wrapped(to: cap) }
+        for subgraph in g.subgraphs { subgraph.label = subgraph.label.wrapped(to: cap) }
+    }
     g.createMapping()
     let d = g.draw()
     return drawingToString(d)

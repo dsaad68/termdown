@@ -58,6 +58,58 @@ B --> A
 B --> C[Store]
 ```
 
+## Fitting a diagram to the width
+
+A diagram is laid out to fit the text column, so the same source renders
+differently in a narrow terminal than a wide one. **Resize your terminal (or
+pass `--width`) while viewing this file to watch the three stages below.**
+
+### Wrapping and tightening
+
+The first thing to give is the node labels: they wrap, and the gaps between
+nodes tighten. Wrapping costs height rather than information, since boxes
+already draw multi-line labels. Around 100 columns these three sit on one line
+each; narrow it and they fold.
+
+```mermaid
+graph LR
+A[Collect raw sensor samples] --> B[Normalize to SI units]
+B --> C[Publish the daily report]
+```
+
+### Restacking a long chain
+
+Wrapping cannot rescue a long left-to-right chain — its width grows with the
+whole chain, not with any one node. So a `graph LR` that still will not fit is
+stacked top-down instead. It is the last resort, because it genuinely changes
+how the diagram reads, and it is used only when it actually fits.
+
+```mermaid
+graph LR
+A[Parse source] --> B[Build syntax tree] --> C[Resolve symbols] --> D[Emit object code]
+```
+
+### The floor
+
+Edge labels are drawn inline along a one-row arrow, so unlike node labels they
+cannot wrap. An edge label wider than the column is therefore a hard floor: no
+amount of shrinking gets under it.
+
+Rather than draw part of a diagram, termdown shows the **source** — the same
+thing it does for an unsupported or malformed diagram. A half-drawn diagram is
+worse than none: you cannot tell which nodes are missing, and a node cut off
+mid-box reads as a rendering fault rather than as a diagram that ran out of
+room.
+
+The block below renders as a diagram in a wide terminal and as source in a
+narrow one. If you are seeing source, *widen the terminal or shorten the edge
+label* — that is the one case termdown cannot solve on your behalf.
+
+```mermaid
+graph LR
+A[Send] -->|connection reset by peer while streaming the response body, retrying with exponential backoff| B[Ack]
+```
+
 ## Configuration
 
 Diagram rendering is on by default and uses Unicode box-drawing. Switch the

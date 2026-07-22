@@ -58,7 +58,12 @@ swift run termdown ~/notes    # scan a specific directory
     [mermaid-ascii] — no external tools. All node shapes are accepted
     (`[]`, `()`, `{}`, `([])`, `[[]]`, `[()]`, `(())`, `{{}}`, `>]`) and drawn as
     rectangles; labels may be quoted and may span lines with `\n` or `<br>`.
-    Falls back to a highlighted code block for unsupported diagram types
+    Diagrams are laid out to fit the text column — labels wrap, spacing tightens,
+    and a left-to-right flowchart that still will not fit is stacked top-down —
+    so the same block renders differently in a narrow terminal than a wide one.
+    Falls back to a highlighted code block for unsupported diagram types, and for
+    a diagram no layout can fit: an edge label is drawn inline along a one-row
+    arrow and cannot wrap, so it sets a hard floor
   - GFM tables drawn with box-drawing borders and column alignment
   - Block quotes (including nested)
   - **GitHub alerts**: `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, etc. as colored callouts
@@ -102,20 +107,22 @@ swift run termdown ~/notes    # scan a specific directory
   cursor** (off by default — `j`/`k` scroll as usual until then). With it shown,
   `j`/`k` move the highlighted line (its source line shows as `L42`), and
   `Shift+↑/↓` (or `Shift+J`/`Shift+K`) **select multiple lines** — `y` copies the
-  selection as raw markdown, `Y` as rendered text. With `--mouse-select` you can
-  also **drag to select text character by character** across lines, copied to the
-  clipboard on release. Press `e` to **edit** the block
+  selection as raw markdown, `Y` as rendered text. You can also **drag to select
+  text character by character** across lines, copied to the clipboard on release
+  (on by default; `--no-mouse-select` turns it off). Press `e` to **edit** the block
   under the cursor (paragraph, heading, list item, table row, …) as its raw
   markdown **in place** while the rest stays rendered. `Enter` commits the edit to
   the buffer and marks the document **unsaved (●)**; `Ctrl-S` writes it to disk,
   and quitting with unsaved changes prompts to **Save / Discard / Cancel**.
 - **Live reload**: automatically reloads when file changes
-- **Color themes** (17): dark, light, mono; popular ports (catppuccin, rose-pine,
-  nord, tokyo-night, gruvbox, dracula); and custom true-color pastels across matte,
-  cold and warm families (matte-rose, matte-slate, frost, mint, dusk, blossom,
-  sand, coral). Press `p` in the viewer for a live-preview **theme selector** that
-  saves your pick. 24-bit color is used automatically when the terminal supports
-  it (`COLORTERM`)
+- **Color themes** (29): dark, light, mono; popular ports (catppuccin, rose-pine,
+  nord, tokyo-night, gruvbox, dracula, solarized-dark, solarized-light,
+  everforest, kanagawa, one-dark, monokai, ayu-mirage, night-owl); and custom
+  true-color pastels across matte, cold and warm families (matte-rose,
+  matte-slate, matte-moss, frost, mint, dusk, glacier, blossom, sand, coral,
+  ember, terracotta). Press `p` in the viewer for a live-preview **theme
+  selector** that saves your pick. 24-bit color is used automatically when the
+  terminal supports it (`COLORTERM`)
 - **Configurable**: supports `.termdown.yaml` (project root or home dir) for default settings
 - **Tests**: comprehensive test coverage for core functionality
 
@@ -167,7 +174,7 @@ swift run termdown ~/notes    # scan a specific directory
 | Viewer (pager) | `]` / `[`                    | next / previous heading         |
 | Viewer (pager) | `v`                          | show/hide the line cursor (cursor mode) |
 | Viewer (pager) | `Shift-↑`/`↓`, `J`/`K`       | select lines (cursor mode); `y` copies as markdown, `Y` as rendered text |
-| Viewer (pager) | drag (`--mouse-select`)      | select text character by character; copied on release, `y`/`Y` re-copy, any key clears |
+| Viewer (pager) | drag                         | select text character by character; copied on release, `y`/`Y` re-copy, any key clears (`--no-mouse-select` to disable) |
 | Viewer (pager) | double / triple click        | select the word / the whole line |
 | Viewer (pager) | `e`                          | edit the block under the cursor (raw markdown); `Enter` commits to buffer, `Esc` cancels |
 | Viewer (pager) | `Ctrl-S`                     | save unsaved edits to the file |
@@ -184,17 +191,22 @@ swift run termdown ~/notes    # scan a specific directory
 ```sh
 termdown [options] [directory]
 termdown render <file.md>
+termdown <file.md>            # with `bare-render: true` in config
 termdown -                    # read from stdin
 
 Options:
   --width N         Set terminal width (default: auto-detect)
-  --theme NAME      Set color theme: dark, light, mono, catppuccin, rose-pine,
-                    nord, tokyo-night, gruvbox, dracula, matte-rose, matte-slate,
-                    frost, mint, dusk, blossom, sand, coral
+  --theme NAME      Set color theme. Base: dark, light, mono. Ports:
+                    catppuccin, rose-pine, nord, tokyo-night, gruvbox,
+                    dracula, solarized-dark, solarized-light, everforest,
+                    kanagawa, one-dark, monokai, ayu-mirage, night-owl.
+                    Pastels: matte-rose, matte-slate, matte-moss, frost,
+                    mint, dusk, glacier, blossom, sand, coral, ember,
+                    terracotta
   --no-color        Disable ANSI colors
-  --mouse           Enable mouse scroll
+  --mouse           Enable mouse scroll (on by default)
   --no-mouse        Disable mouse scroll
-  --mouse-select    Enable drag-to-select text (copied on release)
+  --mouse-select    Enable drag-to-select text, copied on release (on by default)
   --no-mouse-select Disable drag-to-select
   --version, -V     Show version information
   --help, -h        Show help message
@@ -210,9 +222,19 @@ On first run termdown automatically creates a global config file at
 theme: dark       # see the full theme list below
 # width: 80      # uncomment to fix column width
 no-color: false
-mouse: false      # true to enable mouse scroll
+mouse: true         # false to hand the mouse back to the terminal
+mouse-select: true  # false to keep the terminal's own click-drag selection
 # ignore-patterns: [vendor, "*.snap", archive]   # extra paths to skip
 ```
+
+termdown also writes a `config-version:` line here. It uses that to add keys your
+file has never seen — once, so a setting introduced in a later release does not
+stay invisible just because your config predates it. It never edits a value your
+file already states, even one that matches an old default: nothing in the file
+distinguishes a setting you chose from one you left alone, so the only safe
+assumption is that you meant it. Changed *defaults* therefore apply to fresh
+installs; to pick one up on an existing config, delete the key or set it
+yourself.
 
 ### Config keys
 
@@ -221,17 +243,25 @@ mouse: false      # true to enable mouse scroll
 | `theme` | string | see Themes below | Content color palette (unknown values fall back to `dark`) |
 | `width` | int | e.g. `80` | Fixes the text column width; omit for auto-detect |
 | `no-color` | bool | `true`/`false` | Disables all ANSI color |
-| `mouse` | bool | `true`/`false` | Mouse scroll in the finder and pager |
+| `mouse` | bool | `true`/`false` | Mouse scroll in the finder and pager (default `true`) |
 | `wide-emoji` | string | `cluster`/`scalar` | How emoji are measured (default `cluster`: a ZWJ, skin-tone or variation-selector sequence is one two-column glyph). Use `scalar` only if your terminal draws the components separately |
-| `mouse-select` | bool | `true`/`false` | Drag to select text in the pager, copied on release (replaces the terminal's own click-drag selection) |
+| `mouse-select` | bool | `true`/`false` | Drag to select text in the pager, copied on release (default `true`; replaces the terminal's own click-drag selection) |
+| `config-version` | int | written by termdown | Tracks which shipped defaults this file has seen, so a default change reaches existing configs once. Leave it alone |
 | `ignore-patterns` | list | `[a, b, c]` | Extra path patterns to skip during file discovery (beyond the built-in `.git`/`node_modules`/`.build` skips) |
 | `mermaid` | bool | `true`/`false` | Render ` ```mermaid ` blocks as diagrams (default `true`; falls back to a code block on parse failure) |
 | `mermaid-charset` | string | `unicode`/`ascii` | Box-drawing character set for diagrams (default `unicode`) |
+| `bare-render` | bool | `true`/`false` | Treat a bare file path as `render <file>`, so `termdown notes.md` prints the rendered file and exits (default `false`). A bare directory still opens the picker |
 
 **Themes:** `dark`, `light`, `mono`; ports: `catppuccin`, `rose-pine`, `nord`,
-`tokyo-night`, `gruvbox`, `dracula`; custom pastels: matte (`matte-rose`,
-`matte-slate`), cold (`frost`, `mint`, `dusk`), warm (`blossom`, `sand`, `coral`).
-Press `p` in the viewer to preview/switch live.
+`tokyo-night`, `gruvbox`, `dracula`, `solarized-dark`, `solarized-light`,
+`everforest`, `kanagawa`, `one-dark`, `monokai`, `ayu-mirage`, `night-owl`;
+custom pastels: matte (`matte-rose`, `matte-slate`, `matte-moss`), cold
+(`frost`, `mint`, `dusk`, `glacier`), warm (`blossom`, `sand`, `coral`, `ember`,
+`terracotta`). Press `p` in the viewer to preview/switch live.
+
+A theme colors the **document** only — the TUI chrome (status bar, sidebar,
+menus) keeps its own fixed palette. The light themes (`light`,
+`solarized-light`) therefore still sit inside dark chrome.
 
 **Custom viewer keys.** Bind a key to a viewer action with `key-<action>: <char>`
 (the action's default key keeps working; overrides add a key). This applies to
@@ -306,8 +336,8 @@ swift run termdown render README.md | less -R
   is disabled under `--no-color`).
 - **Outline sidebar** (`s`) and **wrap/width/follow** controls (`w`, `+`/`-`,
   `F`) only affect the interactive viewer, not `render` output.
-- **Mouse** is off by default. Enable it with `--mouse` on the CLI or
-  `mouse: true` in `.termdown.yaml`. It works in both the file list and the
+- **Mouse** is on by default. Turn it off with `--no-mouse` on the CLI or
+  `mouse: false` in your config. It works in both the file list and the
   viewer (pager), and inside the theme picker, outline sidebar, project search
   and inline editor: the wheel scrolls or moves the selection, and a **click**
   picks a row (clicking the highlighted row activates it), positions the editor
@@ -315,14 +345,15 @@ swift run termdown render README.md | less -R
   cursor (pager) or selects a file, and clicking the highlighted file opens it
   (list). Mouse reporting uses SGR 1006 mode; terminals that don't support it
   will just ignore the escape sequences.
-- **Drag-to-select** is a separate opt-in (`--mouse-select` or
-  `mouse-select: true`). Drag in the viewer to select text character by
-  character — across lines, starting and ending mid-word — and it's copied to
-  the clipboard on release; `y`/`Y` re-copy it and any key clears it. A click
-  that doesn't move still follows a link. It's kept separate from `mouse`
-  because it reports pointer motion, which replaces your terminal's own
-  click-drag selection while termdown is running (hold Shift, or Option on
-  macOS, to fall back to it).
+- **Drag-to-select** is also on by default (`--no-mouse-select` or
+  `mouse-select: false` to turn it off). Drag in the viewer to select text
+  character by character — across lines, starting and ending mid-word — and it's
+  copied to the clipboard on release; `y`/`Y` re-copy it and any key clears it.
+  A click that doesn't move still follows a link. It stays a **separate** key
+  from `mouse` because it additionally reports pointer motion, which replaces
+  your terminal's own click-drag selection while termdown is running — hold
+  Shift, or Option on macOS, to fall back to it. Copying goes through OSC 52, so
+  it works over SSH.
 - Live reload monitors the file modification time and reloads when changed.
 
 ## Development

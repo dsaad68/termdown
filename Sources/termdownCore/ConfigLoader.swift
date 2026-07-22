@@ -3,6 +3,10 @@ import Foundation
 /// Configuration loaded from ~/.config/termdown/config.yaml (global) merged with
 /// an optional project-local .termdown.yaml (which takes priority key-by-key).
 public struct AppConfig: Codable {
+    /// Which generation of shipped defaults this file has already been through.
+    /// Absent (or lower than `currentConfigVersion`) means `migrate` still has
+    /// work to do. Never read for behavior — only for migration.
+    public var configVersion: Int?
     public var theme: String?
     public var width: Int?
     public var noColor: Bool?
@@ -20,6 +24,10 @@ public struct AppConfig: Codable {
     public var mermaid: Bool?
     /// Mermaid box-drawing character set: "unicode" (default) or "ascii".
     public var mermaidCharset: String?
+    /// Treat a bare file path as `render <file>` (default false), so
+    /// `termdown notes.md` works without the subcommand. Opt-in because it
+    /// changes what an existing invocation means.
+    public var bareRender: Bool?
     /// Viewer key overrides: action name → key (from `key-<action>: <char>`).
     public var keyBindings: [String: String]?
 
@@ -32,12 +40,26 @@ public struct AppConfig: Codable {
             .appendingPathComponent(".config/termdown/config.yaml")
     }()
 
-    private static let defaultConfigContent = """
+    /// Bumped whenever a shipped default changes in a way existing configs should
+    /// pick up. `migrate` compares it against the `config-version:` line in the
+    /// user's file and upgrades once; see `migrate(_:)`.
+    static let currentConfigVersion = 2
+
+    static let defaultConfigContent = """
     # termdown configuration
     # ---------------------
-    # theme: Color theme to use. Options: dark, light, mono, catppuccin, rose-pine,
-    #        nord, tokyo-night, gruvbox, dracula, matte-rose, matte-slate, frost,
-    #        mint, dusk, blossom, sand, coral
+    # config-version: written by termdown so it knows which shipped defaults this
+    # file has already seen. Leave it alone.
+    config-version: 2
+
+    # theme: Color theme to use.
+    #   base:    dark, light, mono
+    #   ports:   catppuccin, rose-pine, nord, tokyo-night, gruvbox, dracula,
+    #            solarized-dark, solarized-light, everforest, kanagawa, one-dark,
+    #            monokai, ayu-mirage, night-owl
+    #   pastels: matte-rose, matte-slate, matte-moss, frost, mint, dusk, glacier,
+    #            blossom, sand, coral, ember, terracotta
+    # Press `p` in the viewer to preview and switch live.
     theme: dark
 
     # width: Text column width. 0 = auto-detect from terminal size.
@@ -46,15 +68,15 @@ public struct AppConfig: Codable {
     # no-color: Disable all ANSI colors (true/false).
     no-color: false
 
-    # mouse: Enable mouse scroll in the viewer and file list (true/false).
-    # Note: enabling mouse scroll prevents native text selection in the terminal.
-    # In tmux, hold Option (macOS) or Shift to select text while mouse is on.
-    mouse: false
+    # mouse: Mouse scroll in the viewer and file list (true/false, default true).
+    # Set false to hand the mouse back to the terminal entirely.
+    mouse: true
 
     # mouse-select: Drag with the mouse to select text, copied on release
-    # (true/false). Separate from `mouse` because it reports pointer motion,
-    # which replaces the terminal's own click-drag selection entirely.
-    mouse-select: false
+    # (true/false, default true). This reports pointer motion, which replaces the
+    # terminal's own click-drag selection — hold Shift (or Option on macOS) to
+    # fall back to it, or set this to false.
+    mouse-select: true
 
     # wide-emoji: How emoji are measured — "cluster" (default) treats a ZWJ
     # sequence, skin-tone or variation-selector emoji as one two-column glyph.
@@ -73,6 +95,12 @@ public struct AppConfig: Codable {
 
     # mermaid-charset: Box-drawing characters for diagrams: unicode or ascii.
     mermaid-charset: unicode
+
+    # bare-render: Treat a bare file path as `render <file>`, so `termdown
+    # notes.md` prints the rendered file and exits instead of erroring
+    # (true/false, default false). A bare *directory* still opens the file
+    # picker either way.
+    bare-render: false
 
     # Custom viewer keys: key-<action>: <char> binds a key to a viewer action
     # (the default key keeps working too). Actions: scroll-down/up, page-down/up,
@@ -96,9 +124,12 @@ public struct AppConfig: Codable {
     public static func load() -> AppConfig {
         let fm = FileManager.default
 
-        // Create global config on first run.
+        // Create global config on first run; otherwise bring an older one up to
+        // the current generation of shipped defaults.
         if !fm.fileExists(atPath: globalConfigPath.path) {
             createDefaultConfig()
+        } else {
+            migrate(globalConfigPath)
         }
 
         // 1. Load global config as the base.
@@ -125,6 +156,7 @@ public struct AppConfig: Codable {
 
     /// Overwrite only the fields that `other` explicitly sets (non-nil).
     mutating func merge(_ other: AppConfig) {
+        if let v = other.configVersion  { configVersion = v }
         if let v = other.theme          { theme = v }
         if let v = other.width          { width = v }
         if let v = other.noColor        { noColor = v }
@@ -134,41 +166,11 @@ public struct AppConfig: Codable {
         if let v = other.ignorePatterns { ignorePatterns = v }
         if let v = other.mermaid        { mermaid = v }
         if let v = other.mermaidCharset { mermaidCharset = v }
+        if let v = other.bareRender     { bareRender = v }
         if let v = other.keyBindings {
             if keyBindings == nil { keyBindings = v }
             else { v.forEach { keyBindings?[$0.key] = $0.value } }   // merge per binding
         }
-    }
-
-    // MARK: - Helpers
-
-    /// Persist the chosen `theme` to the global config, replacing the active
-    /// `theme:` line in place (comments and other keys are preserved) or
-    /// appending one if absent. Used by the in-app theme selector.
-    public static func setTheme(_ name: String) {
-        writeTheme(name, to: globalConfigPath)
-    }
-
-    /// Path-injectable core of `setTheme` so it can be tested without touching the
-    /// user's real config.
-    static func writeTheme(_ name: String, to url: URL) {
-        let fm = FileManager.default
-        var lines = (try? String(contentsOf: url, encoding: .utf8))
-            .map { $0.components(separatedBy: "\n") } ?? []
-        if let i = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("theme:") }) {
-            lines[i] = "theme: \(name)"
-        } else {
-            lines.append("theme: \(name)")
-        }
-        try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
-    }
-
-    private static func createDefaultConfig() {
-        let fm = FileManager.default
-        let dir = globalConfigPath.deletingLastPathComponent()
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        try? defaultConfigContent.write(to: globalConfigPath, atomically: true, encoding: .utf8)
     }
 
     private static func loadFile(_ url: URL) -> AppConfig? {
@@ -211,6 +213,8 @@ public struct AppConfig: Codable {
             }
             guard !value.isEmpty else { continue }
             switch key {
+            case "config-version", "configversion", "config_version":
+                cfg.configVersion = Int(value)
             case "theme":
                 cfg.theme = value
             case "width":
@@ -227,6 +231,8 @@ public struct AppConfig: Codable {
                 cfg.mermaid = parseBool(value)
             case "mermaid-charset", "mermaidcharset", "mermaid_charset":
                 cfg.mermaidCharset = value.lowercased()
+            case "bare-render", "barerender", "bare_render":
+                cfg.bareRender = parseBool(value)
             case "ignore-patterns", "ignorepatterns", "ignore_patterns":
                 // Inline sequence: [a, b, c] or bare comma-separated list
                 let inner = value.hasPrefix("[") ? String(value.dropFirst().dropLast()) : value

@@ -19,6 +19,13 @@ public struct MermaidOptions: Sendable {
     public var paddingY = 5
     /// Padding between text and border (mermaid-ascii -p, default 1).
     public var borderPadding = 1
+    /// Display columns available to the diagram, or nil for its natural size.
+    ///
+    /// When set, node labels wrap and inter-node spacing tightens until the
+    /// diagram fits. A diagram can still exceed it — an edge label is drawn
+    /// inline along a one-row arrow and cannot wrap — so callers must not
+    /// assume the result fits. nil reproduces the unconstrained layout exactly.
+    public var maxWidth: Int?
 
     public init() {}
 }
@@ -44,6 +51,7 @@ public enum Mermaid {
             properties.boxBorderPadding = options.borderPadding
             properties.paddingX = options.paddingX
             properties.paddingY = options.paddingY
+            properties.maxWidth = options.maxWidth
             return drawMap(properties, colorEnabled: options.colorEnabled)
         } catch {
             return nil
