@@ -56,26 +56,32 @@ enum ActionResolver {
             // which also covers a file that exists but cannot be opened.
             return .action(.render(file: path))
 
+        case .open(let path):
+            // Asking to open a folder is asking for the picker — that is the
+            // only interactive thing a directory can mean.
+            switch kind(path) {
+            case .missing:   return .failure(message: noSuchFile(path), code: 1)
+            case .directory: return .action(.picker(root: path))
+            case .file:      return .action(.view(file: path))
+            }
+
         case .bare(nil):
             return .action(stdinIsTTY ? .picker(root: cwd) : .stdin)
 
         case .bare(.some(let path)):
-            if bareRender, kind(path) == .file {
-                return .action(.render(file: path))
-            }
             switch kind(path) {
             case .missing:
-                return .failure(message: "termdown: '\(path)': no such file or directory", code: 1)
+                return .failure(message: noSuchFile(path), code: 1)
             case .directory:
                 return .action(.picker(root: path))
             case .file:
-                return .failure(message: """
-                termdown: '\(path)' is not a directory
-                Use `termdown render \(path)` to render a single file, or set \
-                `bare-render: true` in your config to allow this form.
-
-                """, code: 1)
+                // The one thing `bare-render` decides.
+                return .action(bareRender ? .render(file: path) : .view(file: path))
             }
         }
+    }
+
+    private static func noSuchFile(_ path: String) -> String {
+        "termdown: '\(path)': no such file or directory"
     }
 }

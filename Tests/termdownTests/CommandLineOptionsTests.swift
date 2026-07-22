@@ -39,8 +39,27 @@ final class CommandLineOptionsTests: XCTestCase {
         XCTAssertNil(parse(["--mouse-select"])?.mouse)
     }
 
-    func testRenderSubcommandTakesTheNextArgument() {
-        XCTAssertEqual(parse(["render", "notes.md"])?.action, .render("notes.md"))
+    /// The three spellings are one code path, so they cannot drift apart.
+    func testRenderHasThreeEquivalentSpellings() {
+        for spelling in ["render", "-r", "--render"] {
+            XCTAssertEqual(parse([spelling, "notes.md"])?.action, .render("notes.md"), spelling)
+        }
+    }
+
+    func testOpenFlag() {
+        for spelling in ["-o", "--open"] {
+            XCTAssertEqual(parse([spelling, "notes.md"])?.action, .open("notes.md"), spelling)
+        }
+    }
+
+    func testFlagsSurviveAroundAnAction() throws {
+        let config = try XCTUnwrap(parse(["--width", "72", "-o", "a.md"]))
+        XCTAssertEqual(config.action, .open("a.md"))
+        XCTAssertEqual(config.width, 72)
+
+        let other = try XCTUnwrap(parse(["-r", "a.md", "--theme", "nord"]))
+        XCTAssertEqual(other.action, .render("a.md"))
+        XCTAssertEqual(other.themeName, "nord")
     }
 
     func testBareArgumentBecomesThePositional() {
@@ -54,13 +73,6 @@ final class CommandLineOptionsTests: XCTestCase {
         XCTAssertEqual(parse(["a", "b"])?.action, .bare("b"))
     }
 
-    /// An action named outright beats a bare positional, whichever order they
-    /// arrive in.
-    func testNamedActionWinsOverAPositional() {
-        XCTAssertEqual(parse(["notes.md", "render", "other.md"])?.action, .render("other.md"))
-        XCTAssertEqual(parse(["render", "other.md", "notes.md"])?.action, .render("other.md"))
-    }
-
     func testStdinPseudoSubcommand() {
         XCTAssertEqual(parse(["-"])?.action, .stdin)
     }
@@ -68,6 +80,7 @@ final class CommandLineOptionsTests: XCTestCase {
     func testMappingPathAppliesToWhicheverPathIsCarried() {
         XCTAssertEqual(RequestedAction.bare("a").mappingPath { "/abs/" + $0 }, .bare("/abs/a"))
         XCTAssertEqual(RequestedAction.render("a").mappingPath { "/abs/" + $0 }, .render("/abs/a"))
+        XCTAssertEqual(RequestedAction.open("a").mappingPath { "/abs/" + $0 }, .open("/abs/a"))
         XCTAssertEqual(RequestedAction.bare(nil).mappingPath { "/abs/" + $0 }, .bare(nil))
         XCTAssertEqual(RequestedAction.stdin.mappingPath { "/abs/" + $0 }, .stdin)
     }
@@ -91,12 +104,34 @@ final class CommandLineOptionsTests: XCTestCase {
         XCTAssertEqual(failure(["--width", "wide"]), "termdown: --width requires a number")
         XCTAssertEqual(failure(["--theme"]), "termdown: --theme requires a name")
         XCTAssertEqual(failure(["render"]), "termdown: render requires a file path")
+        XCTAssertEqual(failure(["-r"]), "termdown: -r requires a file path")
+        XCTAssertEqual(failure(["-o"]), "termdown: -o requires a file or directory path")
     }
 
-    /// Documents a known sharp edge rather than asserting it is desirable:
-    /// `render` takes the next token unconditionally, flag or not.
-    func testRenderSwallowsAFollowingFlag() {
-        XCTAssertEqual(parse(["render", "--theme", "nord"])?.action, .render("--theme"))
+    /// `render` used to take the next token unconditionally, so
+    /// `termdown render --theme nord` went looking for a file named `--theme`.
+    func testActionFlagsRejectAFlagAsTheirPath() {
+        XCTAssertEqual(failure(["render", "--theme", "nord"]), "termdown: render requires a file path")
+        XCTAssertEqual(failure(["-r", "--theme"]), "termdown: -r requires a file path")
+        XCTAssertEqual(failure(["-o", "--theme"]), "termdown: -o requires a file or directory path")
+    }
+
+    /// Two actions on one command line is a mistake, not a preference. It used
+    /// to silently keep one and drop the other.
+    func testConflictingActionsFail() {
+        XCTAssertEqual(failure(["-o", "a.md", "-r", "b.md"]),
+                       "termdown: -r cannot be combined with -o")
+        XCTAssertEqual(failure(["render", "a.md", "-o", "b.md"]),
+                       "termdown: -o cannot be combined with render")
+        XCTAssertEqual(failure(["-r", "a.md", "-r", "b.md"]),
+                       "termdown: -r may only be given once")
+    }
+
+    /// `termdown render a.md b.md` used to drop `b.md` without a word.
+    func testAPositionalAfterAnActionFails() {
+        XCTAssertEqual(failure(["render", "a.md", "b.md"]),
+                       "termdown: unexpected argument 'b.md' after render")
+        XCTAssertEqual(failure(["-", "a.md"]), "termdown: unexpected argument 'a.md' after -")
     }
 
     /// The usage text is the only place several flags are documented, so it
@@ -104,7 +139,7 @@ final class CommandLineOptionsTests: XCTestCase {
     func testUsageMentionsEveryFlag() {
         for flag in ["--width", "--theme", "--no-color", "--mouse", "--no-mouse",
                      "--mouse-select", "--no-mouse-select", "--version", "--help",
-                     "render", "bare-render"] {
+                     "render", "bare-render", "-o", "--open", "-r", "--render"] {
             XCTAssertTrue(Config.usage.contains(flag), "\(flag) missing from --help")
         }
     }

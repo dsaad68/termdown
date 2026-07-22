@@ -47,8 +47,62 @@ final class ActionResolutionTests: XCTestCase {
 
     /// `bare-render` changes what a bare *file* means, and nothing else.
     func testBareFileFollowsTheConfig() {
+        XCTAssertEqual(resolve(.bare("/notes.md"), bareRender: false, kinds: tree),
+                       .action(.view(file: "/notes.md")))
         XCTAssertEqual(resolve(.bare("/notes.md"), bareRender: true, kinds: tree),
                        .action(.render(file: "/notes.md")))
+    }
+
+    /// The whole decision table in one place, so a change to any rule has to be
+    /// made deliberately.
+    func testTheDecisionMatrix() {
+        let cases: [(RequestedAction, ResolvedAction, ResolvedAction)] = [
+            //  requested                 bare-render: false        bare-render: true
+            (.bare(nil),                  .picker(root: "/cwd"),    .picker(root: "/cwd")),
+            (.bare("/docs"),              .picker(root: "/docs"),   .picker(root: "/docs")),
+            (.bare("/notes.md"),          .view(file: "/notes.md"), .render(file: "/notes.md")),
+            (.open("/notes.md"),          .view(file: "/notes.md"), .view(file: "/notes.md")),
+            (.open("/docs"),              .picker(root: "/docs"),   .picker(root: "/docs")),
+            (.render("/notes.md"),        .render(file: "/notes.md"), .render(file: "/notes.md")),
+            (.stdin,                      .stdin,                   .stdin),
+        ]
+        for (requested, whenOff, whenOn) in cases {
+            XCTAssertEqual(resolve(requested, bareRender: false, kinds: tree), .action(whenOff),
+                           "\(requested) with bare-render off")
+            XCTAssertEqual(resolve(requested, bareRender: true, kinds: tree), .action(whenOn),
+                           "\(requested) with bare-render on")
+        }
+    }
+
+    /// `-o` and `-r` mean what they say whatever the config says.
+    func testExplicitFlagsOverrideTheConfigBothWays() {
+        XCTAssertEqual(resolve(.open("/notes.md"), bareRender: true, kinds: tree),
+                       .action(.view(file: "/notes.md")))
+        XCTAssertEqual(resolve(.render("/notes.md"), bareRender: false, kinds: tree),
+                       .action(.render(file: "/notes.md")))
+    }
+
+    /// Opening a folder is the picker — the only interactive thing a directory
+    /// can mean.
+    func testOpeningADirectoryIsThePicker() {
+        XCTAssertEqual(resolve(.open("/docs"), kinds: tree), .action(.picker(root: "/docs")))
+    }
+
+    func testOpeningAMissingPathFails() {
+        guard case .failure(let message, _) = resolve(.open("/nope.md"), kinds: tree) else {
+            return XCTFail("expected a failure")
+        }
+        XCTAssertEqual(message, "termdown: '/nope.md': no such file or directory")
+    }
+
+    /// The old "is not a directory" error is gone: a bare file is now a
+    /// perfectly ordinary thing to ask for.
+    func testABareFileNeverErrors() {
+        for bareRender in [false, true] {
+            guard case .action = resolve(.bare("/notes.md"), bareRender: bareRender, kinds: tree) else {
+                return XCTFail("a bare file should resolve, bareRender: \(bareRender)")
+            }
+        }
     }
 
     /// A missing path is a typo, under either setting — never a document to read

@@ -21,13 +21,16 @@ struct Config {
 
 /// What the command line alone asks for.
 ///
-/// `render` and `-` name an action outright. A bare path does not: whether
-/// `termdown notes.md` opens the viewer or prints to stdout depends on
+/// `-o`, `-r`, `render` and `-` name an action outright. A bare path does not:
+/// whether `termdown notes.md` opens the viewer or prints to stdout depends on
 /// `bare-render`, which is not loaded at parse time. `ActionResolver` finishes
 /// the job once it is.
 enum RequestedAction: Equatable {
     /// A positional path, or nil if none was given.
     case bare(String?)
+    /// `-o` / `--open`
+    case open(String)
+    /// `-r` / `--render`, and the older `render` spelling
     case render(String)
     case stdin
 }
@@ -39,6 +42,7 @@ extension RequestedAction {
     func mappingPath(_ transform: (String) -> String) -> RequestedAction {
         switch self {
         case .bare(let path):   return .bare(path.map(transform))
+        case .open(let path):   return .open(transform(path))
         case .render(let path): return .render(transform(path))
         case .stdin:            return .stdin
         }
@@ -67,6 +71,17 @@ extension Config {
         // named outright, and vice versa.
         var positional: String?
         var named: RequestedAction?
+        // The token that named the action, so a second one can name both.
+        var namedBy: String?
+
+        /// Two actions on one command line is a mistake, not a preference —
+        /// say so rather than silently picking one.
+        func claim(_ token: String) -> String? {
+            guard let previous = namedBy else { return nil }
+            return previous == token
+                ? "termdown: \(token) may only be given once"
+                : "termdown: \(token) cannot be combined with \(previous)"
+        }
 
         while let arg = args.first {
             args = args.dropFirst()
@@ -97,14 +112,30 @@ extension Config {
                 config.mouseSelect = true
             case "--no-mouse-select":
                 config.mouseSelect = false
-            case "render":
-                guard let file = args.first else {
-                    return .failure(message: "termdown: render requires a file path", code: 1)
+            case "-r", "--render", "render":
+                if let conflict = claim(arg) { return .failure(message: conflict, code: 1) }
+                // Rejecting a flag as the path fixes a long-standing sharp edge:
+                // `render` used to take the next token unconditionally, so
+                // `termdown render --theme nord` tried to read a file called
+                // `--theme`.
+                guard let file = args.first, !file.hasPrefix("-") else {
+                    return .failure(message: "termdown: \(arg) requires a file path", code: 1)
                 }
                 named = .render(file)
+                namedBy = arg
+                args = args.dropFirst()
+            case "-o", "--open":
+                if let conflict = claim(arg) { return .failure(message: conflict, code: 1) }
+                guard let path = args.first, !path.hasPrefix("-") else {
+                    return .failure(message: "termdown: \(arg) requires a file or directory path", code: 1)
+                }
+                named = .open(path)
+                namedBy = arg
                 args = args.dropFirst()
             case "-":
+                if let conflict = claim(arg) { return .failure(message: conflict, code: 1) }
                 named = .stdin
+                namedBy = arg
             default:
                 if !arg.hasPrefix("--") && !arg.hasPrefix("-") {
                     positional = arg
@@ -114,9 +145,16 @@ extension Config {
             }
         }
 
-        // A named action wins over a bare positional, matching the old field
-        // layout where `renderFile` was checked before `directory`.
-        config.action = named ?? .bare(positional)
+        if let positional {
+            // `termdown render a.md b.md` used to drop `b.md` without a word.
+            guard let namedBy else {
+                config.action = .bare(positional)
+                return .success(config)
+            }
+            return .failure(message: "termdown: unexpected argument '\(positional)' after \(namedBy)",
+                            code: 1)
+        }
+        config.action = named ?? .bare(nil)
         return .success(config)
     }
 
@@ -124,11 +162,20 @@ extension Config {
     /// documentation are edited together.
     static let usage = """
     termdown — browse & render markdown in your terminal
-    USAGE: termdown [options] [directory]
-           termdown render <file.md>
-           termdown <file.md>            (with `bare-render: true` in config)
-           termdown -                    (read from stdin)
+    USAGE: termdown [options] [path]
+           termdown                      file picker over the current directory
+           termdown DIR                  file picker over DIR
+           termdown FILE.md              open FILE.md in the viewer
+                                         (renders to stdout with `bare-render: true`)
+           termdown -o FILE.md           always open in the viewer
+           termdown -r FILE.md           always render to stdout
+           termdown render FILE.md       older spelling of -r
+           termdown -                    read from stdin
     OPTIONS:
+      -o, --open PATH   Open PATH in the viewer whatever `bare-render` says
+                        (a directory opens the file picker)
+      -r, --render PATH Render PATH to stdout and exit, whatever `bare-render`
+                        says
       --width N         Set terminal width (default: auto-detect)
       --theme NAME      Set color theme. Base: dark, light, mono. Ports:
                         catppuccin, rose-pine, nord, tokyo-night, gruvbox,
