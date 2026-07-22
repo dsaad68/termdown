@@ -277,6 +277,35 @@ Rebindable actions: `scroll-down`, `scroll-up`, `page-down`, `page-up`,
 `project-search`, `open-link`, `new-tab`, `theme`, `sidebar`, `wrap`, `follow`,
 `banner`, `fold`, `fold-all`, `next-heading`, `prev-heading`, `edit`, `cursor`, `contents`, `help`, `quit`.
 
+**Rendering a file straight to stdout.** By default only `termdown render
+notes.md` does that — a bare `termdown notes.md` errors, because a positional
+argument means "directory to browse". Set `bare-render` to make the `render`
+verb optional:
+
+```yaml
+bare-render: true
+```
+
+`termdown notes.md` then prints the rendered document and exits, exactly as
+`termdown render notes.md` does. Three things deliberately do not change:
+
+- a bare **directory** still opens the file picker, so `termdown ~/notes` is
+  unaffected — the shortcut only fires for a path that exists and is not a
+  directory
+- a **typo** still fails with `no such file or directory` rather than being read
+  as a document
+- `termdown` with no argument still opens the picker over the current directory
+
+It ships off because it changes what an existing command means: `termdown
+foo.md` errors today, and a script may depend on that.
+
+Output keeps ANSI color when stdout is a terminal; pipe or redirect it and you
+get escape codes in the text, so add `--no-color` when capturing to a file.
+
+If your config predates the key, migration appends it as `bare-render: false` on
+the next launch — flip that. Adding the line yourself works too, and migration
+will leave your value alone.
+
 Booleans accept `true`/`yes`/`on`/`1` as true. The config reader is **flat**:
 `key: value` lines only, so `ignore-patterns` must be inline (`[...]` or a
 comma-separated list), not a multi-line `- item` block. Aliases: `no-color` =
