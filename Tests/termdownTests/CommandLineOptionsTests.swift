@@ -18,11 +18,9 @@ final class CommandLineOptionsTests: XCTestCase {
 
     func testEmptyArgumentsLeaveEverythingUnset() throws {
         let config = try XCTUnwrap(parse([]))
-        XCTAssertNil(config.directory)
-        XCTAssertNil(config.renderFile)
+        XCTAssertEqual(config.action, .bare(nil))
         XCTAssertNil(config.mouse)         // nil, not false — config file must show through
         XCTAssertNil(config.mouseSelect)
-        XCTAssertFalse(config.useStdin)
     }
 
     func testFlagsWithValues() throws {
@@ -41,25 +39,37 @@ final class CommandLineOptionsTests: XCTestCase {
         XCTAssertNil(parse(["--mouse-select"])?.mouse)
     }
 
-    func testRenderSubcommandTakesTheNextArgument() throws {
-        let config = try XCTUnwrap(parse(["render", "notes.md"]))
-        XCTAssertEqual(config.renderFile, "notes.md")
-        XCTAssertNil(config.directory)
+    func testRenderSubcommandTakesTheNextArgument() {
+        XCTAssertEqual(parse(["render", "notes.md"])?.action, .render("notes.md"))
     }
 
-    func testBareArgumentBecomesThePositional() throws {
-        // `main.swift` promotes this to `renderFile` when `bare-render` is on;
-        // the parser itself cannot know, so it always lands here.
-        XCTAssertEqual(parse(["notes.md"])?.directory, "notes.md")
-        XCTAssertEqual(parse(["~/docs"])?.directory, "~/docs")
+    func testBareArgumentBecomesThePositional() {
+        // The parser cannot know whether this opens or renders — that depends on
+        // `bare-render`, which is not loaded yet. `ActionResolver` decides.
+        XCTAssertEqual(parse(["notes.md"])?.action, .bare("notes.md"))
+        XCTAssertEqual(parse(["~/docs"])?.action, .bare("~/docs"))
     }
 
     func testLastPositionalWins() {
-        XCTAssertEqual(parse(["a", "b"])?.directory, "b")
+        XCTAssertEqual(parse(["a", "b"])?.action, .bare("b"))
+    }
+
+    /// An action named outright beats a bare positional, whichever order they
+    /// arrive in.
+    func testNamedActionWinsOverAPositional() {
+        XCTAssertEqual(parse(["notes.md", "render", "other.md"])?.action, .render("other.md"))
+        XCTAssertEqual(parse(["render", "other.md", "notes.md"])?.action, .render("other.md"))
     }
 
     func testStdinPseudoSubcommand() {
-        XCTAssertEqual(parse(["-"])?.useStdin, true)
+        XCTAssertEqual(parse(["-"])?.action, .stdin)
+    }
+
+    func testMappingPathAppliesToWhicheverPathIsCarried() {
+        XCTAssertEqual(RequestedAction.bare("a").mappingPath { "/abs/" + $0 }, .bare("/abs/a"))
+        XCTAssertEqual(RequestedAction.render("a").mappingPath { "/abs/" + $0 }, .render("/abs/a"))
+        XCTAssertEqual(RequestedAction.bare(nil).mappingPath { "/abs/" + $0 }, .bare(nil))
+        XCTAssertEqual(RequestedAction.stdin.mappingPath { "/abs/" + $0 }, .stdin)
     }
 
     func testHelpAndVersion() {
@@ -86,7 +96,7 @@ final class CommandLineOptionsTests: XCTestCase {
     /// Documents a known sharp edge rather than asserting it is desirable:
     /// `render` takes the next token unconditionally, flag or not.
     func testRenderSwallowsAFollowingFlag() {
-        XCTAssertEqual(parse(["render", "--theme", "nord"])?.renderFile, "--theme")
+        XCTAssertEqual(parse(["render", "--theme", "nord"])?.action, .render("--theme"))
     }
 
     /// The usage text is the only place several flags are documented, so it

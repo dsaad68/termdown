@@ -42,22 +42,6 @@ if config.mouseSelect == nil {
 let mouseEnabled = config.mouse ?? true
 let mouseSelectEnabled = config.mouseSelect ?? true
 
-// `bare-render`: a positional argument naming a file rather than a directory is
-// treated as `render <file>`. Gated on the file already existing and not being a
-// directory, so `termdown ~/notes` keeps opening the picker and a typo still
-// reaches the "no such file or directory" error below rather than being read as
-// a document. This cannot live in the parse loop above — `appConfig` is not
-// loaded yet there — and must run before the stdin auto-detect, which branches
-// on `config.renderFile == nil`.
-if config.renderFile == nil, let positional = config.directory, appConfig.bareRender ?? false {
-    var isDirectory: ObjCBool = false
-    if FileManager.default.fileExists(atPath: positional, isDirectory: &isDirectory),
-       !isDirectory.boolValue {
-        config.renderFile = positional
-        config.directory = nil
-    }
-}
-
 // Viewer key rebindings (config `key-<action>: <char>`) → canonical-key translation.
 let keyTranslation = KeyBindings.translation(from: appConfig.keyBindings)
 
@@ -100,17 +84,6 @@ if let colorterm = ProcessInfo.processInfo.environment["COLORTERM"]?.lowercased(
     Ansi.truecolor = colorterm.contains("truecolor") || colorterm.contains("24bit")
 }
 
-// MARK: - Stdin detection
-
-func isStdinTTY() -> Bool {
-    return isatty(STDIN_FILENO) != 0
-}
-
-// Auto-detect stdin if not a TTY and no directory/render file specified
-if !isStdinTTY() && config.directory == nil && config.renderFile == nil {
-    config.useStdin = true
-}
-
 // MARK: - Everything the entry points need, in one value
 
 let env = AppEnvironment(
@@ -122,51 +95,45 @@ let env = AppEnvironment(
     render: renderContext
 )
 
-// MARK: - Stdin handling
+// MARK: - Decide what to do
 
-if config.useStdin {
+// Standardize the path once, up front, so the decision and every message it
+// produces speak in the same terms.
+let requested = config.action.mappingPath { URL(fileURLWithPath: $0).standardizedFileURL.path }
+
+let resolved: ResolvedAction
+switch ActionResolver.resolve(requested,
+                              bareRender: appConfig.bareRender ?? false,
+                              stdinIsTTY: isatty(STDIN_FILENO) != 0,
+                              cwd: FileManager.default.currentDirectoryPath,
+                              kind: PathKind.of) {
+case .action(let action):
+    resolved = action
+case .failure(let message, let code):
+    FileHandle.standardError.write(Data((message + "\n").utf8))
+    exit(code)
+}
+
+switch resolved {
+case .stdin:
     runStdin(env: env)
-    exit(0)
-}
 
-// MARK: - `render` subcommand: render a single file to stdout and exit.
-// Usage: termdown render <file.md>   (handy for piping / scripting)
-if let file = config.renderFile {
+case .render(let file):
     renderToStdout(file, env: env)
-}
 
-Terminal.installCleanup()
+case .view(let file):
+    let url = URL(fileURLWithPath: file).standardizedFileURL
+    let session = FolderSession(root: url.deletingLastPathComponent(), env: env)
+    withTerminalUI { session.view(url) }
 
-// MARK: - Resolve the directory to scan
-
-let rootPath = config.directory ?? FileManager.default.currentDirectoryPath
-let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true).standardizedFileURL
-
-var isDir: ObjCBool = false
-guard FileManager.default.fileExists(atPath: rootURL.path, isDirectory: &isDir) else {
-    FileHandle.standardError.write(Data("termdown: '\(rootURL.path)': no such file or directory\n".utf8))
-    exit(1)
-}
-guard isDir.boolValue else {
-    // Reachable only with `bare-render` off — with it on, an existing file was
-    // already promoted to `renderFile` above.
-    FileHandle.standardError.write(Data("""
-    termdown: '\(rootURL.path)' is not a directory
-    Use `termdown render \(rootPath)` to render a single file, or set \
-    `bare-render: true` in your config to allow this form.
-
-    """.utf8))
-    exit(1)
-}
-
-// MARK: - Browse the folder
-
-let session = FolderSession(root: rootURL, env: env)
-guard !session.isEmpty else {
+case .picker(let directory):
+    let root = URL(fileURLWithPath: directory, isDirectory: true).standardizedFileURL
+    let session = FolderSession(root: root, env: env)
     // Checked before the alternate screen, so the message survives on the
     // normal one.
-    print("No markdown files found under \(rootURL.path)")
-    exit(0)
+    guard !session.isEmpty else {
+        print("No markdown files found under \(root.path)")
+        exit(0)
+    }
+    withTerminalUI { session.runPicker() }
 }
-
-withTerminalUI { session.runPicker() }

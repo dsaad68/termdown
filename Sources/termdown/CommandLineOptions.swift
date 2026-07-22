@@ -14,11 +14,35 @@ struct Config {
     var noColor: Bool = false
     var mouse: Bool?  // nil = use yaml/default
     var mouseSelect: Bool?  // nil = use yaml/default
-    var directory: String?
-    var renderFile: String?
+    var action: RequestedAction = .bare(nil)
     var showHelp: Bool = false
     var showVersion: Bool = false
-    var useStdin: Bool = false
+}
+
+/// What the command line alone asks for.
+///
+/// `render` and `-` name an action outright. A bare path does not: whether
+/// `termdown notes.md` opens the viewer or prints to stdout depends on
+/// `bare-render`, which is not loaded at parse time. `ActionResolver` finishes
+/// the job once it is.
+enum RequestedAction: Equatable {
+    /// A positional path, or nil if none was given.
+    case bare(String?)
+    case render(String)
+    case stdin
+}
+
+extension RequestedAction {
+    /// Apply `transform` to whatever path this action carries. `main.swift` uses
+    /// it to standardize the path once, up front, so the decision and every
+    /// message it produces speak in the same terms.
+    func mappingPath(_ transform: (String) -> String) -> RequestedAction {
+        switch self {
+        case .bare(let path):   return .bare(path.map(transform))
+        case .render(let path): return .render(transform(path))
+        case .stdin:            return .stdin
+        }
+    }
 }
 
 extension Config {
@@ -39,6 +63,10 @@ extension Config {
     static func parse(_ arguments: some Sequence<String>) -> ParseResult {
         var config = Config()
         var args = ArraySlice(Array(arguments))
+        // Tracked separately so a positional cannot silently overwrite an action
+        // named outright, and vice versa.
+        var positional: String?
+        var named: RequestedAction?
 
         while let arg = args.first {
             args = args.dropFirst()
@@ -73,18 +101,22 @@ extension Config {
                 guard let file = args.first else {
                     return .failure(message: "termdown: render requires a file path", code: 1)
                 }
-                config.renderFile = file
+                named = .render(file)
                 args = args.dropFirst()
             case "-":
-                config.useStdin = true
+                named = .stdin
             default:
                 if !arg.hasPrefix("--") && !arg.hasPrefix("-") {
-                    config.directory = arg
+                    positional = arg
                 } else {
                     return .failure(message: "termdown: unknown option \(arg)", code: 1)
                 }
             }
         }
+
+        // A named action wins over a bare positional, matching the old field
+        // layout where `renderFile` was checked before `directory`.
+        config.action = named ?? .bare(positional)
         return .success(config)
     }
 
