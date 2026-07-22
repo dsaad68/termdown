@@ -9,4 +9,4 @@
 /// `main.swift` are bound to top-level program execution, so referencing them from
 /// other files — including under `@testable import` — is unsafe. The name is
 /// `appVersion` (not `version`) to avoid `NSObject`'s inherited static `version`.
-let appVersion = "0.1.7"
+let appVersion = "0.1.8"

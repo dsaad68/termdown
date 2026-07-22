@@ -58,7 +58,12 @@ swift run termdown ~/notes    # scan a specific directory
     [mermaid-ascii] — no external tools. All node shapes are accepted
     (`[]`, `()`, `{}`, `([])`, `[[]]`, `[()]`, `(())`, `{{}}`, `>]`) and drawn as
     rectangles; labels may be quoted and may span lines with `\n` or `<br>`.
-    Falls back to a highlighted code block for unsupported diagram types
+    Diagrams are laid out to fit the text column — labels wrap, spacing tightens,
+    and a left-to-right flowchart that still will not fit is stacked top-down —
+    so the same block renders differently in a narrow terminal than a wide one.
+    Falls back to a highlighted code block for unsupported diagram types, and for
+    a diagram no layout can fit: an edge label is drawn inline along a one-row
+    arrow and cannot wrap, so it sets a hard floor
   - GFM tables drawn with box-drawing borders and column alignment
   - Block quotes (including nested)
   - **GitHub alerts**: `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, etc. as colored callouts

@@ -6,6 +6,8 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-07-22
+
 ### Fixed
 - **Mermaid diagrams no longer overflow the text column.** The renderer was
   never told how much width it had, so it always laid out at the diagram's
@@ -311,7 +313,10 @@ Initial release.
 - Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
   updates the Homebrew tap.
 
-[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/dsaad68/termdown/releases/tag/v0.1.8
+[0.1.7]: https://github.com/dsaad68/termdown/releases/tag/v0.1.7
+[0.1.6]: https://github.com/dsaad68/termdown/releases/tag/v0.1.6
 [0.1.5]: https://github.com/dsaad68/termdown/releases/tag/v0.1.5
 [0.1.4]: https://github.com/dsaad68/termdown/releases/tag/v0.1.4
 [0.1.2]: https://github.com/dsaad68/termdown/releases/tag/v0.1.2
