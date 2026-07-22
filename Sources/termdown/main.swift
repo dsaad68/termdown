@@ -61,24 +61,14 @@ if config.renderFile == nil, let positional = config.directory, appConfig.bareRe
 // Viewer key rebindings (config `key-<action>: <char>`) → canonical-key translation.
 let keyTranslation = KeyBindings.translation(from: appConfig.keyBindings)
 
-// MARK: - Resolve theme
+// MARK: - Render context (theme, banners, mermaid — all live-mutable)
 
-func resolveTheme(_ name: String?) -> Theme {
-    guard let name = name else { return .dark }
-    return Theme.named(name) ?? .dark
-}
-
-// Mutable so the in-app theme selector can swap it at runtime; the render
-// closures below capture it and read the current value on each call.
-var activeTheme = resolveTheme(config.themeName)
-var activeThemeName = config.themeName.flatMap { Theme.named($0) != nil ? $0.lowercased() : nil } ?? "dark"
-
-// Heading-banner mode (toggle `B` in the viewer): render closures read it live.
-var headingBanners = false
-
-// Mermaid diagram rendering (config-driven; defaults to on + Unicode).
-let mermaidEnabled = appConfig.mermaid ?? true
-let mermaidCharset: MermaidCharset = (appConfig.mermaidCharset == "ascii") ? .ascii : .unicode
+let renderContext = RenderContext(
+    themeName: config.themeName,
+    // Mermaid diagram rendering (config-driven; defaults to on + Unicode).
+    mermaidEnabled: appConfig.mermaid ?? true,
+    mermaidCharset: (appConfig.mermaidCharset == "ascii") ? .ascii : .unicode
+)
 
 // MARK: - Help and version
 
@@ -121,52 +111,28 @@ if !isStdinTTY() && config.directory == nil && config.renderFile == nil {
     config.useStdin = true
 }
 
+// MARK: - Everything the entry points need, in one value
+
+let env = AppEnvironment(
+    width: config.width,
+    mouseEnabled: mouseEnabled,
+    mouseSelectEnabled: mouseSelectEnabled,
+    keyTranslation: keyTranslation,
+    ignorePatterns: appConfig.ignorePatterns ?? [],
+    render: renderContext
+)
+
 // MARK: - Stdin handling
 
 if config.useStdin {
-    let source = String(data: FileHandle.standardInput.readDataToEndOfFile(), encoding: .utf8) ?? ""
-
-    // If stdout is a TTY, use interactive pager; otherwise just print
-    if isatty(STDOUT_FILENO) != 0 {
-        Terminal.installCleanup()
-        Terminal.enableRawMode()
-        Terminal.enterAltScreen()
-        var pager = Pager(title: "stdin", lines: [])
-        pager.fixedWidth = config.width
-        pager.mouseEnabled = mouseEnabled
-        pager.mouseSelectEnabled = mouseSelectEnabled
-        pager.renderSource = { w in
-            AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners,
-                         mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(source)
-        }
-        pager.keyTranslation = keyTranslation
-        pager.onToggleHeadingBanners = { headingBanners = $0 }
-        pager.run()
-        Terminal.exitAltScreen()
-        Terminal.disableRawMode()
-        Terminal.showCursor()
-    } else {
-        let cols = config.width ?? Terminal.size().cols
-        let doc = AnsiRenderer(width: cols, theme: activeTheme,
-                               mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(source)
-        print(doc.lines.joined(separator: "\n"))
-    }
+    runStdin(env: env)
     exit(0)
 }
 
 // MARK: - `render` subcommand: render a single file to stdout and exit.
 // Usage: termdown render <file.md>   (handy for piping / scripting)
 if let file = config.renderFile {
-    let fileURL = URL(fileURLWithPath: file).standardizedFileURL
-    guard let source = try? String(contentsOf: fileURL, encoding: .utf8) else {
-        FileHandle.standardError.write(Data("termdown: cannot read \(fileURL.path)\n".utf8))
-        exit(1)
-    }
-    let cols = config.width ?? Terminal.size().cols
-    let doc = AnsiRenderer(width: cols, theme: activeTheme,
-                           mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(source)
-    print(doc.lines.joined(separator: "\n"))
-    exit(0)
+    renderToStdout(file, env: env)
 }
 
 Terminal.installCleanup()
@@ -243,18 +209,6 @@ menu.onFolderChanged = {
     refreshEntries() ? (items: entries.map { $0.relativePath }, details: details) : nil
 }
 
-// Render any markdown file at a given width (current doc, reload, link nav).
-let renderFile: (URL, Int) -> RenderedDocument? = { url, w in
-    guard let src = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-    return AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners,
-                        mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(src)
-}
-
-// Render arbitrary markdown text (used to re-render unsaved in-memory edits).
-let renderText: (String, Int) -> RenderedDocument = { src, w in
-    AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners).render(src)
-}
-
 // Resolve a [[wikilink]] page name to one of the discovered files — matching by
 // filename (with or without extension) or relative path, case-insensitively.
 let resolveWikilink: (String) -> URL? = { name in
@@ -277,21 +231,17 @@ func viewFile(_ url: URL, query: String?) {
     pager.mouseEnabled = mouseEnabled
     pager.mouseSelectEnabled = mouseSelectEnabled
     pager.initialQuery = query
-    pager.renderFile = renderFile
-    pager.renderText = renderText
+    pager.renderFile = { renderContext.renderFile($0, width: $1) }
+    pager.renderText = { renderContext.render($0, width: $1) }
     pager.resolveWikilink = resolveWikilink
     pager.keyTranslation = keyTranslation
     pager.onProjectSearch = { liveGrep.run() }
     // Theme selector (`p`): preview swaps the active theme live; save persists it.
-    pager.currentThemeName = activeThemeName
-    pager.onPreviewTheme = { name in activeTheme = resolveTheme(name) }
-    pager.onSaveTheme = { name in
-        activeTheme = resolveTheme(name)
-        activeThemeName = name
-        AppConfig.setTheme(name)
-    }
-    pager.bannerOn = headingBanners
-    pager.onToggleHeadingBanners = { headingBanners = $0 }
+    pager.currentThemeName = renderContext.themeName
+    pager.onPreviewTheme = { renderContext.previewTheme($0) }
+    pager.onSaveTheme = { renderContext.saveTheme($0) }
+    pager.bannerOn = renderContext.headingBanners
+    pager.onToggleHeadingBanners = { renderContext.headingBanners = $0 }
     pager.onNewTab = {
         // Reuse the file finder (and grep) to choose a document for a new tab;
         // `.quit` here means the user cancelled, so no tab is opened. The "New tab"
