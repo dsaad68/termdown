@@ -42,43 +42,17 @@ if config.mouseSelect == nil {
 let mouseEnabled = config.mouse ?? true
 let mouseSelectEnabled = config.mouseSelect ?? true
 
-// `bare-render`: a positional argument naming a file rather than a directory is
-// treated as `render <file>`. Gated on the file already existing and not being a
-// directory, so `termdown ~/notes` keeps opening the picker and a typo still
-// reaches the "no such file or directory" error below rather than being read as
-// a document. This cannot live in the parse loop above — `appConfig` is not
-// loaded yet there — and must run before the stdin auto-detect, which branches
-// on `config.renderFile == nil`.
-if config.renderFile == nil, let positional = config.directory, appConfig.bareRender ?? false {
-    var isDirectory: ObjCBool = false
-    if FileManager.default.fileExists(atPath: positional, isDirectory: &isDirectory),
-       !isDirectory.boolValue {
-        config.renderFile = positional
-        config.directory = nil
-    }
-}
-
 // Viewer key rebindings (config `key-<action>: <char>`) → canonical-key translation.
 let keyTranslation = KeyBindings.translation(from: appConfig.keyBindings)
 
-// MARK: - Resolve theme
+// MARK: - Render context (theme, banners, mermaid — all live-mutable)
 
-func resolveTheme(_ name: String?) -> Theme {
-    guard let name = name else { return .dark }
-    return Theme.named(name) ?? .dark
-}
-
-// Mutable so the in-app theme selector can swap it at runtime; the render
-// closures below capture it and read the current value on each call.
-var activeTheme = resolveTheme(config.themeName)
-var activeThemeName = config.themeName.flatMap { Theme.named($0) != nil ? $0.lowercased() : nil } ?? "dark"
-
-// Heading-banner mode (toggle `B` in the viewer): render closures read it live.
-var headingBanners = false
-
-// Mermaid diagram rendering (config-driven; defaults to on + Unicode).
-let mermaidEnabled = appConfig.mermaid ?? true
-let mermaidCharset: MermaidCharset = (appConfig.mermaidCharset == "ascii") ? .ascii : .unicode
+let renderContext = RenderContext(
+    themeName: config.themeName,
+    // Mermaid diagram rendering (config-driven; defaults to on + Unicode).
+    mermaidEnabled: appConfig.mermaid ?? true,
+    mermaidCharset: (appConfig.mermaidCharset == "ascii") ? .ascii : .unicode
+)
 
 // MARK: - Help and version
 
@@ -110,224 +84,71 @@ if let colorterm = ProcessInfo.processInfo.environment["COLORTERM"]?.lowercased(
     Ansi.truecolor = colorterm.contains("truecolor") || colorterm.contains("24bit")
 }
 
-// MARK: - Stdin detection
+// MARK: - Everything the entry points need, in one value
 
-func isStdinTTY() -> Bool {
-    return isatty(STDIN_FILENO) != 0
+let env = AppEnvironment(
+    width: config.width,
+    mouseEnabled: mouseEnabled,
+    mouseSelectEnabled: mouseSelectEnabled,
+    keyTranslation: keyTranslation,
+    ignorePatterns: appConfig.ignorePatterns ?? [],
+    render: renderContext
+)
+
+// MARK: - Decide what to do
+
+// Standardize the path once, up front, so the decision and every message it
+// produces speak in the same terms.
+let requested = config.action.mappingPath { URL(fileURLWithPath: $0).standardizedFileURL.path }
+
+let resolved: ResolvedAction
+switch ActionResolver.resolve(requested,
+                              bareRender: appConfig.bareRender ?? false,
+                              stdinIsTTY: isatty(STDIN_FILENO) != 0,
+                              cwd: FileManager.default.currentDirectoryPath,
+                              kind: PathKind.of) {
+case .action(let action):
+    resolved = action
+case .failure(let message, let code):
+    FileHandle.standardError.write(Data((message + "\n").utf8))
+    exit(code)
 }
 
-// Auto-detect stdin if not a TTY and no directory/render file specified
-if !isStdinTTY() && config.directory == nil && config.renderFile == nil {
-    config.useStdin = true
-}
+switch resolved {
+case .stdin:
+    runStdin(env: env)
 
-// MARK: - Stdin handling
+case .render(let file):
+    renderToStdout(file, env: env)
 
-if config.useStdin {
-    let source = String(data: FileHandle.standardInput.readDataToEndOfFile(), encoding: .utf8) ?? ""
-
-    // If stdout is a TTY, use interactive pager; otherwise just print
-    if isatty(STDOUT_FILENO) != 0 {
-        Terminal.installCleanup()
-        Terminal.enableRawMode()
-        Terminal.enterAltScreen()
-        var pager = Pager(title: "stdin", lines: [])
-        pager.fixedWidth = config.width
-        pager.mouseEnabled = mouseEnabled
-        pager.mouseSelectEnabled = mouseSelectEnabled
-        pager.renderSource = { w in
-            AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners,
-                         mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(source)
-        }
-        pager.keyTranslation = keyTranslation
-        pager.onToggleHeadingBanners = { headingBanners = $0 }
-        pager.run()
-        Terminal.exitAltScreen()
-        Terminal.disableRawMode()
-        Terminal.showCursor()
-    } else {
-        let cols = config.width ?? Terminal.size().cols
-        let doc = AnsiRenderer(width: cols, theme: activeTheme,
-                               mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(source)
-        print(doc.lines.joined(separator: "\n"))
-    }
-    exit(0)
-}
-
-// MARK: - `render` subcommand: render a single file to stdout and exit.
-// Usage: termdown render <file.md>   (handy for piping / scripting)
-if let file = config.renderFile {
-    let fileURL = URL(fileURLWithPath: file).standardizedFileURL
-    guard let source = try? String(contentsOf: fileURL, encoding: .utf8) else {
-        FileHandle.standardError.write(Data("termdown: cannot read \(fileURL.path)\n".utf8))
+case .view(let file):
+    let url = URL(fileURLWithPath: file).standardizedFileURL
+    // Refuse to open a document that cannot be read, rather than dropping the
+    // user into a blank pager and exiting 0. `termdown cover.png` and a
+    // permission-denied file both land here.
+    guard (try? String(contentsOf: url, encoding: .utf8)) != nil else {
+        FileHandle.standardError.write(Data("termdown: cannot read \(url.path)\n".utf8))
         exit(1)
     }
-    let cols = config.width ?? Terminal.size().cols
-    let doc = AnsiRenderer(width: cols, theme: activeTheme,
-                           mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(source)
-    print(doc.lines.joined(separator: "\n"))
-    exit(0)
-}
-
-Terminal.installCleanup()
-
-// MARK: - Resolve the directory to scan
-
-let rootPath = config.directory ?? FileManager.default.currentDirectoryPath
-let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true).standardizedFileURL
-
-var isDir: ObjCBool = false
-guard FileManager.default.fileExists(atPath: rootURL.path, isDirectory: &isDir) else {
-    FileHandle.standardError.write(Data("termdown: '\(rootURL.path)': no such file or directory\n".utf8))
-    exit(1)
-}
-guard isDir.boolValue else {
-    // Reachable only with `bare-render` off — with it on, an existing file was
-    // already promoted to `renderFile` above.
-    FileHandle.standardError.write(Data("""
-    termdown: '\(rootURL.path)' is not a directory
-    Use `termdown render \(rootPath)` to render a single file, or set \
-    `bare-render: true` in your config to allow this form.
-
-    """.utf8))
-    exit(1)
-}
-
-// MARK: - Discover markdown files
-
-var entries = FileScanner.scan(root: rootURL, ignorePatterns: appConfig.ignorePatterns ?? [])
-guard !entries.isEmpty else {
-    print("No markdown files found under \(rootURL.path)")
-    exit(0)
-}
-
-// Watch the folder so newly added/removed files show up in the picker
-// without restarting termdown.
-FolderWatcher.start(root: rootURL)
-
-// MARK: - Main loop: pick a file -> view it -> repeat
-
-var details = fileDetails(entries)
-
-let homePath = FileManager.default.homeDirectoryForCurrentUser.path
-let displayPath = rootURL.path.hasPrefix(homePath)
-    ? "~" + String(rootURL.path.dropFirst(homePath.count))
-    : rootURL.path
-
-var menu = TerminalMenu(
-    title: "termdown",
-    items: entries.map { $0.relativePath },
-    details: details
-)
-menu.path = displayPath
-menu.mouseEnabled = mouseEnabled
-
-// Project-wide search across all discovered files (reused from list + pager).
-var liveGrep = LiveGrep(entries: entries.map { ($0.url, $0.relativePath) })
-liveGrep.mouseEnabled = mouseEnabled
-
-// Re-scan the directory after `FolderWatcher` reports a change, syncing
-// `entries`/`details`/`liveGrep` if the file list actually differs (an
-// FSEvents firing can also be a same-file mtime touch with no list change).
-@discardableResult
-func refreshEntries() -> Bool {
-    let rescanned = FileScanner.scan(root: rootURL, ignorePatterns: appConfig.ignorePatterns ?? [])
-    guard rescanned.map(\.relativePath) != entries.map(\.relativePath) else { return false }
-    entries = rescanned
-    details = fileDetails(entries)
-    liveGrep.updateEntries(entries.map { ($0.url, $0.relativePath) })
-    return true
-}
-
-menu.onFolderChanged = {
-    refreshEntries() ? (items: entries.map { $0.relativePath }, details: details) : nil
-}
-
-// Render any markdown file at a given width (current doc, reload, link nav).
-let renderFile: (URL, Int) -> RenderedDocument? = { url, w in
-    guard let src = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-    return AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners,
-                        mermaidEnabled: mermaidEnabled, mermaidCharset: mermaidCharset).render(src)
-}
-
-// Render arbitrary markdown text (used to re-render unsaved in-memory edits).
-let renderText: (String, Int) -> RenderedDocument = { src, w in
-    AnsiRenderer(width: w, theme: activeTheme, headingBanners: headingBanners).render(src)
-}
-
-// Resolve a [[wikilink]] page name to one of the discovered files — matching by
-// filename (with or without extension) or relative path, case-insensitively.
-let resolveWikilink: (String) -> URL? = { name in
-    let needle = name.lowercased()
-    let needleStem = (needle as NSString).deletingPathExtension
-    return entries.first { entry in
-        let file = entry.url.lastPathComponent.lowercased()
-        let stem = (file as NSString).deletingPathExtension
-        let rel = entry.relativePath.lowercased()
-        let relStem = (rel as NSString).deletingPathExtension
-        return file == needle || stem == needleStem || rel == needle || relStem == needleStem
-    }?.url
-}
-
-/// Open a file in the pager (which then handles in-app link/grep navigation).
-func viewFile(_ url: URL, query: String?) {
-    var pager = Pager(title: url.lastPathComponent, lines: [])
-    pager.fileURL = url
-    pager.fixedWidth = config.width
-    pager.mouseEnabled = mouseEnabled
-    pager.mouseSelectEnabled = mouseSelectEnabled
-    pager.initialQuery = query
-    pager.renderFile = renderFile
-    pager.renderText = renderText
-    pager.resolveWikilink = resolveWikilink
-    pager.keyTranslation = keyTranslation
-    pager.onProjectSearch = { liveGrep.run() }
-    // Theme selector (`p`): preview swaps the active theme live; save persists it.
-    pager.currentThemeName = activeThemeName
-    pager.onPreviewTheme = { name in activeTheme = resolveTheme(name) }
-    pager.onSaveTheme = { name in
-        activeTheme = resolveTheme(name)
-        activeThemeName = name
-        AppConfig.setTheme(name)
+    // A viewer needs a terminal to draw on. With stdout redirected there is
+    // nothing to page, and entering raw mode would leave the tty silent and
+    // unresponsive while frames poured into the file — so render instead, which
+    // is what the user can actually have used the output for.
+    guard isatty(STDOUT_FILENO) != 0 else {
+        renderToStdout(file, env: env)
     }
-    pager.bannerOn = headingBanners
-    pager.onToggleHeadingBanners = { headingBanners = $0 }
-    pager.onNewTab = {
-        // Reuse the file finder (and grep) to choose a document for a new tab;
-        // `.quit` here means the user cancelled, so no tab is opened. The "New tab"
-        // context swaps the launch wordmark for a slim header so it's clearly a
-        // picker, not the app relaunching.
-        switch menu.run(initialSelection: lastSelection, context: "New tab") {
-        case .open(let index):
-            lastSelection = index
-            return entries[index].url
-        case .grep:
-            return liveGrep.run()?.url
-        case .quit:
-            return nil
-        }
+    let session = FolderSession(root: url.deletingLastPathComponent(), env: env,
+                                announceScan: true)
+    withTerminalUI { session.view(url) }
+
+case .picker(let directory):
+    let root = URL(fileURLWithPath: directory, isDirectory: true).standardizedFileURL
+    let session = FolderSession(root: root, env: env)
+    // Checked before the alternate screen, so the message survives on the
+    // normal one.
+    guard !session.isEmpty else {
+        print("No markdown files found under \(root.path)")
+        exit(0)
     }
-    pager.run()
+    withTerminalUI { session.runPicker() }
 }
-
-Terminal.enableRawMode()
-Terminal.enterAltScreen()
-
-var lastSelection = 0
-menuLoop: while true {
-    switch menu.run(initialSelection: lastSelection) {
-    case .quit:
-        break menuLoop
-    case .open(let index):
-        lastSelection = index
-        viewFile(entries[index].url, query: nil)
-    case .grep:
-        if let result = liveGrep.run() {
-            viewFile(result.url, query: result.query)
-        }
-    }
-}
-
-Terminal.exitAltScreen()
-Terminal.disableRawMode()
-Terminal.showCursor()

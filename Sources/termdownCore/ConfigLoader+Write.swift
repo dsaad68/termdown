@@ -72,6 +72,35 @@ extension AppConfig {
         ]),
     ]
 
+    /// Keys introduced in config-version 3. `bare-render` shipped in v0.1.8's
+    /// template but was never added to a migration list, so no existing config
+    /// has ever seen the line — and its meaning has since narrowed: it no longer
+    /// decides whether `termdown notes.md` works at all, only whether it renders
+    /// to stdout instead of opening the viewer.
+    private static let version3Keys: [AddedKey] = [
+        AddedKey(key: "bare-render", aliases: ["barerender", "bare_render"], value: "false",
+                 subordinateTo: nil, comment: [
+            "# bare-render: What a bare file path does. false (the default) opens",
+            "# `termdown notes.md` in the viewer; true renders it to stdout and exits.",
+            "# `-o`/`--open` and `-r`/`--render` override this either way.",
+        ]),
+    ]
+
+    /// The keys a file at `version` has never been offered.
+    ///
+    /// Only the generations *above* its own, which is the whole point: a key the
+    /// user deleted after an earlier migration added it has to stay deleted, and
+    /// a later bump must not resurrect every key from every earlier one. The
+    /// previous code applied one flat list to any file below the current
+    /// version, which was invisible only because there was exactly one version
+    /// to apply.
+    private static func keysAdded(after version: Int) -> [AddedKey] {
+        var keys: [AddedKey] = []
+        if version < 2 { keys += version2Keys }
+        if version < 3 { keys += version3Keys }
+        return keys
+    }
+
     /// Bring an existing config up to `currentConfigVersion`, once: append the
     /// keys the file has never seen, then stamp the version so it does not run
     /// again. Every value already in the file keeps its spelling, its comment,
@@ -101,7 +130,7 @@ extension AppConfig {
             lines.append(setting)
         }
 
-        for added in version2Keys where value(of: added.key, aliases: added.aliases) == nil {
+        for added in keysAdded(after: version) where value(of: added.key, aliases: added.aliases) == nil {
             let parentOff = added.subordinateTo
                 .flatMap { value(of: $0) }
                 .map { ["false", "no"].contains($0) } ?? false

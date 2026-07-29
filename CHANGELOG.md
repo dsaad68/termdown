@@ -6,6 +6,82 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-07-29
+
+### Changed
+- **`termdown notes.md` opens the file in the viewer.** It used to fail with
+  "is not a directory" unless you had found the `bare-render` config key — the
+  most obvious thing to type did the least useful thing. A bare directory still
+  opens the file picker and a typo still errors, so only the case that used to
+  be an error has changed.
+
+  `bare-render` narrows to one job: whether a bare path opens or renders. It no
+  longer decides whether a bare path works at all, and anyone who set it `true`
+  keeps exactly what they had.
+
+  A file opened directly gets the folder features of the directory it sits in —
+  project search, new tabs and wikilinks all resolve — but `q` leaves termdown
+  rather than dropping you into a picker you did not ask for. The folder scan
+  skips hidden files, `node_modules` and `.build`, so a file opened from one of
+  those will not appear in its own project search.
+- **Two actions on one command line is now an error.** `termdown render a.md
+  b.md` used to drop `b.md` without a word; it and `-o a.md -r b.md` now say so.
+- **`-r`/`-o` reject a flag as their path.** `termdown render --theme nord` used
+  to go looking for a file called `--theme`.
+
+### Added
+- **`Space` ticks off a task.** With the line cursor shown (`v`), `Space` flips
+  the `- [ ]` under it to `- [x]` and back. termdown has always *drawn*
+  checkboxes; now it can change them, which is the difference between reading a
+  TODO file and keeping one.
+
+  The rewrite is surgical: indentation, bullet style (`-`/`*`/`+`, `1.`, `2)`),
+  the spacing around the marker and everything after the checkbox are preserved
+  byte for byte, so a toggle produces a one-character diff. A nested item
+  toggles itself rather than its parent, and a task that wraps over several
+  rendered rows toggles from any of them.
+
+  It reuses the inline editor's path rather than writing straight through: the
+  toggle updates the in-memory buffer and marks the document **unsaved (●)**,
+  and `Ctrl-S` commits it — so an accidental tick is undone by discarding at the
+  quit prompt, and a mid-edit reload can't clobber the file.
+
+  `Space` keeps its page-down meaning everywhere else: outside cursor mode
+  (where the cursor only tracks the viewport) and on any line that isn't a task
+  item. `f` and `PgDn` always page down. The new action is rebindable as
+  `key-toggle-task`.
+- **`-o`/`--open` and `-r`/`--render`** name the action outright and ignore
+  `bare-render` in both directions, so neither behaviour is reachable only by
+  editing a config file. `render FILE` remains as an older spelling of `-r`.
+- **`bare-render` reaches existing configs**, at `config-version: 3`. It shipped
+  in v0.1.8's template but was in no migration list, so no existing config had
+  ever seen the line — the README claimed otherwise.
+
+### Fixed
+- **The interface no longer breaks up on a narrow terminal.** `Ansi.pad` grows
+  but never shrinks, and about a dozen places composed a row and handed it to
+  `pad` as though it would rein the result in. With autowrap off an over-wide
+  row does not wrap — it clips at the right margin and takes the frame's border
+  with it.
+
+  The find box's key legend is a fixed 79 columns, so it was breaking on a
+  half-screen terminal, not only a tiny one; the picker's version line a fixed
+  53; the help overlay below 40 and the theme picker below 36. Pager content
+  rows broke at 23 and under. The folder path in the picker header and the
+  scroll counter in overlay hints were unbounded at *any* width.
+
+  Key hints are now dropped whole rather than cut, so a narrow terminal shows
+  fewer of them instead of `? he…`.
+- **The viewer keeps its colors on a narrow terminal.** Wrapped rows were cut
+  with a helper that flattens styled text to plain, and at narrow widths nearly
+  every row is cut — so syntax highlighting disappeared entirely.
+- **A config key deleted on purpose stays deleted.** Migration applied its one
+  key list to any file below the current version, which was invisible while
+  there was only one version to apply. At `config-version: 3` a v2 file would
+  have been re-offered the v2 keys, undoing a deliberate deletion.
+- **An unsaved edit no longer re-renders diagrams that `mermaid: false` turned
+  off**, until the next reload put them back.
+
 ## [0.1.8] - 2026-07-22
 
 ### Fixed
@@ -313,7 +389,8 @@ Initial release.
 - Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
   updates the Homebrew tap.
 
-[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/dsaad68/termdown/releases/tag/v0.1.9
 [0.1.8]: https://github.com/dsaad68/termdown/releases/tag/v0.1.8
 [0.1.7]: https://github.com/dsaad68/termdown/releases/tag/v0.1.7
 [0.1.6]: https://github.com/dsaad68/termdown/releases/tag/v0.1.6

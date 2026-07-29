@@ -33,6 +33,12 @@ final class KeyParserTests: XCTestCase {
         XCTAssertEqual(decode([0x08]), .backspace)
     }
 
+    /// Space is an ordinary printable byte, not a named key — the viewer's
+    /// page-down / task-toggle binding matches on `.char(" ")`.
+    func testSpaceDecodesAsAPrintableChar() {
+        XCTAssertEqual(decode([0x20]), .char(" "))
+    }
+
     func testCtrlL() {
         XCTAssertEqual(decode([0x0C]), .ctrlL)
     }

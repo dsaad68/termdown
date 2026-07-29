@@ -192,6 +192,10 @@ extension Pager {
         case .mouseClick, .mouseDrag, .mouseRelease:
             handleMouseButton(key)
         case .pageDown, .char(" "), .char("f"):
+            // In cursor mode, Space flips the task checkbox under the cursor.
+            // With no task there — and outside cursor mode, where `cursorLine`
+            // only tracks the viewport — it keeps its page-down meaning.
+            if case .char(" ") = key, cursorVisible, toggleTaskUnderCursor() { break }
             navDown(contentRows)
         case .pageUp, .char("b"):
             navUp(contentRows)

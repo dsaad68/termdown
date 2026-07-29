@@ -43,14 +43,14 @@ public struct AppConfig: Codable {
     /// Bumped whenever a shipped default changes in a way existing configs should
     /// pick up. `migrate` compares it against the `config-version:` line in the
     /// user's file and upgrades once; see `migrate(_:)`.
-    static let currentConfigVersion = 2
+    static let currentConfigVersion = 3
 
     static let defaultConfigContent = """
     # termdown configuration
     # ---------------------
     # config-version: written by termdown so it knows which shipped defaults this
     # file has already seen. Leave it alone.
-    config-version: 2
+    config-version: 3
 
     # theme: Color theme to use.
     #   base:    dark, light, mono
@@ -96,17 +96,18 @@ public struct AppConfig: Codable {
     # mermaid-charset: Box-drawing characters for diagrams: unicode or ascii.
     mermaid-charset: unicode
 
-    # bare-render: Treat a bare file path as `render <file>`, so `termdown
-    # notes.md` prints the rendered file and exits instead of erroring
-    # (true/false, default false). A bare *directory* still opens the file
-    # picker either way.
+    # bare-render: What a bare file path does. false (the default) opens
+    # `termdown notes.md` in the viewer; true renders it to stdout and exits.
+    # `-o`/`--open` and `-r`/`--render` override this either way. A bare
+    # *directory* opens the file picker regardless.
     bare-render: false
 
     # Custom viewer keys: key-<action>: <char> binds a key to a viewer action
-    # (the default key keeps working too). Actions: scroll-down/up, page-down/up,
-    # half-down/up, top, bottom, search, next-match, prev-match, project-search,
-    # open-link, new-tab, theme, sidebar, wrap, follow, banner, fold, fold-all,
-    # next-heading, prev-heading, contents, help, quit.
+    # (the default key keeps working too). Actions: scroll-down, scroll-up,
+    # page-down, page-up, half-down, half-up, top, bottom, search, next-match,
+    # prev-match, project-search, open-link, new-tab, theme, sidebar, wrap,
+    # follow, banner, fold, fold-all, next-heading, prev-heading, edit, cursor,
+    # toggle-task, contents, help, quit.
     # key-scroll-down: e
 
     # Precedence (highest wins, merged per key):

@@ -78,6 +78,7 @@ extension Terminal {
             "t                Contents / Open Tabs overlay (t switches panes)",
         ]),
         ("Edit", [
+            "Space            Toggle the task checkbox under the cursor",
             "e                Edit the block under the cursor (raw markdown)",
             "↵                Commit the edit to the buffer (marks unsaved)",
             "Ctrl-S           Save the file to disk",
@@ -86,7 +87,10 @@ extension Terminal {
         ("Misc", [
             "y                Copy code block nearest cursor",
             "Ctrl-L           Force redraw",
-            "q / Esc          Close sidebar, else extra tab, else file list",
+            // "back" is deliberately vague: it is the file list when the viewer
+            // was reached through the picker, and termdown itself when a file
+            // was opened directly.
+            "q / Esc          Close sidebar, else extra tab, else back",
             "?                Show this help",
         ]),
     ]

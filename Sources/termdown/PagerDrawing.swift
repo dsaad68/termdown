@@ -70,7 +70,13 @@ extension Pager {
             var cell = ""
             if lineIdx < total {
                 let display = view[lineIdx]
-                cell = wrapOn ? Ansi.truncate(display, to: available)
+                // `clip` leaves a line that already fits completely alone, and
+                // cuts the rest through `horizontalSlice`. Both halves matter:
+                // `truncate` used to flatten a cut line to plain text, losing
+                // every syntax colour at narrow widths, while slicing
+                // unconditionally rebuilds even lines that fit — and a rebuild
+                // drops OSC 8 hyperlinks, so links stopped being clickable.
+                cell = wrapOn ? Ansi.clip(display, to: available)
                               : Ansi.horizontalSlice(display, start: hscroll, width: available)
                 // Current-line cursor / selection / edit field: a full-width matte
                 // highlight across the content column (degrades to the gutter
@@ -114,7 +120,10 @@ extension Pager {
                                                    : String(repeating: " ", count: Pager.leftMargin)
                 row = gutter + cell
             }
-            row = Ansi.pad(row, to: max(0, cols - 1))
+            // `available` is floored at 20 (Pager.swift), so on a terminal
+            // narrower than about 24 it is *wider than the screen* and the
+            // assembled row overruns. `fit` clamps; `pad` only grew.
+            row = Ansi.fit(row, to: max(0, cols - 1))
             if scrollable {
                 let thumb = vi >= thumbStart && vi < thumbEnd
                 row += thumb ? Ansi.color("\u{2503}", P.accent) : Ansi.color("\u{250A}", P.borderDim) // ┃ thumb, ┊ track

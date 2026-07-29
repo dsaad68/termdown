@@ -172,8 +172,21 @@ final class LiveGrep {
     private func draw(cols: Int, viewport: Int, query: String, hits: [Hit], selected: Int, scroll: Int) {
         var out: [String] = []
         out.append(Terminal.bold(Terminal.cyan("Project search")))
-        out.append("grep> \(query)█")
-        out.append(Terminal.dim("\(hits.count) match(es) · ↑↓ move · Enter open · Esc cancel"))
+        // Scrolls to the caret rather than clipping at the margin, so a long
+        // query does not hide the block cursor and the characters just typed.
+        let prompt = "grep> "
+        let room = max(0, cols - Ansi.width(prompt) - 1)
+        let shown = Ansi.width(query) > room
+            ? "\u{2026}" + Ansi.horizontalSlice(query, start: Ansi.width(query) - (room - 1),
+                                                width: max(0, room - 1))
+            : query
+        out.append(prompt + shown + "█")
+        // Segments are dropped, not cut, so a narrow terminal shows fewer key
+        // hints rather than a truncated one. The match count stays: it is the
+        // only part that is information rather than a reminder.
+        out.append(Terminal.dim(Ansi.fittedHint(
+            ["\(hits.count) match(es)", "↑↓ move", "Enter open", "Esc cancel"],
+            separator: " · ", width: cols)))
         out.append("")
 
         let end = min(scroll + viewport, hits.count)
@@ -195,17 +208,31 @@ final class LiveGrep {
         Terminal.render(out)
     }
 
-    private func renderHit(_ h: Hit, selected: Bool, cols: Int) -> String {
+    /// Internal rather than private so the width invariant can be tested: a
+    /// deep path plus a line number can exceed the terminal on its own.
+    func renderHit(_ h: Hit, selected: Bool, cols: Int) -> String {
         let marker = selected ? "\u{276F} " : "  " // ❯
-        let loc = "\(h.relativePath):\(h.lineNo)"
         let sep = "  "
+        // `previewW` floored the preview at zero but never clamped the location
+        // itself, so a deep path plus a line number could exceed the terminal on
+        // its own — and `pad` cannot shrink. Elide the path from the left, since
+        // the filename at the end identifies the hit better than the repo root.
+        let markerW = Ansi.width(marker)
+        let locRoom = max(0, cols - markerW - Ansi.width(sep) - 1)
+        var path = h.relativePath
+        let full = "\(path):\(h.lineNo)"
+        if Ansi.width(full) > locRoom {
+            let numberW = Ansi.width(":\(h.lineNo)")
+            let keep = max(0, locRoom - numberW - 1)
+            path = "\u{2026}" + Ansi.clusterSlice(path, start: max(0, Ansi.width(path) - keep), width: keep)
+        }
+        let loc = "\(path):\(h.lineNo)"
         let previewW = max(0, cols - Ansi.width(marker + loc + sep))
         let preview = Ansi.truncate(h.preview, to: previewW)
         if selected {
-            let line = marker + loc + sep + preview
-            return Ansi.wrap(Ansi.pad(line, to: cols), [7])
+            return Ansi.wrap(Ansi.fit(marker + loc + sep + preview, to: cols), [7])
         }
-        let styledLoc = Ansi.dim(h.relativePath + ":") + Ansi.color("\(h.lineNo)", LiveGrep.accent)
-        return marker + styledLoc + sep + preview
+        let styledLoc = Ansi.dim(path + ":") + Ansi.color("\(h.lineNo)", LiveGrep.accent)
+        return Ansi.clip(marker + styledLoc + sep + preview, to: cols)
     }
 }
