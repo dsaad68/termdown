@@ -78,6 +78,7 @@ extension Terminal {
             "t                Contents / Open Tabs overlay (t switches panes)",
         ]),
         ("Edit", [
+            "Space            Toggle the task checkbox under the cursor",
             "e                Edit the block under the cursor (raw markdown)",
             "↵                Commit the edit to the buffer (marks unsaved)",
             "Ctrl-S           Save the file to disk",

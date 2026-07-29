@@ -28,6 +28,26 @@ All notable changes to termdown are documented here. The format is based on
   to go looking for a file called `--theme`.
 
 ### Added
+- **`Space` ticks off a task.** With the line cursor shown (`v`), `Space` flips
+  the `- [ ]` under it to `- [x]` and back. termdown has always *drawn*
+  checkboxes; now it can change them, which is the difference between reading a
+  TODO file and keeping one.
+
+  The rewrite is surgical: indentation, bullet style (`-`/`*`/`+`, `1.`, `2)`),
+  the spacing around the marker and everything after the checkbox are preserved
+  byte for byte, so a toggle produces a one-character diff. A nested item
+  toggles itself rather than its parent, and a task that wraps over several
+  rendered rows toggles from any of them.
+
+  It reuses the inline editor's path rather than writing straight through: the
+  toggle updates the in-memory buffer and marks the document **unsaved (●)**,
+  and `Ctrl-S` commits it — so an accidental tick is undone by discarding at the
+  quit prompt, and a mid-edit reload can't clobber the file.
+
+  `Space` keeps its page-down meaning everywhere else: outside cursor mode
+  (where the cursor only tracks the viewport) and on any line that isn't a task
+  item. `f` and `PgDn` always page down. The new action is rebindable as
+  `key-toggle-task`.
 - **`-o`/`--open` and `-r`/`--render`** name the action outright and ignore
   `bare-render` in both directions, so neither behaviour is reachable only by
   editing a config file. `render FILE` remains as an older spelling of `-r`.

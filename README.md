@@ -118,6 +118,13 @@ swift run termdown ~/notes    # scan a specific directory
   markdown **in place** while the rest stays rendered. `Enter` commits the edit to
   the buffer and marks the document **unsaved (●)**; `Ctrl-S` writes it to disk,
   and quitting with unsaved changes prompts to **Save / Discard / Cancel**.
+- **Task lists**: in cursor mode, `Space` ticks the `- [ ]` under the cursor and
+  writes `- [x]` back to the source — indentation, bullet style (`-`/`*`/`+`,
+  `1.`) and everything after the checkbox are preserved byte for byte. It rides
+  the same path as an inline edit: the toggle marks the document **unsaved (●)**
+  and `Ctrl-S` commits it. A nested item toggles itself rather than its parent,
+  and a task that wraps over several rows toggles from any of them. Outside
+  cursor mode — and on any line that isn't a task — `Space` still pages down.
 - **Live reload**: automatically reloads when file changes
 - **Color themes** (29): dark, light, mono; popular ports (catppuccin, rose-pine,
   nord, tokyo-night, gruvbox, dracula, solarized-dark, solarized-light,
@@ -180,6 +187,7 @@ swift run termdown ~/notes    # scan a specific directory
 | Viewer (pager) | `Shift-↑`/`↓`, `J`/`K`       | select lines (cursor mode); `y` copies as markdown, `Y` as rendered text |
 | Viewer (pager) | drag                         | select text character by character; copied on release, `y`/`Y` re-copy, any key clears (`--no-mouse-select` to disable) |
 | Viewer (pager) | double / triple click        | select the word / the whole line |
+| Viewer (pager) | `Space` (cursor mode)        | toggle the `- [ ]` task checkbox under the cursor (else page down) |
 | Viewer (pager) | `e`                          | edit the block under the cursor (raw markdown); `Enter` commits to buffer, `Esc` cancels |
 | Viewer (pager) | `Ctrl-S`                     | save unsaved edits to the file |
 | Viewer (pager) | `w`                          | toggle line wrap               |
@@ -286,7 +294,11 @@ key-theme: _           # open the theme selector with '_'
 Rebindable actions: `scroll-down`, `scroll-up`, `page-down`, `page-up`,
 `half-down`, `half-up`, `top`, `bottom`, `search`, `next-match`, `prev-match`,
 `project-search`, `open-link`, `new-tab`, `theme`, `sidebar`, `wrap`, `follow`,
-`banner`, `fold`, `fold-all`, `next-heading`, `prev-heading`, `edit`, `cursor`, `contents`, `help`, `quit`.
+`banner`, `fold`, `fold-all`, `next-heading`, `prev-heading`, `edit`, `cursor`, `toggle-task`, `contents`,
+`help`, `quit`.
+
+Note that `toggle-task` shares its default key with `page-down` (`Space` does
+both, picking by context), so rebinding it gives the new key both meanings too.
 
 **What a bare path does.** `termdown notes.md` opens the file in the viewer, and
 `termdown ~/notes` opens the file picker over that folder. `bare-render` flips
