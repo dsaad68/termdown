@@ -160,6 +160,30 @@ final class PagerTaskTests: XCTestCase {
         XCTAssertTrue(p.rawSource.contains("- [ ] keep me"))
     }
 
+    // MARK: - Rebinding
+
+    /// `key-toggle-task: x` is documented as working, and rebinding translates
+    /// the new key to Space — so it inherits both of Space's meanings, toggling
+    /// on a task line and paging down elsewhere.
+    func testReboundKeyTogglesAndStillPagesDown() throws {
+        // The blank line matters: without it the first paragraph is a lazy
+        // continuation of the list item, and so is part of the task's own span.
+        let url = try tempFile("- [ ] rebound\n\n" + (1...80).map { "para \($0)\n\n" }.joined())
+        defer { try? FileManager.default.removeItem(at: url) }
+        var p = loadedPager(file: url, rows: 10)
+        p.keyTranslation = KeyBindings.translation(from: ["toggle-task": "x"])
+        focus("rebound", in: &p)
+
+        _ = p.handleKey(.char("x"))
+        XCTAssertTrue(p.rawSource.hasPrefix("- [x] rebound"), "the rebound key toggles")
+
+        p.reflowIfNeeded(renderWidth: 80)
+        focus("para 1", in: &p)
+        let before = p.cursorLine
+        _ = p.handleKey(.char("x"))
+        XCTAssertTrue(p.cursorLine > before, "and pages down where there is no task")
+    }
+
     // MARK: - Guards
 
     func testToggleWithoutAFileIsANoop() {

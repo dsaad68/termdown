@@ -147,6 +147,11 @@ swift run termdown ~/notes    # scan a specific directory
 
 ## Usage
 
+The `examples/` folder is a guided tour — open it with `termdown examples` and
+start at `index.md`. Each page says which keys it is there to exercise: link
+navigation, task checkboxes (`tasks.md`), Mermaid diagrams, wikilinks, and a
+stress test for long and deeply nested content.
+
 ### Keybindings
 
 | Context        | Key                          | Action                         |

@@ -39,6 +39,30 @@ final class KeyBindingsTests: XCTestCase {
         XCTAssertEqual(cfg?.keyBindings?["theme"], "_")
     }
 
+    /// `toggle-task` is rebindable like any other action; its canonical key is
+    /// Space, which the input switch resolves by context.
+    func testToggleTaskIsRebindable() {
+        XCTAssertEqual(KeyBindings.defaults["toggle-task"], " ")
+        XCTAssertEqual(KeyBindings.translation(from: ["toggle-task": "x"])["x"], " ")
+    }
+
+    /// The shipped config file lists the rebindable actions in a comment, and a
+    /// list that drifts from the code is worse than no list — `edit` and `cursor`
+    /// were both missing from it before this test existed.
+    func testShippedConfigDocumentsEveryRebindableAction() throws {
+        let template = AppConfig.defaultConfigContent
+        let start = try XCTUnwrap(template.range(of: "Actions: "), "no action list in the template")
+        let tail = template[start.upperBound...]
+        let end = try XCTUnwrap(tail.range(of: ".\n"), "action list is not terminated")
+        let listed = Set(tail[..<end.lowerBound]
+            .replacingOccurrences(of: "#", with: " ")
+            .split(whereSeparator: { $0 == "," || $0 == "\n" })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty })
+        XCTAssertEqual(listed, Set(KeyBindings.defaults.keys),
+                       "config template's action list disagrees with KeyBindings.defaults")
+    }
+
     func testRemappedKeyDispatchesToCanonicalAction() {
         // '_' bound to scroll-down should scroll like 'j' (cursor hidden by default).
         var p = Pager(title: "t", lines: Array(repeating: "x", count: 100))

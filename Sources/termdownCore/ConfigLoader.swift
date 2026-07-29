@@ -103,10 +103,11 @@ public struct AppConfig: Codable {
     bare-render: false
 
     # Custom viewer keys: key-<action>: <char> binds a key to a viewer action
-    # (the default key keeps working too). Actions: scroll-down/up, page-down/up,
-    # half-down/up, top, bottom, search, next-match, prev-match, project-search,
-    # open-link, new-tab, theme, sidebar, wrap, follow, banner, fold, fold-all,
-    # next-heading, prev-heading, contents, help, quit.
+    # (the default key keeps working too). Actions: scroll-down, scroll-up,
+    # page-down, page-up, half-down, half-up, top, bottom, search, next-match,
+    # prev-match, project-search, open-link, new-tab, theme, sidebar, wrap,
+    # follow, banner, fold, fold-all, next-heading, prev-heading, edit, cursor,
+    # toggle-task, contents, help, quit.
     # key-scroll-down: e
 
     # Precedence (highest wins, merged per key):
