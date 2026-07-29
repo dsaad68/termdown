@@ -6,6 +6,8 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-07-29
+
 ### Changed
 - **`termdown notes.md` opens the file in the viewer.** It used to fail with
   "is not a directory" unless you had found the `bare-render` config key — the
@@ -387,7 +389,8 @@ Initial release.
 - Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
   updates the Homebrew tap.
 
-[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/dsaad68/termdown/releases/tag/v0.1.9
 [0.1.8]: https://github.com/dsaad68/termdown/releases/tag/v0.1.8
 [0.1.7]: https://github.com/dsaad68/termdown/releases/tag/v0.1.7
 [0.1.6]: https://github.com/dsaad68/termdown/releases/tag/v0.1.6
