@@ -38,8 +38,7 @@ All notable changes to termdown are documented here. The format is based on
 - **The bar runs unbroken down a multi-block callout.** Blank rows between a
   callout's paragraphs used to be dropped entirely, running them together; they
   now keep the bar, the way an ordinary blockquote already did.
-
-- **`**bold**` no longer renders as plain text.** Bold was emitted as a bare
+- **Bold prose no longer renders as plain text.** Bold was emitted as a bare
   `ESC[1m` and nothing else, so whether it looked like emphasis came down to
   whether your font shipped a bold face — inside tmux, or with a font that has
   none, bold prose was indistinguishable from the text around it.

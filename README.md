@@ -49,7 +49,9 @@ swift run termdown ~/notes    # scan a specific directory
 - **Fuzzy file finder** with real-time filtering and match highlighting.
 - Full terminal rendering powered by Apple's [swift-markdown] parser:
   - Headings with colored underlines
-  - **Bold**, *italic*, ~~strikethrough~~, `inline code`
+  - **Bold**, *italic*, ~~strikethrough~~, `inline code` — bold carries a
+    high-contrast color from the theme as well as the weight, so it stays visible
+    under tmux and with fonts that ship no bold face
   - Bullet / ordered / nested lists and `- [ ]` task lists
   - Fenced code blocks with **syntax highlighting** across ~35 languages
     (via [Chroma]), drawn as a framed card and mapped onto the matte palette

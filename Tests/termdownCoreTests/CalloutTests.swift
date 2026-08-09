@@ -206,7 +206,44 @@ final class CalloutTests: XCTestCase {
         XCTAssertFalse(out.contains { $0.contains("[^1]") }, "\(out)")
     }
 
+    // MARK: - Colour
+
+    /// Bold picks up `theme.strong` only where the run has no colour of its own,
+    /// and a callout title has one — otherwise `> [!TIP] Use **--width**` would
+    /// repaint half its own header a different colour from the bar beside it.
+    func testBoldInACalloutTitleKeepsTheCalloutColor() {
+        let previous = Ansi.colorEnabled
+        Ansi.colorEnabled = true
+        defer { Ansi.colorEnabled = previous }
+
+        let row = lines("> [!TIP] Use **bold** here")[0]
+        XCTAssertTrue(row.contains(Ansi.code([1] + Ansi.fg(Theme.dark.alertTip)) + "bold"), row.debugDescription)
+        XCTAssertFalse(row.contains(Ansi.code(Ansi.fg(Theme.dark.strong))), row.debugDescription)
+    }
+
     // MARK: - Width
+
+    /// The blocks after a callout's opening paragraph are rendered two columns
+    /// narrower and then prefixed with the bar. A card or a table that ignored
+    /// the narrowing would fit its own box and still overhang the row.
+    func testBlocksInsideACalloutStayWithinTheWidth() {
+        for width in [24, 40, 78] {
+            let out = lines("""
+            > [!NOTE] Blocks
+            > ```swift
+            > let x = averylongidentifier + anotherlongidentifier
+            > ```
+            >
+            > | column one | column two |
+            > | --- | --- |
+            > | a value here | another value |
+            """, width: width)
+            for row in out {
+                XCTAssertLessThanOrEqual(Ansi.width(row), width, "width \(width): \(Ansi.strip(row))")
+            }
+            XCTAssertTrue(out.contains { Ansi.strip($0).contains("│") }, "no table/card rows at \(width)")
+        }
+    }
 
     /// Callout rows are content rows like any other: one column over the width
     /// and the pager's frame desyncs, because autowrap is off.

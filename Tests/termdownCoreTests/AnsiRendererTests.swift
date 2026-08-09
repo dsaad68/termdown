@@ -218,6 +218,17 @@ final class AnsiRendererTests: XCTestCase {
         XCTAssertFalse(link.contains(strong))
     }
 
+    /// The strong colour is styling, so `--no-color` has to drop it along with the
+    /// weight rather than leaving a bare `ESC[38;5;…m` in plain-text output.
+    func testStrongEmitsNothingWithoutColor() {
+        let previous = Ansi.colorEnabled
+        Ansi.colorEnabled = false
+        defer { Ansi.colorEnabled = previous }
+
+        let line = AnsiRenderer(width: 80, theme: .dark).render("a **b** c").lines[0]
+        XCTAssertEqual(line, "a b c")
+    }
+
     /// Inline code inside bold keeps the code colour and drops the weight — the
     /// rule that predates this change, restated so the strong colour can't leak in.
     func testInlineCodeInsideStrongStaysCodeColored() {
