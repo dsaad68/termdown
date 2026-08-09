@@ -82,6 +82,7 @@ extension Theme {
         inlineCode: .hex(0xd33682), codeText: .hex(0x839496), codeBar: .hex(0x586e75),
         link: .hex(0x268bd2), quoteBar: .hex(0x859900), rule: .hex(0x586e75),
         tableBorder: .hex(0x586e75), image: .hex(0xcb4b16), math: .hex(0x2aa198),
+        strong: .hex(0xeee8d5),  // base2 — the palette's own high-contrast tone, not a flat white
         alertNote: .hex(0x268bd2), alertTip: .hex(0x859900), alertImportant: .hex(0x6c71c4),
         alertWarning: .hex(0xb58900), alertCaution: .hex(0xdc322f),
         keyword: .hex(0x859900), string: .hex(0x2aa198), number: .hex(0xd33682),
@@ -94,8 +95,10 @@ extension Theme {
         inlineCode: .hex(0xd33682), codeText: .hex(0x657b83), codeBar: .hex(0x93a1a1),
         link: .hex(0x268bd2), quoteBar: .hex(0x859900), rule: .hex(0x93a1a1),
         tableBorder: .hex(0x93a1a1), image: .hex(0xcb4b16), math: .hex(0x2aa198),
+        strong: .hex(0x073642),  // base02 — Solarized's emphasised text on a light background
         alertNote: .hex(0x268bd2), alertTip: .hex(0x859900), alertImportant: .hex(0x6c71c4),
         alertWarning: .hex(0xb58900), alertCaution: .hex(0xdc322f),
+        alertAbstract: .hex(0x2aa198),
         keyword: .hex(0x859900), string: .hex(0x2aa198), number: .hex(0xd33682),
         comment: .hex(0x93a1a1), type: .hex(0xb58900))
 

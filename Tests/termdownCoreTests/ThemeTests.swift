@@ -78,6 +78,28 @@ final class ThemeTests: XCTestCase {
         }
     }
 
+    /// Bold is SGR 1, which is invisible wherever the font ships no bold face, so
+    /// every theme has to back it with a foreground that differs from the ones
+    /// ordinary prose already uses. A theme whose `strong` matched its body-ish
+    /// tones would put us straight back to bold reading as plain text.
+    func testEveryThemeGivesStrongItsOwnForeground() {
+        for (name, theme) in Theme.all {
+            XCTAssertNotEqual(theme.strong, theme.inlineCode, "\(name): strong must not read as code")
+            XCTAssertNotEqual(theme.strong, theme.comment, "\(name): strong must not read as a comment")
+        }
+    }
+
+    /// `alertAbstract` is the one callout color with no counterpart among the
+    /// GitHub five, and it carries a shared default rather than a per-theme
+    /// value. A theme whose note or tip color happens to land on that default
+    /// would render `[!ABSTRACT]` indistinguishable from `[!NOTE]`.
+    func testEveryThemeKeepsAbstractApartFromNoteAndTip() {
+        for (name, theme) in Theme.all where name != "mono" {
+            XCTAssertNotEqual(theme.alertAbstract, theme.alertNote, "\(name): abstract reads as a note")
+            XCTAssertNotEqual(theme.alertAbstract, theme.alertTip, "\(name): abstract reads as a tip")
+        }
+    }
+
     func testThemeNamesAreUnique() {
         let names = Theme.all.map { $0.name }
         XCTAssertEqual(names.count, Set(names).count, "duplicate theme name")

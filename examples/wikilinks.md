@@ -24,7 +24,7 @@ Use `|` to show custom link text:
 Append `#Heading` to jump to a section after the file loads:
 
 - [[showcase#Emoji shortcodes]]
-- [[showcase#GitHub alerts]]
+- [[showcase#Callouts]]
 
 ## Same-document anchors
 

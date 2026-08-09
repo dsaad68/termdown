@@ -11,9 +11,16 @@ extension AnsiRenderer {
     }
 
     func flatten(_ markup: Markup, baseStyle: InlineStyle = InlineStyle()) -> Flat {
+        flatten(Array(markup.children), baseStyle: baseStyle)
+    }
+
+    /// Flatten a loose run of inline nodes rather than a whole container — a
+    /// callout splits its opening paragraph into a title and a body, and neither
+    /// half is a `Markup` of its own to hand to the overload above.
+    func flatten(_ inlines: [Markup], baseStyle: InlineStyle = InlineStyle()) -> Flat {
         let flattener = InlineFlattener(theme: theme)
-        for child in markup.children {
-            flattener.walk(child, style: baseStyle)
+        for node in inlines {
+            flattener.walk(node, style: baseStyle)
         }
         return Flat(chars: flattener.chars, styles: flattener.styles)
     }

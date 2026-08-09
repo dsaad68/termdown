@@ -1,0 +1,99 @@
+[2m# [0m[1;38;5;183mCallouts[0m
+[38;5;183m════════════════════════════════════════════════════════════════════════════════[0m
+
+[2m## [0m[1;38;5;111mGitHub’s[0m [1;38;5;111mfive[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;5;111m┃[0m [38;5;111m● [0m[38;5;111mNOTE[0m
+[38;5;111m┃[0m Useful information that users should know, even when skimming content.
+
+[38;5;151m┃[0m [38;5;151m● [0m[38;5;151mTIP[0m
+[38;5;151m┃[0m Helpful advice for doing things better or more easily.
+
+[38;5;183m┃[0m [38;5;183m● [0m[38;5;183mIMPORTANT[0m
+[38;5;183m┃[0m Key information users need to know to achieve their goal.
+
+[38;5;223m┃[0m [38;5;223m● [0m[38;5;223mWARNING[0m
+[38;5;223m┃[0m Urgent info that needs immediate user attention to avoid problems.
+
+[38;5;217m┃[0m [38;5;217m● [0m[38;5;217mCAUTION[0m
+[38;5;217m┃[0m Advises about risks or negative outcomes of certain actions.
+
+[2m## [0m[1;38;5;111mThe[0m [1;38;5;111mrest[0m [1;38;5;111mof[0m [1;38;5;111mthe[0m [1;38;5;111mObsidian[0m [1;38;5;111mset[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;5;111m┃[0m [38;5;111m● [0m[38;5;111mINFO[0m
+[38;5;111m┃[0m Reads as a note — same blue.
+
+[38;5;111m┃[0m [38;5;111m● [0m[38;5;111mTODO[0m
+[38;5;111m┃[0m Still to do. Blue, like a note.
+
+[38;5;152m┃[0m [38;5;152m● [0m[38;5;152mABSTRACT[0m
+[38;5;152m┃[0m A summary, in teal.
+
+[38;5;151m┃[0m [38;5;151m● [0m[38;5;151mSUCCESS[0m
+[38;5;151m┃[0m It worked.
+
+[38;5;183m┃[0m [38;5;183m● [0m[38;5;183mEXAMPLE[0m
+[38;5;183m┃[0m A worked example.
+
+[38;5;217m┃[0m [38;5;217m● [0m[38;5;217mFAILURE[0m
+[38;5;217m┃[0m It did not work.
+
+[38;5;217m┃[0m [38;5;217m● [0m[38;5;217mDANGER[0m
+[38;5;217m┃[0m Do not do this.
+
+[38;5;217m┃[0m [38;5;217m● [0m[38;5;217mBUG[0m
+[38;5;217m┃[0m A known defect.
+
+[2m## [0m[1;38;5;111mCase[0m [1;38;5;111mdoes[0m [1;38;5;111mnot[0m [1;38;5;111mmatter[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;5;111m┃[0m [38;5;111m● [0m[38;5;111mNOTE[0m
+[38;5;111m┃[0m Lowercase tags are the same tag.
+
+[38;5;223m┃[0m [38;5;223m● [0m[38;5;223mWARNING[0m
+[38;5;223m┃[0m So is mixed case.
+
+[2m## [0m[1;38;5;111mCustom[0m [1;38;5;111mtitles[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;5;151m┃[0m [38;5;151m● [0m[38;5;151mTry[0m [38;5;218m--width[0m [38;5;151minstead[0m
+[38;5;151m┃[0m The rest of the first line becomes the title, and it can carry [1;38;5;255minline[0m [1;38;5;255mmarkup[0m
+[38;5;151m┃[0m of its own.
+
+[38;5;183m┃[0m [38;5;183m● [0m[38;5;183mA[0m [38;5;183mtitle[0m [38;5;183mand[0m [38;5;183mnothing[0m [38;5;183melse[0m
+
+[2m## [0m[1;38;5;111mCustom[0m [1;38;5;111mtags[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;5;151m┃[0m [38;5;151m● [0m[38;5;151mAnything[0m [38;5;151melse[0m [38;5;151mis[0m [38;5;151mstill[0m [38;5;151ma[0m [38;5;151mcallout[0m
+[38;5;151m┃[0m An unrecognised tag keeps the plain quote colour and uses its own name as the
+[38;5;151m┃[0m title when no title is given.
+
+[38;5;151m┃[0m [38;5;151m● [0m[38;5;151mSIDEBAR[0m
+[38;5;151m┃[0m Tags with no colour of their own fall back the same way.
+
+[2m## [0m[1;38;5;111mBlocks[0m [1;38;5;111minside[0m [1;38;5;111ma[0m [1;38;5;111mcallout[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;5;183m┃[0m [38;5;183m● [0m[38;5;183mCallouts[0m [38;5;183mhold[0m [38;5;183mwhole[0m [38;5;183mblocks[0m
+[38;5;183m┃[0m A first paragraph.
+[38;5;183m┃[0m
+[38;5;183m┃[0m A second one, after a blank line.
+[38;5;183m┃[0m
+[38;5;183m┃[0m [38;5;117m•[0m a list item
+[38;5;183m┃[0m [38;5;117m•[0m another
+[38;5;183m┃[0m
+[38;5;183m┃[0m [38;5;240m┌─ swift ────────────────────────────────────────────────────────────────────┐[0m
+[38;5;183m┃[0m [38;5;240m│ [0m[38;5;209mlet[0m[38;5;252m inside = [0m[38;5;152m"a code block"[0m                                               [38;5;240m │[0m
+[38;5;183m┃[0m [38;5;240m└────────────────────────────────────────────────────────────────────────────┘[0m
+
+[2m## [0m[1;38;5;111mNot[0m [1;38;5;111ma[0m [1;38;5;111mcallout[0m
+[38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;5;151m┃[0m An ordinary blockquote is untouched.
+
+[38;5;151m┃[0m [!NOT VALID] A tag with a space in it is not a marker, so this stays prose.
+
+

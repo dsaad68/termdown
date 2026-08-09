@@ -182,6 +182,53 @@ final class AnsiRendererTests: XCTestCase {
         XCTAssertTrue(output.allSatisfy { $0.isEmpty })
     }
 
+    // MARK: - Strong
+
+    /// `**bold**` used to emit a bare `ESC[1m`, which a terminal draws only if the
+    /// font ships a bold face — under tmux, or with a font that has none, bold
+    /// prose was indistinguishable from the text around it. It now carries the
+    /// theme's `strong` foreground alongside the weight.
+    func testStrongCarriesWeightAndTheThemeColor() {
+        let previous = Ansi.colorEnabled
+        Ansi.colorEnabled = true
+        defer { Ansi.colorEnabled = previous }
+
+        let line = AnsiRenderer(width: 80, theme: .dark).render("a **b** c").lines[0]
+        let expected = Ansi.code([1] + Ansi.fg(Theme.dark.strong))
+        XCTAssertTrue(line.contains(expected + "b"), "expected \(expected.debugDescription) in \(line.debugDescription)")
+    }
+
+    /// The colour is a fallback, not an override: a run that already has one of
+    /// its own — a heading, a link, an alert — must keep it, or bold inside a
+    /// heading would repaint the heading's colour away.
+    func testStrongLeavesAnExistingColorAlone() {
+        let previous = Ansi.colorEnabled
+        Ansi.colorEnabled = true
+        defer { Ansi.colorEnabled = previous }
+
+        let renderer = AnsiRenderer(width: 80, theme: .dark)
+        let strong = Ansi.code(Ansi.fg(Theme.dark.strong))
+
+        let heading = renderer.render("# h **b**").lines[0]
+        XCTAssertTrue(heading.contains(Ansi.code([1] + Ansi.fg(Theme.dark.heading[0])) + "b"))
+        XCTAssertFalse(heading.contains(strong))
+
+        let link = renderer.render("[**b**](https://example.com)").lines[0]
+        XCTAssertTrue(link.contains("b"))
+        XCTAssertFalse(link.contains(strong))
+    }
+
+    /// Inline code inside bold keeps the code colour and drops the weight — the
+    /// rule that predates this change, restated so the strong colour can't leak in.
+    func testInlineCodeInsideStrongStaysCodeColored() {
+        let previous = Ansi.colorEnabled
+        Ansi.colorEnabled = true
+        defer { Ansi.colorEnabled = previous }
+
+        let line = AnsiRenderer(width: 80, theme: .dark).render("**a `c`**").lines[0]
+        XCTAssertTrue(line.contains(Ansi.code(Ansi.fg(Theme.dark.inlineCode)) + "c"))
+    }
+
     func testRenderMultipleParagraphs() {
         let renderer = AnsiRenderer(width: 80, theme: .dark)
         let markdown = """

@@ -72,16 +72,20 @@ $$
 \frac{\partial}{\partial t} \Psi = \hat{H}\,\Psi
 $$
 
-## GitHub alerts
+## Callouts
 
 > [!NOTE]
 > Highlights information users should take into account.
 
-> [!TIP]
+> [!TIP] Text after the tag becomes the title
 > Optional advice to help users be more successful.
 
 > [!WARNING]
 > Critical content demanding immediate attention.
+
+> [!house-style] Any other tag is a callout too
+> Tags are matched case-insensitively, and one this build has no color for
+> keeps the plain quote color. See [callouts](callouts.md) for the full set.
 
 ## Emoji shortcodes
 

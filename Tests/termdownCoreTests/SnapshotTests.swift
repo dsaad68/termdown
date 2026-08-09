@@ -60,4 +60,5 @@ final class SnapshotTests: XCTestCase {
     func testMalformedSnapshot() throws { try assertSnapshot("malformed") }
     func testMermaidSnapshot() throws { try assertSnapshot("mermaid") }
     func testEmojiSnapshot() throws { try assertSnapshot("emoji") }
+    func testCalloutsSnapshot() throws { try assertSnapshot("callouts") }
 }

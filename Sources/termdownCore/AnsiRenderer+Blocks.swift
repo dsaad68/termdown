@@ -145,45 +145,11 @@ extension AnsiRenderer {
 
     private func renderQuote(_ quote: BlockQuote, width: Int, listDepth: Int,
                              footnoteMap: [String: [String]] = [:]) -> [RenderedRow] {
-        // Check for GitHub alerts: > [!NOTE], > [!TIP], etc.
-        var alertType: String?
-        var alertColor: Ansi.Color?
-
-        let children = Array(quote.children)
-        if let firstChild = children.first, let firstParagraph = firstChild as? Paragraph {
-            let paragraphChildren = Array(firstParagraph.children)
-            if let firstInline = paragraphChildren.first, let firstText = firstInline as? Markdown.Text {
-                let text = firstText.string.trimmingCharacters(in: .whitespaces)
-                let alertPattern = #"^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]"#
-                if let regex = try? NSRegularExpression(pattern: alertPattern, options: []),
-                   let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-                   let range = Range(match.range(at: 1), in: text) {
-                    alertType = String(text[range])
-                    switch alertType {
-                    case "NOTE": alertColor = theme.alertNote
-                    case "TIP": alertColor = theme.alertTip
-                    case "IMPORTANT": alertColor = theme.alertImportant
-                    case "WARNING": alertColor = theme.alertWarning
-                    case "CAUTION": alertColor = theme.alertCaution
-                    default: break
-                    }
-                }
-            }
-        }
-
         let quoteSpan = sourceSpan(of: quote)
 
-        // Render as alert if detected
-        if let alertType = alertType, let alertColor = alertColor {
-            let bar = Ansi.color("\u{2503}", alertColor) + " " // ┃
-            let title = Ansi.color("● \(alertType)", alertColor)
-            var out: [RenderedRow] = [RenderedRow(bar + title, quoteSpan)]
-
-            let inner = renderBlocks(children, width: width - 2, listDepth: listDepth, footnoteMap: footnoteMap)
-            for row in inner where !row.text.isEmpty {
-                out.append(RenderedRow(bar + row.text, row.span ?? quoteSpan))
-            }
-            return out
+        if let callout = Callout.parse(quote) {
+            return renderCallout(callout, span: quoteSpan, width: width,
+                                 listDepth: listDepth, footnoteMap: footnoteMap)
         }
 
         // Default quote rendering
@@ -194,6 +160,48 @@ extension AnsiRenderer {
                 ? RenderedRow(Ansi.color("\u{2503}", theme.quoteBar), row.span ?? quoteSpan)
                 : RenderedRow(bar + row.text, row.span ?? quoteSpan)
         }
+    }
+
+    /// Draw a parsed callout: a colored bar down the left, a `● TITLE` header, then
+    /// the body. The `[!TAG]` marker is consumed by the header and never reaches the
+    /// body — it used to be printed twice, once styled and once as literal prose.
+    private func renderCallout(_ callout: Callout, span: SourceSpan?, width: Int,
+                               listDepth: Int, footnoteMap: [String: [String]]) -> [RenderedRow] {
+        let color = callout.color(theme)
+        let bar = Ansi.color("\u{2503}", color)  // ┃
+        let inner = width - 2
+
+        // An empty row keeps the bar and nothing else, the same way a plain quote
+        // draws one, so the paragraphs of a multi-block callout stay apart.
+        func rows(_ lines: [String], _ rowSpan: SourceSpan?) -> [RenderedRow] {
+            lines.map { RenderedRow($0.isEmpty ? bar : bar + " " + $0, rowSpan ?? span) }
+        }
+
+        let dot = Ansi.color("\u{25CF} ", color)
+        var titleLines: [String]
+        if callout.titleInlines.isEmpty {
+            titleLines = [dot + Ansi.color(callout.kind, color)]
+        } else {
+            var style = InlineStyle()
+            style.color = color
+            titleLines = layout(flatten(callout.titleInlines, baseStyle: style), width: inner,
+                                firstPrefix: dot, firstPrefixWidth: 2,
+                                contPrefix: "  ", contPrefixWidth: 2)
+        }
+        var out = rows(titleLines, span)
+
+        if !callout.bodyInlines.isEmpty {
+            var flat = flatten(callout.bodyInlines)
+            if !footnoteMap.isEmpty { flat = substituteFootnoteRefs(flat, footnoteMap: footnoteMap) }
+            out += rows(wrap(flat, width: inner), span)
+        }
+        if !callout.restBlocks.isEmpty {
+            if !callout.bodyInlines.isEmpty { out += rows([""], span) }
+            let blocks = renderBlocks(callout.restBlocks, width: inner,
+                                      listDepth: listDepth, footnoteMap: footnoteMap)
+            out += blocks.map { RenderedRow($0.text.isEmpty ? bar : bar + " " + $0.text, $0.span ?? span) }
+        }
+        return out
     }
 
     /// Extract plain text from markup (for alt text, etc.)

@@ -70,7 +70,16 @@ swift run termdown ~/notes    # scan a specific directory
     or use a list or a blank line — to keep them apart
   - GFM tables drawn with box-drawing borders and column alignment
   - Block quotes (including nested)
-  - **GitHub alerts**: `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, etc. as colored callouts
+  - **Callouts**: a blockquote opening with `> [!TAG]` renders as a colored
+    callout with a `● TAG` header. GitHub's five (`NOTE`, `TIP`, `IMPORTANT`,
+    `WARNING`, `CAUTION`) plus `INFO`, `TODO`, `ABSTRACT`, `SUCCESS`, `EXAMPLE`,
+    `FAILURE`, `DANGER` and `BUG` have colors of their own; tags are matched
+    case-insensitively, so `[!note]` and `[!NOTE]` are the same tag. Text after
+    the tag becomes the title in place of the tag name (`> [!TIP] Try this
+    instead`), and can carry inline markup. **Any other tag still renders as a
+    callout** — in the plain quote color, titled with its own name — so a vault
+    full of house-style tags reads sensibly instead of leaking `[!MYTAG]` into
+    the prose. Callouts hold whole blocks: lists, code and multiple paragraphs
   - YAML frontmatter displayed as a metadata panel
   - Thematic breaks (horizontal rules)
   - Links as clickable OSC 8 hyperlinks
