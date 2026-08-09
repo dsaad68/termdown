@@ -22,9 +22,10 @@ callout: a colored bar down the left and a `● TITLE` header.
 
 ## The rest of the set
 
-Eight more tags carry colors of their own, following Obsidian's vocabulary.
-Tags that mean the same thing share a color, so the palette stays a legible six
-rather than a rainbow nobody can tell apart at a glance.
+Ten more tags carry colors of their own — Obsidian's vocabulary, plus
+`DECISION` for notes and plans that record one. Tags that mean the same thing
+share a color, so the palette stays a legible six rather than a rainbow nobody
+can tell apart at a glance.
 
 > [!INFO]
 > Reads as a note — the same blue.
@@ -40,6 +41,12 @@ rather than a rainbow nobody can tell apart at a glance.
 
 > [!EXAMPLE]
 > A worked example. Mauve, like an important.
+
+> [!QUESTION]
+> Something still open. Yellow, like a warning.
+
+> [!DECISION]
+> Something settled, and why. Mauve, like an important.
 
 > [!FAILURE]
 > It did not work.

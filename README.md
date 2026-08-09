@@ -73,7 +73,8 @@ swift run termdown ~/notes    # scan a specific directory
   - **Callouts**: a blockquote opening with `> [!TAG]` renders as a colored
     callout with a `● TAG` header. GitHub's five (`NOTE`, `TIP`, `IMPORTANT`,
     `WARNING`, `CAUTION`) plus `INFO`, `TODO`, `ABSTRACT`, `SUCCESS`, `EXAMPLE`,
-    `FAILURE`, `DANGER` and `BUG` have colors of their own; tags are matched
+    `QUESTION`, `DECISION`, `FAILURE`, `DANGER` and `BUG` have colors of their
+    own; tags are matched
     case-insensitively, so `[!note]` and `[!NOTE]` are the same tag. Text after
     the tag becomes the title in place of the tag name (`> [!TIP] Try this
     instead`), and can carry inline markup. **Any other tag still renders as a

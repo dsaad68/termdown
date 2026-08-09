@@ -37,6 +37,12 @@
 [38;5;183m┃[0m [38;5;183m● [0m[38;5;183mEXAMPLE[0m
 [38;5;183m┃[0m A worked example.
 
+[38;5;223m┃[0m [38;5;223m● [0m[38;5;223mQUESTION[0m
+[38;5;223m┃[0m Something still open. Yellow, like a warning.
+
+[38;5;183m┃[0m [38;5;183m● [0m[38;5;183mDECISION[0m
+[38;5;183m┃[0m Something settled. Mauve, like an important.
+
 [38;5;217m┃[0m [38;5;217m● [0m[38;5;217mFAILURE[0m
 [38;5;217m┃[0m It did not work.
 

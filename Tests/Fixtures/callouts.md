@@ -34,6 +34,12 @@
 > [!EXAMPLE]
 > A worked example.
 
+> [!QUESTION]
+> Something still open. Yellow, like a warning.
+
+> [!DECISION]
+> Something settled. Mauve, like an important.
+
 > [!FAILURE]
 > It did not work.
 

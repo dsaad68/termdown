@@ -52,6 +52,8 @@ final class CalloutTests: XCTestCase {
         XCTAssertEqual(callout("> [!TODO]")?.color(.dark), Theme.dark.alertNote)
         XCTAssertEqual(callout("> [!SUCCESS]")?.color(.dark), Theme.dark.alertTip)
         XCTAssertEqual(callout("> [!EXAMPLE]")?.color(.dark), Theme.dark.alertImportant)
+        XCTAssertEqual(callout("> [!DECISION]")?.color(.dark), Theme.dark.alertImportant)
+        XCTAssertEqual(callout("> [!QUESTION]")?.color(.dark), Theme.dark.alertWarning)
         for red in ["DANGER", "FAILURE", "BUG"] {
             XCTAssertEqual(callout("> [!\(red)]")?.color(.dark), Theme.dark.alertCaution, red)
         }

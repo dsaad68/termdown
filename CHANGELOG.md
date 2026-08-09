@@ -7,12 +7,14 @@ All notable changes to termdown are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
-- **Eight more callout tags.** Alongside GitHub's `NOTE`, `TIP`, `IMPORTANT`,
+- **Ten more callout tags.** Alongside GitHub's `NOTE`, `TIP`, `IMPORTANT`,
   `WARNING` and `CAUTION`, a blockquote can now open with `[!INFO]`, `[!TODO]`,
-  `[!ABSTRACT]`, `[!SUCCESS]`, `[!EXAMPLE]`, `[!FAILURE]`, `[!DANGER]` or
-  `[!BUG]`. Tags that mean the same thing share a color — `INFO` and `TODO` are
-  a note blue, `DANGER`/`FAILURE`/`BUG` are all the caution red — so the palette
-  stays a legible six rather than a rainbow nobody can tell apart at a glance.
+  `[!ABSTRACT]`, `[!SUCCESS]`, `[!EXAMPLE]`, `[!QUESTION]`, `[!DECISION]`,
+  `[!FAILURE]`, `[!DANGER]` or `[!BUG]` — Obsidian's vocabulary, plus
+  `DECISION` for notes and plans that record one. Tags that mean the same thing
+  share a color — `INFO` and `TODO` are a note blue, `DANGER`/`FAILURE`/`BUG`
+  are all the caution red — so the palette stays a legible six rather than a
+  rainbow nobody can tell apart at a glance.
   `ABSTRACT` brings the one genuinely new color, a teal, as `Theme.alertAbstract`.
 - **Tags are matched case-insensitively.** `[!note]`, `[!Note]` and `[!NOTE]`
   are one tag, so an Obsidian vault written in lowercase renders the same as a

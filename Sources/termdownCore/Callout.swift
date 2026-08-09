@@ -51,6 +51,8 @@ struct Callout {
         "IMPORTANT": \.alertImportant,
         "EXAMPLE": \.alertImportant,
         "WARNING": \.alertWarning,
+        "QUESTION": \.alertWarning,
+        "DECISION": \.alertImportant,
         "CAUTION": \.alertCaution,
         "DANGER": \.alertCaution,
         "FAILURE": \.alertCaution,
