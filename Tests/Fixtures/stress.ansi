@@ -2,7 +2,7 @@
 [38;5;183m════════════════════════════════════════════════════════════════════════════════[0m
 
 A long paragraph that should wrap nicely across multiple lines when the terminal
-is narrow, demonstrating the word-wrapping logic with [1mbold[0m [1mspanning[0m [1mwords[0m and a
+is narrow, demonstrating the word-wrapping logic with [1;38;5;255mbold[0m [1;38;5;255mspanning[0m [1;38;5;255mwords[0m and a
 verylongunbreakablewordthatexceedsthewidthlimit to test hard splitting.
 
 [2m## [0m[1;38;5;111mLoose[0m [1;38;5;111mlist[0m

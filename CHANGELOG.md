@@ -6,6 +6,52 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-08-09
+
+### Added
+- **Ten more callout tags.** Alongside GitHub's `NOTE`, `TIP`, `IMPORTANT`,
+  `WARNING` and `CAUTION`, a blockquote can now open with `[!INFO]`, `[!TODO]`,
+  `[!ABSTRACT]`, `[!SUCCESS]`, `[!EXAMPLE]`, `[!QUESTION]`, `[!DECISION]`,
+  `[!FAILURE]`, `[!DANGER]` or `[!BUG]` — Obsidian's vocabulary, plus
+  `DECISION` for notes and plans that record one. Tags that mean the same thing
+  share a color — `INFO` and `TODO` are a note blue, `DANGER`/`FAILURE`/`BUG`
+  are all the caution red — so the palette stays a legible six rather than a
+  rainbow nobody can tell apart at a glance.
+  `ABSTRACT` brings the one genuinely new color, a teal, as `Theme.alertAbstract`.
+- **Tags are matched case-insensitively.** `[!note]`, `[!Note]` and `[!NOTE]`
+  are one tag, so an Obsidian vault written in lowercase renders the same as a
+  GitHub README written in caps. The header still displays the tag upper-cased.
+- **Custom titles.** Whatever follows the tag on that first line becomes the
+  callout's title in place of the tag name — `> [!TIP] Try --width 100 instead`
+  renders as `● Try --width 100 instead`. The title is markup rather than a
+  string, so it carries bold, italic and inline code like any other line, and it
+  ends at the first line break rather than swallowing the body.
+- **Unrecognized tags are callouts too.** `> [!HOUSE-STYLE]` renders in the
+  plain quote color with its own name as the title, instead of falling back to a
+  blockquote with `[!HOUSE-STYLE]` sitting in the prose. A tag must still be a
+  single word at the head of the quote, so `[!NOT VALID]` stays literal text.
+- `examples/callouts.md`, and a `callouts` render snapshot — callouts had no
+  fixture at all, which is how the duplicated marker below went unnoticed.
+
+### Fixed
+- **A callout no longer prints its own tag twice.** The marker was matched for
+  its color and then rendered again as part of the body, so every callout read
+  `● NOTE` over `[!NOTE] Body text`. The header consumes the marker now.
+- **The bar runs unbroken down a multi-block callout.** Blank rows between a
+  callout's paragraphs used to be dropped entirely, running them together; they
+  now keep the bar, the way an ordinary blockquote already did.
+- **Bold prose no longer renders as plain text.** Bold was emitted as a bare
+  `ESC[1m` and nothing else, so whether it looked like emphasis came down to
+  whether your font shipped a bold face — inside tmux, or with a font that has
+  none, bold prose was indistinguishable from the text around it.
+
+  Strong runs now carry a `strong` foreground from the theme alongside the
+  weight: a near-white on the dark themes, a near-black on `light` and
+  `solarized-light`, and each palette's own high-contrast tone where a flat
+  white would clash. Bold that already has a colour — inside a heading, a link,
+  an alert or an inline code span — keeps it, so nothing that was already
+  legible changes.
+
 ## [0.1.9] - 2026-07-29
 
 ### Changed
@@ -389,7 +435,8 @@ Initial release.
 - Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
   updates the Homebrew tap.
 
-[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/dsaad68/termdown/releases/tag/v0.1.10
 [0.1.9]: https://github.com/dsaad68/termdown/releases/tag/v0.1.9
 [0.1.8]: https://github.com/dsaad68/termdown/releases/tag/v0.1.8
 [0.1.7]: https://github.com/dsaad68/termdown/releases/tag/v0.1.7

@@ -49,7 +49,9 @@ swift run termdown ~/notes    # scan a specific directory
 - **Fuzzy file finder** with real-time filtering and match highlighting.
 - Full terminal rendering powered by Apple's [swift-markdown] parser:
   - Headings with colored underlines
-  - **Bold**, *italic*, ~~strikethrough~~, `inline code`
+  - **Bold**, *italic*, ~~strikethrough~~, `inline code` — bold carries a
+    high-contrast color from the theme as well as the weight, so it stays visible
+    under tmux and with fonts that ship no bold face
   - Bullet / ordered / nested lists and `- [ ]` task lists
   - Fenced code blocks with **syntax highlighting** across ~35 languages
     (via [Chroma]), drawn as a framed card and mapped onto the matte palette
@@ -70,7 +72,17 @@ swift run termdown ~/notes    # scan a specific directory
     or use a list or a blank line — to keep them apart
   - GFM tables drawn with box-drawing borders and column alignment
   - Block quotes (including nested)
-  - **GitHub alerts**: `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, etc. as colored callouts
+  - **Callouts**: a blockquote opening with `> [!TAG]` renders as a colored
+    callout with a `● TAG` header. GitHub's five (`NOTE`, `TIP`, `IMPORTANT`,
+    `WARNING`, `CAUTION`) plus `INFO`, `TODO`, `ABSTRACT`, `SUCCESS`, `EXAMPLE`,
+    `QUESTION`, `DECISION`, `FAILURE`, `DANGER` and `BUG` have colors of their
+    own; tags are matched
+    case-insensitively, so `[!note]` and `[!NOTE]` are the same tag. Text after
+    the tag becomes the title in place of the tag name (`> [!TIP] Try this
+    instead`), and can carry inline markup. **Any other tag still renders as a
+    callout** — in the plain quote color, titled with its own name — so a vault
+    full of house-style tags reads sensibly instead of leaking `[!MYTAG]` into
+    the prose. Callouts hold whole blocks: lists, code and multiple paragraphs
   - YAML frontmatter displayed as a metadata panel
   - Thematic breaks (horizontal rules)
   - Links as clickable OSC 8 hyperlinks

@@ -1,12 +1,12 @@
 [2m# [0m[1;38;5;183mtermdown[0m [1;38;5;183mshowcase[0m
 [38;5;183m════════════════════════════════════════════════════════════════════════════════[0m
 
-A document exercising [1mall[0m [1mthe[0m [1mfeatures[0m.
+A document exercising [1;38;5;255mall[0m [1;38;5;255mthe[0m [1;38;5;255mfeatures[0m.
 
 [2m## [0m[1;38;5;111mText[0m [1;38;5;111mstyling[0m
 [38;5;111m────────────────────────────────────────────────────────────────────────────────[0m
 
-This paragraph has [3mitalic[0m, [1mbold[0m, [1;3mbold[0m [1;3mitalic[0m, [9mstrikethrough[0m, [38;5;218minline[0m [38;5;218mcode[0m, and a
+This paragraph has [3mitalic[0m, [1;38;5;255mbold[0m, [1;3;38;5;255mbold[0m [1;3;38;5;255mitalic[0m, [9mstrikethrough[0m, [38;5;218minline[0m [38;5;218mcode[0m, and a
 ]8;;https://example.com\[4;38;5;117mlink[0m]8;;\ [38;5;117m↗[0m. Here is a footnote-ish note and an autolink: https://github.com.
 
 [38;5;151m┃[0m Blockquotes work too.

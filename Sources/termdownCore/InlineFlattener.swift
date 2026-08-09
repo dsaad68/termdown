@@ -107,7 +107,11 @@ final class InlineFlattener {
             var s = style; s.italic = true
             recurse(markup, s)
         case is Strong:
+            // SGR 1 alone is invisible wherever the font has no bold face, so
+            // carry the theme's strong colour too — but only into a run that has
+            // none, leaving bold inside a heading, link or alert its own colour.
             var s = style; s.bold = true
+            if s.color == nil { s.color = theme.strong }
             recurse(markup, s)
         case is Strikethrough:
             var s = style; s.strike = true

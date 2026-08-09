@@ -19,12 +19,29 @@ public struct Theme {
     var image: Ansi.Color
     var math: Ansi.Color
 
+    /// Foreground for `**strong**` prose. Bold on its own is SGR 1, which a
+    /// terminal only honours if the font ships a bold face — inside tmux, or
+    /// with a font that has none, `**bold**` came out identical to the prose
+    /// around it. Pairing the weight with a higher-contrast foreground makes
+    /// emphasis read either way. Applied only where the run has no colour of
+    /// its own, so bold inside a heading or a link keeps that colour.
+    ///
+    /// Defaults to a near-white that suits every dark theme; the light ones
+    /// override it with a near-black.
+    var strong: Ansi.Color = 255
+
     // Alert colors (for Step 06)
     var alertNote: Ansi.Color
     var alertTip: Ansi.Color
     var alertImportant: Ansi.Color
     var alertWarning: Ansi.Color
     var alertCaution: Ansi.Color
+
+    /// `[!ABSTRACT]` — the one callout color with no counterpart among the
+    /// GitHub five. Teal, keeping it clear of the note blue and the tip green.
+    /// Defaults to a soft teal that suits the dark themes; the light ones and
+    /// `mono` override it.
+    var alertAbstract: Ansi.Color = 152
 
     // Syntax highlighting colors (for Step 04)
     var keyword: Ansi.Color
@@ -69,11 +86,13 @@ public struct Theme {
         tableBorder: 244,
         image: 208,
         math: 30,           // soft teal
+        strong: 232,        // near-black — a light background needs the contrast the other way
         alertNote: 27,        // Blue
         alertTip: 34,         // Green
         alertImportant: 55,  // Purple
         alertWarning: 172,   // Yellow
         alertCaution: 160,   // Red
+        alertAbstract: 30,   // Teal
         keyword: 168,      // Soft purple (more pastel than 127)
         string: 64,        // Soft blue (more pastel than 22)
         number: 94,        // Soft orange (more pastel than 130)
@@ -92,11 +111,13 @@ public struct Theme {
         tableBorder: 7,
         image: 7,
         math: 7,
+        strong: 15,         // bright white — the classic "bold is bright" mapping
         alertNote: 7,
         alertTip: 7,
         alertImportant: 7,
         alertWarning: 7,
         alertCaution: 7,
+        alertAbstract: 7,
         keyword: 7,
         string: 7,
         number: 7,
