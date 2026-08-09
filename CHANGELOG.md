@@ -6,6 +6,8 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-08-09
+
 ### Added
 - **Ten more callout tags.** Alongside GitHub's `NOTE`, `TIP`, `IMPORTANT`,
   `WARNING` and `CAUTION`, a blockquote can now open with `[!INFO]`, `[!TODO]`,
@@ -433,7 +435,8 @@ Initial release.
 - Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
   updates the Homebrew tap.
 
-[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/dsaad68/termdown/releases/tag/v0.1.10
 [0.1.9]: https://github.com/dsaad68/termdown/releases/tag/v0.1.9
 [0.1.8]: https://github.com/dsaad68/termdown/releases/tag/v0.1.8
 [0.1.7]: https://github.com/dsaad68/termdown/releases/tag/v0.1.7
