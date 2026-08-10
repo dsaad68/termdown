@@ -58,11 +58,17 @@ final class FolderSession {
                             details: details)
         menu.path = displayPath
         menu.mouseEnabled = env.mouseEnabled
+        // The folder browser's hierarchy comes from the paths the scan already
+        // walked, so `d` costs nothing extra and inherits every skip rule.
+        menu.list.tree = FolderTree(entries: entries)
         // `unowned` breaks the cycle: this closure is stored on `menu`, which is
         // a property of `self`. The process is short-lived so a leak would never
         // be noticed, which is exactly why it is worth spelling out.
         menu.onFolderChanged = { [unowned self] in
-            refresh() ? (items: entries.map(\.relativePath), details: details) : nil
+            refresh()
+                ? (items: entries.map(\.relativePath), details: details,
+                   tree: FolderTree(entries: entries))
+                : nil
         }
 
         grep = LiveGrep(entries: entries.map { ($0.url, $0.relativePath) })

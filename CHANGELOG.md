@@ -6,6 +6,30 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Folder browsing in the file list (`d`).** The picker has only ever shown one
+  thing: every Markdown file in the project, flat, however deep the folders go.
+  On a large vault that is a wall of `notes/2026/07/…` prefixes with no way to
+  look at the shape of it. `d` now swaps that list for the folders, one level at
+  a time — `Enter` steps into the selected folder and shows *its* folders,
+  `Backspace` (or `←`/`h`) comes back out, and coming back out lands on the
+  folder you just left rather than at the top.
+
+  Each row carries the number of Markdown files beneath it, and only folders
+  that lead to one are listed at all — the hierarchy is derived from the paths
+  the scan already walked, so browsing costs no extra work and inherits every
+  skip rule (`.git`, `node_modules`, your `ignore-patterns`).
+
+  Browsing is also how the file list gets narrowed: `d` from inside a folder
+  leaves the browser with the list showing just that folder's files, named
+  relative to it. `Esc` widens it back to the whole project. A folder with
+  nothing inside it hands over its files on `Enter` rather than opening an empty
+  list, and `/` still searches every folder — clearing the query puts the
+  browser back where it was.
+
+  Both lists remember where they were, so opening a file and coming back returns
+  to the folder you were in.
+
 ## [0.1.10] - 2026-08-09
 
 ### Added

@@ -82,12 +82,20 @@ public struct FuzzyMatch {
 
     /// Filter and sort items based on fuzzy match against the query.
     public static func filterAndSort(_ items: [String], query: String) -> [(item: String, indices: [Int])] {
+        filterAndSort(items, query: query, label: { $0 })
+    }
+
+    /// Filter and sort values that merely *carry* the text to match — a picker row
+    /// knows the file or folder it stands for, and matching on a bare `String`
+    /// meant looking that up again afterwards, which duplicate labels get wrong.
+    public static func filterAndSort<T>(_ items: [T], query: String,
+                                        label: (T) -> String) -> [(item: T, indices: [Int])] {
         guard !query.isEmpty else { return items.map { ($0, []) } }
 
-        var results: [(item: String, score: Int, indices: [Int])] = []
+        var results: [(item: T, score: Int, indices: [Int])] = []
 
         for item in items {
-            if let match = match(query, against: item) {
+            if let match = match(query, against: label(item)) {
                 results.append((item, match.score, match.matchedIndices))
             }
         }

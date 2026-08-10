@@ -47,6 +47,13 @@ swift run termdown ~/notes    # scan a specific directory
 - Recursively finds `.md` / `.markdown` / `.mdx` … files in the current folder
   (skips `.git`, `node_modules`, `.build`, etc.).
 - **Fuzzy file finder** with real-time filtering and match highlighting.
+- **Folder browsing** (`d`): swap the flat list of every file for the folders one
+  level at a time — `Enter` steps into the selected folder and shows *its*
+  folders, `Backspace` (or `←`/`h`) comes back out, and each row carries how many
+  Markdown files are beneath it. `d` again leaves the browser with the file list
+  narrowed to the folder you were standing in, so browsing is also how you scope
+  the list; `Esc` widens it back to the whole project. Folders that lead to no
+  Markdown file are never shown, and `/` searches every folder as before.
 - Full terminal rendering powered by Apple's [swift-markdown] parser:
   - Headings with colored underlines
   - **Bold**, *italic*, ~~strikethrough~~, `inline code` — bold carries a
@@ -172,6 +179,11 @@ stress test for long and deeply nested content.
 | File list      | `↑`/`↓` or `k`/`j`           | move selection                 |
 | File list      | `g` / `G`                    | jump to first / last           |
 | File list      | `Enter`                      | open the selected file         |
+| File list      | `d`                          | switch between files and folders |
+| Folder browser | `Enter`                      | step into the folder (its files, if it has none inside) |
+| Folder browser | `Backspace` / `←` / `h`      | up one level                   |
+| Folder browser | `d`                          | back to the files, narrowed to this folder |
+| File list      | `Esc`                        | widen back to the whole project |
 | File list      | `\`                          | project-wide search (live grep)|
 | File list      | `q` / `Esc`                  | quit                           |
 | Viewer (pager) | `↑`/`↓` or `k`/`j`           | scroll one line                |

@@ -52,16 +52,18 @@ extension TerminalMenu {
     /// wordmark + "markdown viewer" tagline are swapped for a slim contextual
     /// header so the finder doesn't read as the whole app relaunching. Returns the
     /// styled rows; the caller renders (or slides) them.
+    ///
+    /// `visible` is the filtered list as shown — file rows in the flat list, folder
+    /// rows in the browser — and `total` how many there were before filtering.
     func draw(selected: Int, top: Int, viewport: Int, rows: Int, cols: Int,
-              query: String, searching: Bool, filteredItems: [(item: String, indices: [Int])],
-              detailFor: [String: String], context: String? = nil) -> [String] {
+              query: String, searching: Bool, visible: [MenuList.Visible],
+              total: Int, context: String? = nil) -> [String] {
         let P = Ansi.Pastel.self
         let bv = Ansi.color("\u{2502}", P.borderDim)
         // `max(0, …)`: a terminal narrower than the two border columns would
         // otherwise hand a negative count to `String(repeating:count:)`, which
         // traps rather than drawing something ugly.
         let inner = max(0, cols - 2)  // inside the box borders
-        let total = items.count
         var out: [String] = []
 
         // ── Top border. On the launch screen the wordmark below already shows the
@@ -96,8 +98,10 @@ extension TerminalMenu {
         }
 
         // ── Subtitle: folder path · file count  (left)   tagline/hint (right) ──
-        let filtering = filteredItems.count != total
-        let countText = filtering ? "\(filteredItems.count)/\(total) files" : "\(total) files"
+        // The path carries the browsed folder too, so the header answers "where am
+        // I" — without it, one level of a hierarchy looks like any other.
+        let path = self.path + list.subPath
+        let countText = list.countText(shown: visible.count, total: total)
         // The right side is a fixed ~26 columns and the path on the left is
         // unbounded, so this used to run past the border on anything under about
         // 52 columns — and on a deep folder path at any width. Drop the tagline
@@ -197,10 +201,19 @@ extension TerminalMenu {
                 + Ansi.horizontalSlice(typed, start: typedW - max(0, tailRoom - 1),
                                        width: max(0, tailRoom - 1))
         }
-        let hintSegments = searching
-            ? [Ansi.color("\u{21B5} open", P.textDim), Ansi.color("Esc done", P.textDim)]
-            : [Ansi.color("/ search", P.textDim), Ansi.color("\u{2191}\u{2193} move", P.textDim),
-               Ansi.color("\u{21B5} open", P.textDim), Ansi.color("? help", P.textDim)]
+        // The browser's keys are not the list's: Enter goes *in*, Backspace comes
+        // back out, and `d` is the way to the files. Showing the file list's legend
+        // there would advertise the wrong ones.
+        let hintSegments: [String]
+        if searching {
+            hintSegments = [Ansi.color("\u{21B5} open", P.textDim), Ansi.color("Esc done", P.textDim)]
+        } else if list.mode == .folders {
+            hintSegments = [Ansi.color("\u{21B5} enter", P.textDim), Ansi.color("\u{232B} up", P.textDim),
+                            Ansi.color("d files", P.textDim), Ansi.color("? help", P.textDim)]
+        } else {
+            hintSegments = [Ansi.color("/ search", P.textDim), Ansi.color("d folders", P.textDim),
+                            Ansi.color("\u{21B5} open", P.textDim), Ansi.color("? help", P.textDim)]
+        }
         // What is left once the query and a one-column gap are paid for.
         let hintRoom = innerSearch - Ansi.width(leftPart) - 2
         let hint = Ansi.fittedHint(hintSegments, separator: sep, width: max(0, hintRoom))
@@ -222,14 +235,18 @@ extension TerminalMenu {
         // ── Separator ──
         out.append(Ansi.color("\u{251C}" + String(repeating: "\u{2500}", count: inner) + "\u{2524}", P.borderDim))
 
-        // ── File rows ──
-        let secW = detailFor.isEmpty ? 0 : (detailFor.values.map { Ansi.width($0) }.max() ?? 0)
-        let end = min(top + viewport, filteredItems.count)
-        if filteredItems.isEmpty {
+        // ── File / folder rows ──
+        let secW = visible.map { Ansi.width($0.row.detail) }.max() ?? 0
+        let end = min(top + viewport, visible.count)
+        if visible.isEmpty {
+            // An empty browser is a project with no folders in it, not a filter
+            // that matched nothing — saying "no matching files" there is a lie.
+            let msg = query.isEmpty && list.mode == .folders
+                ? "   No folders here"
+                : "   No matching \(list.noun)"
             for i in 0..<viewport {
                 if i == 1 {
-                    let msg = Ansi.color("   No matching files", P.textDim)
-                    out.append(bv + Ansi.fit(msg, to: inner) + bv)
+                    out.append(bv + Ansi.fit(Ansi.color(msg, P.textDim), to: inner) + bv)
                 } else {
                     out.append(bv + String(repeating: " ", count: inner) + bv)
                 }
@@ -238,9 +255,10 @@ extension TerminalMenu {
             for i in 0..<viewport {
                 let idx = top + i
                 if idx < end {
-                    let (item, indices) = filteredItems[idx]
-                    let row = renderRow(path: item, detail: detailFor[item] ?? "", indices: indices,
-                                        selected: idx == selected, cols: inner, secW: secW)
+                    let item = visible[idx]
+                    let row = renderRow(path: item.row.label, detail: item.row.detail,
+                                        indices: item.indices, selected: idx == selected,
+                                        cols: inner, secW: secW, isFolder: item.row.isFolder)
                     out.append(bv + row + bv)
                 } else {
                     out.append(bv + String(repeating: " ", count: inner) + bv)
@@ -249,11 +267,11 @@ extension TerminalMenu {
         }
 
         // ── Bottom border with pagination pill ──
-        let pagCur = min(selected + 1, filteredItems.count)
-        let pagText = " \(pagCur)\u{200A}/\u{200A}\(filteredItems.count) "
+        let pagCur = min(selected + 1, visible.count)
+        let pagText = " \(pagCur)\u{200A}/\u{200A}\(visible.count) "
         // The pill needs its own text plus the four glyphs around it; below that
         // there is no room for a counter and the border goes back to plain.
-        if filteredItems.count > viewport, Ansi.width(pagText) + 4 <= cols {
+        if visible.count > viewport, Ansi.width(pagText) + 4 <= cols {
             let pag = pagText
             let pagW = Ansi.width(pag)
             // The row carries four glyphs (╰ ┤ ├ ╯), not two, so the dashes get
@@ -274,8 +292,10 @@ extension TerminalMenu {
     }
 
     /// Render a single file row with a matte selection surface + mauve accent bar.
+    /// A folder row is the same shape with a leading `\u{25B8}` and its name in the
+    /// teal accent, so the two lists are never mistaken for each other.
     private func renderRow(path: String, detail: String, indices: [Int],
-                           selected: Bool, cols: Int, secW: Int) -> String {
+                           selected: Bool, cols: Int, secW: Int, isFolder: Bool = false) -> String {
         let P = Ansi.Pastel.self
         let marker = selected ? Ansi.bar(P.selectBar) + " " : "  "  // ▌ + space, or blank
         let matched = Set(indices)
@@ -301,8 +321,12 @@ extension TerminalMenu {
         var body = ""
         for (j, ch) in keep.enumerated() {
             let isMatch = matched.contains(j)
-            let isDir = lastSlash != nil && j <= lastSlash!
-            body += styledChar(ch, isMatch: isMatch, isDir: isDir, selected: selected)
+            // In a file row the leading directories are the dim part and the
+            // filename the bright one. A folder row is all name, so the trailing
+            // slash is what dims instead — the same rule, read the other way.
+            let isDir = isFolder ? ch == "/" : (lastSlash != nil && j <= lastSlash!)
+            body += styledChar(ch, isMatch: isMatch, isDir: isDir, selected: selected,
+                              isFolder: isFolder)
         }
         if truncated { body += Ansi.color("\u{2026}", selected ? P.selectFg : P.textDim) }
 
@@ -326,7 +350,8 @@ extension TerminalMenu {
         return row
     }
 
-    private func styledChar(_ ch: Character, isMatch: Bool, isDir: Bool, selected: Bool) -> String {
+    private func styledChar(_ ch: Character, isMatch: Bool, isDir: Bool, selected: Bool,
+                            isFolder: Bool = false) -> String {
         let s = String(ch)
         guard Ansi.colorEnabled else { return s }
         let P = Ansi.Pastel.self
@@ -335,6 +360,9 @@ extension TerminalMenu {
             return isDir ? Ansi.color(s, P.accentDim) : Ansi.wrap(s, [1] + Ansi.fg(P.selectFg))
         }
         if isDir { return Ansi.color(s, P.textDim) }
+        // Teal names mark the folder list out from the file list at a glance, which
+        // matters when the same key flips between the two.
+        if isFolder { return Ansi.color(s, P.tealAccent) }
         return s
     }
 }
