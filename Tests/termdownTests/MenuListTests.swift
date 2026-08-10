@@ -213,19 +213,50 @@ final class MenuListTests: XCTestCase {
         XCTAssertEqual(l.countText(shown: 1, total: 1), "1 folder")
     }
 
-    func testHeaderShowsTheFolderForBothLists() {
+    /// The breadcrumb is *relative* to the folder termdown was opened on — the
+    /// header keeps showing that folder, so repeating it here would say it twice.
+    func testTheBreadcrumbIsRelativeAndFollowsBothLists() {
         var l = list()
-        XCTAssertEqual(l.subPath, "")
+        XCTAssertEqual(l.breadcrumb, [], "at the root the path alone says everything")
         XCTAssertEqual(l.noun, "files")
 
         l.toggleMode()
         l.cwd = "docs/api"
-        XCTAssertEqual(l.subPath, "/docs/api")
+        XCTAssertEqual(l.breadcrumb, ["docs", "api"])
         XCTAssertEqual(l.noun, "folders")
 
         l.toggleMode()
-        XCTAssertEqual(l.subPath, "/docs/api", "the narrowed file list says where it is too")
+        XCTAssertEqual(l.breadcrumb, ["docs", "api"], "the narrowed file list says where it is too")
         XCTAssertEqual(l.noun, "files")
+    }
+
+    // MARK: - The configured starting view
+
+    /// `file-list-view` picks which list the picker opens on. Only an explicit
+    /// `folders` switches it, so an absent, empty or misspelled value leaves the
+    /// picker doing what it has always done rather than opening a mode the user
+    /// never asked for.
+    func testTheConfiguredViewOnlyChangesOnAnExplicitFolders() {
+        XCTAssertEqual(MenuList.Mode(configValue: "folders"), .folders)
+        XCTAssertEqual(MenuList.Mode(configValue: "FOLDERS"), .folders)
+        XCTAssertEqual(MenuList.Mode(configValue: " folders "), .folders)
+        for value in [nil, "", "files", "file", "folder", "tree", "banana"] as [String?] {
+            XCTAssertEqual(MenuList.Mode(configValue: value), .files, value ?? "nil")
+        }
+    }
+
+    /// Opening on the browser still starts at the root of the project, with the
+    /// scope unset — the config picks a list, not a folder.
+    func testOpeningOnFoldersStartsAtTheRoot() {
+        var l = list()
+        l.mode = MenuList.Mode(configValue: "folders")
+        XCTAssertEqual(l.cwd, "")
+        XCTAssertEqual(l.breadcrumb, [])
+        XCTAssertEqual(labels(l), ["docs/", "notes/"])
+
+        // And `d` from there is still the way to the files, unnarrowed.
+        l.toggleMode()
+        XCTAssertEqual(labels(l), paths)
     }
 
     // MARK: - Degenerate projects

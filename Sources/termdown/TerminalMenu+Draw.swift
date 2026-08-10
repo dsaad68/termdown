@@ -1,11 +1,9 @@
 import termdownCore
 
-/// Rendering for the file picker: the wordmark banner, the search box, and the
-/// per-file rows. Pure layout — no input handling or state mutation.
+/// Rendering for the file picker's frame: the wordmark banner, the header and its
+/// breadcrumb row, the search box and the bordered list. Pure layout — no input
+/// handling or state mutation. The rows themselves live in `TerminalMenu+Row.swift`.
 extension TerminalMenu {
-
-    /// Width of the leading marker column (accent bar / blank).
-    private static let markerWidth = 2
 
     /// Thin-line wordmark glyphs (3 rows each) for t·e·r·m·d·o·w·n.
     private static let bannerGlyphs: [[String]] = [
@@ -98,9 +96,9 @@ extension TerminalMenu {
         }
 
         // ── Subtitle: folder path · file count  (left)   tagline/hint (right) ──
-        // The path carries the browsed folder too, so the header answers "where am
-        // I" — without it, one level of a hierarchy looks like any other.
-        let path = self.path + list.subPath
+        // The path stays the folder termdown was opened on, whatever the browser is
+        // showing — it is what says which termdown window this is. Where you are
+        // *inside* it goes in the breadcrumb row below.
         let countText = list.countText(shown: visible.count, total: total)
         // The right side is a fixed ~26 columns and the path on the left is
         // unbounded, so this used to run past the border on anything under about
@@ -121,8 +119,13 @@ extension TerminalMenu {
         // A minimum of 12 columns for the path: shorter than that elides to
         // little more than an ellipsis, which is worth less than the room.
         let countW = Ansi.width(countText)
-        let pathW = path.isEmpty ? 0 : min(Ansi.width(path), max(0, inner - countW - 3 - dotW - 2))
-        let showPath = pathW >= 12
+        let room = max(0, inner - countW - 3 - dotW - 2)
+        let pathW = path.isEmpty ? 0 : min(Ansi.width(path), room)
+        // A path that fits is shown whatever its length; the 12-column floor is
+        // about *elision*, and applying it to the width itself hid every short path
+        // there was — `~/notes` is seven columns, so `termdown ~/notes` named no
+        // folder at all.
+        let showPath = pathW > 0 && (pathW == Ansi.width(path) || pathW >= 12)
         var spent = 3 + countW + 1 + (showPath ? pathW + dotW : 0)
 
         var rightParts: [String] = []
@@ -150,8 +153,13 @@ extension TerminalMenu {
                    + Ansi.fit(sub + String(repeating: " ", count: subGap) + subRight + " ", to: inner)
                    + bv)
 
-        // ── Breathing room ──
-        out.append(bv + String(repeating: " ", count: inner) + bv)
+        // ── Breadcrumb, or breathing room when there is nothing to say ──
+        // The row exists either way, so entering a folder never shifts the rows
+        // below it — `headerLines` in the run loop counts on that.
+        let crumbs = list.breadcrumb
+        out.append(crumbs.isEmpty
+            ? bv + String(repeating: " ", count: inner) + bv
+            : bv + Ansi.fit("   " + Self.breadcrumbRow(crumbs, width: max(0, inner - 4)), to: inner) + bv)
 
         // ── Search field — its own rounded box with a "find" legend. The frame
         // brightens and a block cursor appears only while the box is focused
@@ -289,80 +297,5 @@ extension TerminalMenu {
         }
 
         return out
-    }
-
-    /// Render a single file row with a matte selection surface + mauve accent bar.
-    /// A folder row is the same shape with a leading `\u{25B8}` and its name in the
-    /// teal accent, so the two lists are never mistaken for each other.
-    private func renderRow(path: String, detail: String, indices: [Int],
-                           selected: Bool, cols: Int, secW: Int, isFolder: Bool = false) -> String {
-        let P = Ansi.Pastel.self
-        let marker = selected ? Ansi.bar(P.selectBar) + " " : "  "  // ▌ + space, or blank
-        let matched = Set(indices)
-        let avail = max(1, cols - Self.markerWidth - secW - 2)
-
-        let chars = Array(path)
-        var keep = chars
-        var truncated = false
-        if Ansi.width(path) > avail {
-            var w = 0
-            var kept: [Character] = []
-            for ch in chars {
-                let cw = Ansi.charWidth(ch)
-                if w + cw > avail - 1 { break }
-                kept.append(ch)
-                w += cw
-            }
-            keep = kept
-            truncated = true
-        }
-
-        let lastSlash = keep.lastIndex(of: "/")
-        var body = ""
-        for (j, ch) in keep.enumerated() {
-            let isMatch = matched.contains(j)
-            // In a file row the leading directories are the dim part and the
-            // filename the bright one. A folder row is all name, so the trailing
-            // slash is what dims instead — the same rule, read the other way.
-            let isDir = isFolder ? ch == "/" : (lastSlash != nil && j <= lastSlash!)
-            body += styledChar(ch, isMatch: isMatch, isDir: isDir, selected: selected,
-                              isFolder: isFolder)
-        }
-        if truncated { body += Ansi.color("\u{2026}", selected ? P.selectFg : P.textDim) }
-
-        let left = marker + body
-        let leftW = Ansi.width(left)
-        let detailW = Ansi.width(detail)
-        let gap = max(1, cols - leftW - detailW - 1)
-        let detailStyled = Ansi.color(detail, selected ? P.accentDim : P.borderDim)
-        // The detail column ("2h ago") is dropped rather than cut once the row
-        // is too narrow to hold both — a filename is what the row is for.
-        // `bgRow`/`pad` only grow, so neither would have reined this in.
-        let fitsDetail = leftW + detailW + 2 <= cols
-        let line = fitsDetail
-            ? left + String(repeating: " ", count: gap) + detailStyled + " "
-            : left
-        let row = Ansi.fit(line, to: cols)
-
-        if selected {
-            return Ansi.bgRow(row, bg: P.selectBg, cols: cols)
-        }
-        return row
-    }
-
-    private func styledChar(_ ch: Character, isMatch: Bool, isDir: Bool, selected: Bool,
-                            isFolder: Bool = false) -> String {
-        let s = String(ch)
-        guard Ansi.colorEnabled else { return s }
-        let P = Ansi.Pastel.self
-        if isMatch { return Ansi.wrap(s, [1] + Ansi.fg(P.matchFg)) }  // match always pops
-        if selected {
-            return isDir ? Ansi.color(s, P.accentDim) : Ansi.wrap(s, [1] + Ansi.fg(P.selectFg))
-        }
-        if isDir { return Ansi.color(s, P.textDim) }
-        // Teal names mark the folder list out from the file list at a glance, which
-        // matters when the same key flips between the two.
-        if isFolder { return Ansi.color(s, P.tealAccent) }
-        return s
     }
 }

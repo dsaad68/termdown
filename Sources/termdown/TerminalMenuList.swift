@@ -12,7 +12,17 @@ struct MenuList {
     /// The two lists the picker can show. `files` is the recursive, fuzzy-filtered
     /// list termdown has always opened with; `folders` walks the hierarchy one
     /// level at a time.
-    enum Mode: Equatable { case files, folders }
+    enum Mode: Equatable {
+        case files, folders
+
+        /// Resolve the `file-list-view` config value. Anything but an explicit
+        /// `folders` — absent, misspelled, empty — is the file list, so a typo
+        /// leaves the picker behaving the way it always has.
+        init(configValue: String?) {
+            self = configValue?.trimmingCharacters(in: .whitespaces).lowercased() == "folders"
+                ? .folders : .files
+        }
+    }
 
     /// What a row stands for. Hoisted out of `Row` rather than nested inside it
     /// so the type stays one level deep.
@@ -93,10 +103,15 @@ struct MenuList {
         }
     }
 
-    /// The folder shown after the root in the header, e.g. `/notes/projects`.
-    var subPath: String {
+    /// The folder the list is standing in, split into components relative to the
+    /// folder termdown was opened on — the breadcrumb the header draws under the
+    /// path. Empty at the root, where the path alone says everything.
+    ///
+    /// The header keeps showing the opened folder unchanged; this is *where inside
+    /// it* you are, which is a different question and belongs in its own row.
+    var breadcrumb: [String] {
         let shown = mode == .folders ? cwd : scope
-        return shown.isEmpty ? "" : "/" + shown
+        return shown.isEmpty ? [] : shown.split(separator: "/").map(String.init)
     }
 
     /// Plural noun for the header count and the empty-list message.

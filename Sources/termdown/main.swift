@@ -92,6 +92,7 @@ let env = AppEnvironment(
     mouseSelectEnabled: mouseSelectEnabled,
     keyTranslation: keyTranslation,
     ignorePatterns: appConfig.ignorePatterns ?? [],
+    fileListView: MenuList.Mode(configValue: appConfig.fileListView),
     render: renderContext
 )
 

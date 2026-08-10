@@ -14,6 +14,9 @@ struct AppEnvironment {
     var mouseSelectEnabled: Bool
     var keyTranslation: [Character: Character]
     var ignorePatterns: [String]
+    /// Which list the picker opens on (config `file-list-view`). `d` switches at
+    /// any time, so this is only the starting point.
+    var fileListView: MenuList.Mode = .files
     let render: RenderContext
 }
 

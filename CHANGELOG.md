@@ -29,6 +29,25 @@ All notable changes to termdown are documented here. The format is based on
 
   Both lists remember where they were, so opening a file and coming back returns
   to the folder you were in.
+- **A breadcrumb row under the header.** The header keeps naming the folder
+  termdown was opened on — that is what says which window this is — and the row
+  beneath it says where you are *inside* it, as `docs › api`, relative to that
+  folder. Ancestors are dimmed and the folder you are standing in is picked out.
+  A path too long for the terminal loses its start, not its end: the deepest
+  component is the answer the row exists to give. The row is present either way,
+  so stepping into a folder never shifts the list below it.
+- **`file-list-view`** picks which list the picker opens on: `files` (the
+  default, unchanged) or `folders`. Only an explicit `folders` switches it, so a
+  misspelled value keeps the long-standing behaviour, and `d` still switches at
+  any time. Existing configs are offered the key on next launch
+  (`config-version: 4`) with `files` as its value.
+
+### Fixed
+- **A short folder path is shown in the picker header again.** The header drops
+  the path when there is no room to elide it into, but the 12-column floor for
+  that was applied to the path's own width — so `termdown ~/notes` named no
+  folder at all, at any terminal size. A path that fits is now shown whatever its
+  length; the floor applies only when it has to be cut.
 
 ## [0.1.10] - 2026-08-09
 

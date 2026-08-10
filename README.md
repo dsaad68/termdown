@@ -53,7 +53,10 @@ swift run termdown ~/notes    # scan a specific directory
   Markdown files are beneath it. `d` again leaves the browser with the file list
   narrowed to the folder you were standing in, so browsing is also how you scope
   the list; `Esc` widens it back to the whole project. Folders that lead to no
-  Markdown file are never shown, and `/` searches every folder as before.
+  Markdown file are never shown, and `/` searches every folder as before. The
+  header keeps naming the folder termdown was opened on, with a **breadcrumb**
+  (`docs › api`) under it for where you are inside it. Set
+  `file-list-view: folders` to open on the browser instead of the file list.
 - Full terminal rendering powered by Apple's [swift-markdown] parser:
   - Headings with colored underlines
   - **Bold**, *italic*, ~~strikethrough~~, `inline code` — bold carries a
@@ -272,6 +275,7 @@ theme: dark       # see the full theme list below
 no-color: false
 mouse: true         # false to hand the mouse back to the terminal
 mouse-select: true  # false to keep the terminal's own click-drag selection
+file-list-view: files   # or `folders` to open on the folder browser
 # ignore-patterns: [vendor, "*.snap", archive]   # extra paths to skip
 ```
 
@@ -298,6 +302,7 @@ yourself.
 | `ignore-patterns` | list | `[a, b, c]` | Extra path patterns to skip during file discovery (beyond the built-in `.git`/`node_modules`/`.build` skips) |
 | `mermaid` | bool | `true`/`false` | Render ` ```mermaid ` blocks as diagrams (default `true`; falls back to a code block on parse failure) |
 | `mermaid-charset` | string | `unicode`/`ascii` | Box-drawing character set for diagrams (default `unicode`) |
+| `file-list-view` | string | `files`/`folders` | Which list the file picker opens on: `files` (default, every Markdown file in the project) or `folders` (the folder browser). `d` switches between them while running either way |
 | `bare-render` | bool | `true`/`false` | What a bare file path does: `false` (default) opens `termdown notes.md` in the viewer, `true` renders it to stdout and exits. `-o`/`-r` override it either way; a bare directory opens the picker regardless |
 
 **Themes:** `dark`, `light`, `mono`; ports: `catppuccin`, `rose-pine`, `nord`,

@@ -86,6 +86,16 @@ extension AppConfig {
         ]),
     ]
 
+    /// Keys introduced in config-version 4, for the file picker's folder browser.
+    private static let version4Keys: [AddedKey] = [
+        AddedKey(key: "file-list-view", aliases: ["filelistview", "file_list_view"],
+                 value: "files", subordinateTo: nil, comment: [
+            "# file-list-view: Which list the file picker opens on — files (the default,",
+            "# every markdown file in the project) or folders (the folder browser, one",
+            "# level at a time). `d` switches between them while running either way.",
+        ]),
+    ]
+
     /// The keys a file at `version` has never been offered.
     ///
     /// Only the generations *above* its own, which is the whole point: a key the
@@ -98,6 +108,7 @@ extension AppConfig {
         var keys: [AddedKey] = []
         if version < 2 { keys += version2Keys }
         if version < 3 { keys += version3Keys }
+        if version < 4 { keys += version4Keys }
         return keys
     }
 

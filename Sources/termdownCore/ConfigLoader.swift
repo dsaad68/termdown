@@ -28,6 +28,10 @@ public struct AppConfig: Codable {
     /// `termdown notes.md` works without the subcommand. Opt-in because it
     /// changes what an existing invocation means.
     public var bareRender: Bool?
+    /// Which list the file picker opens on: "files" (default, every markdown file
+    /// in the project) or "folders" (the folder browser, one level at a time).
+    /// `d` switches at any time either way; this only picks the starting point.
+    public var fileListView: String?
     /// Viewer key overrides: action name → key (from `key-<action>: <char>`).
     public var keyBindings: [String: String]?
 
@@ -43,14 +47,14 @@ public struct AppConfig: Codable {
     /// Bumped whenever a shipped default changes in a way existing configs should
     /// pick up. `migrate` compares it against the `config-version:` line in the
     /// user's file and upgrades once; see `migrate(_:)`.
-    static let currentConfigVersion = 3
+    static let currentConfigVersion = 4
 
     static let defaultConfigContent = """
     # termdown configuration
     # ---------------------
     # config-version: written by termdown so it knows which shipped defaults this
     # file has already seen. Leave it alone.
-    config-version: 3
+    config-version: 4
 
     # theme: Color theme to use.
     #   base:    dark, light, mono
@@ -95,6 +99,11 @@ public struct AppConfig: Codable {
 
     # mermaid-charset: Box-drawing characters for diagrams: unicode or ascii.
     mermaid-charset: unicode
+
+    # file-list-view: Which list the file picker opens on — files (the default,
+    # every markdown file in the project) or folders (the folder browser, one
+    # level at a time). `d` switches between them while running either way.
+    file-list-view: files
 
     # bare-render: What a bare file path does. false (the default) opens
     # `termdown notes.md` in the viewer; true renders it to stdout and exits.
@@ -168,6 +177,7 @@ public struct AppConfig: Codable {
         if let v = other.mermaid        { mermaid = v }
         if let v = other.mermaidCharset { mermaidCharset = v }
         if let v = other.bareRender     { bareRender = v }
+        if let v = other.fileListView   { fileListView = v }
         if let v = other.keyBindings {
             if keyBindings == nil { keyBindings = v }
             else { v.forEach { keyBindings?[$0.key] = $0.value } }   // merge per binding
@@ -234,6 +244,8 @@ public struct AppConfig: Codable {
                 cfg.mermaidCharset = value.lowercased()
             case "bare-render", "barerender", "bare_render":
                 cfg.bareRender = parseBool(value)
+            case "file-list-view", "filelistview", "file_list_view":
+                cfg.fileListView = value.lowercased()
             case "ignore-patterns", "ignorepatterns", "ignore_patterns":
                 // Inline sequence: [a, b, c] or bare comma-separated list
                 let inner = value.hasPrefix("[") ? String(value.dropFirst().dropLast()) : value
