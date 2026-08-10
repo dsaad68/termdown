@@ -10,14 +10,14 @@ extension Terminal {
             "PgUp / PgDn   Move by a page",
         ]),
         ("Folders", [
-            "d             Switch between files and folders",
-            "Enter         Enter the folder (its files, if it has none inside)",
+            "d             Show the folders instead of the files",
+            "Enter         Step into it (its files, if none inside)",
             "Backspace     Up one level (also ← or h)",
-            "d (in a folder)  Back to the files, just this folder's",
+            "d (again)     Back to the files, just this folder's",
             "Esc           Widen back to the whole project",
         ]),
         ("Filter", [
-            "/             Search files (focus the box; searches every folder)",
+            "/             Search all files, in every folder",
             "Type          Filter by fuzzy match (any letter, in the box)",
             "Backspace     Delete a character / leave the box",
             "Esc           Leave box, then clear filter, then quit",

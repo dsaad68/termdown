@@ -242,11 +242,20 @@ final class MenuListTests: XCTestCase {
         XCTAssertEqual(labels(l, flat), flat)
     }
 
-    /// The rows are rebuilt from a list that a rescan can shorten under us; an
-    /// index that no longer exists must be dropped, not read past the end.
+    /// The rows are rebuilt from a list that a rescan can shorten under us — the
+    /// watcher fires between the tree being built and the rows being asked for — so
+    /// an index that no longer exists must be dropped, not read past the end.
     func testRowsSurviveAShrunkenFileList() {
         var l = list()
         l.scope = "docs/api"
         XCTAssertEqual(l.rows(labels: ["README.md"], details: []).count, 0)
+    }
+
+    /// The detail column is a second array that can run short of the first; a row
+    /// then has no mtime rather than crashing the picker.
+    func testAShortDetailListLeavesTheColumnBlank() {
+        let rows = list().rows(labels: paths, details: ["1d"])
+        XCTAssertEqual(rows.count, paths.count)
+        XCTAssertEqual(rows.map(\.detail), ["1d", "", "", "", ""])
     }
 }

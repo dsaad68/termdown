@@ -52,6 +52,11 @@ dedicated lint job. Please make sure `just check` is green before pushing.
 - Platform-specific code uses `#if canImport(Darwin) … #elseif canImport(Glibc) …`
   so the executable builds on both macOS and Linux. Terminal-only features (e.g. the
   `pbcopy` clipboard fallback) stay guarded by `#if canImport(Darwin)`.
+- **UI state lives in a plain value, apart from the loop that reads keys.** A
+  `run()` loop needs a TTY and a key stream, so anything decided inside one is
+  effectively untestable: `Pager.TabState` and the picker's `MenuList` (which list
+  is showing, which folder it is standing in) hold that state as structs the loop
+  merely drives, and the tests exercise those directly.
 - Colors go through `Ansi.Color` (256-palette or truecolor). Content colors live in
   `Theme`; TUI chrome colors live in `Ansi.Pastel`.
 

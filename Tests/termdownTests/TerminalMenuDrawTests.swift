@@ -199,6 +199,27 @@ final class TerminalMenuDrawTests: XCTestCase {
         XCTAssertTrue(filteredOut.contains("No matching folders"), filteredOut)
     }
 
+    /// Teal is how a folder row reads as a folder — but `--no-color` takes that
+    /// away, so the trailing slash has to carry it alone, and no escape may be left
+    /// behind in what is supposed to be plain text.
+    func testWithoutColorAFolderIsStillMarkedByItsSlash() {
+        let previous = Ansi.colorEnabled
+        Ansi.colorEnabled = false
+        defer { Ansi.colorEnabled = previous }
+
+        let m = browsing()
+        let frame = m.draw(selected: 0, top: 0, viewport: 4, rows: 20, cols: 60,
+                           query: "", searching: false, visible: folderRows(["docs", "notes"]),
+                           total: 2, context: nil)
+        for row in frame {
+            XCTAssertFalse(row.contains("\u{1B}"), "escape in --no-color output: \(row.debugDescription)")
+            XCTAssertEqual(Ansi.width(row), 60, row)
+        }
+        let plain = frame.joined(separator: "\n")
+        XCTAssertTrue(plain.contains("docs/"), plain)
+        XCTAssertTrue(plain.contains("2 folders"), plain)
+    }
+
     // MARK: - Every row is exactly `cols` wide
 
     /// Autowrap is off, so a row wider than the terminal does not wrap: it clips
