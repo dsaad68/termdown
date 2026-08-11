@@ -245,7 +245,12 @@ extension TerminalMenu {
         // which is the way back *out* of the folder this row names. ──
         let listRows = list.listRows(in: viewport)
         if list.showsBreadcrumbRow {
-            out.append(bv + Self.breadcrumbRow(list.breadcrumb, width: max(0, inner - 3),
+            // Anchored on the opened folder's own name, so the row has something to
+            // say at the root too: `❯ termdown`, then `❯ termdown › examples` a level
+            // in. The header keeps the full path; this is the short form of it.
+            let root = path.split(separator: "/").last.map(String.init)
+            let crumbs = (root.map { [$0] } ?? []) + list.breadcrumb
+            out.append(bv + Self.breadcrumbRow(crumbs, width: max(0, inner - 3),
                                                cols: inner) + bv)
         }
 

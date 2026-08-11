@@ -272,10 +272,16 @@ final class MenuListTests: XCTestCase {
     /// every click in a folder would land one row off.
     func testTheBreadcrumbRowCostsOneListRow() {
         var l = list()
-        XCTAssertFalse(l.showsBreadcrumbRow, "nothing to say at the root")
+        XCTAssertFalse(l.showsBreadcrumbRow, "the whole project is what the header names")
         XCTAssertEqual(l.listRows(in: 10), 10)
 
+        // The browser has the row from its first frame — it is the banner that says
+        // which list you are in, so it cannot wait until you descend.
         l.toggleMode()
+        XCTAssertEqual(l.cwd, "")
+        XCTAssertTrue(l.showsBreadcrumbRow, "no banner on the browser's first frame")
+        XCTAssertEqual(l.listRows(in: 10), 9)
+
         l.cwd = "docs"
         XCTAssertTrue(l.showsBreadcrumbRow)
         XCTAssertEqual(l.listRows(in: 10), 9)

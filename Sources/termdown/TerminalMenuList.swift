@@ -121,11 +121,11 @@ struct MenuList {
     }
 
     /// The folder the list is standing in, split into components relative to the
-    /// folder termdown was opened on — the breadcrumb the header draws under the
-    /// path. Empty at the root, where the path alone says everything.
+    /// folder termdown was opened on. Empty at the root, where the drawing shows the
+    /// opened folder's own name as the only crumb.
     ///
-    /// The header keeps showing the opened folder unchanged; this is *where inside
-    /// it* you are, which is a different question and belongs in its own row.
+    /// The header keeps showing the opened path unchanged; this is *where inside it*
+    /// you are, which is a different question and belongs in its own row.
     var breadcrumb: [String] {
         let shown = mode == .folders ? cwd : scope
         return shown.isEmpty ? [] : shown.split(separator: "/").map(String.init)
@@ -133,7 +133,12 @@ struct MenuList {
 
     /// Whether the list area opens with a breadcrumb row. It sits above the rows,
     /// inside the bordered list, so it costs one of them.
-    var showsBreadcrumbRow: Bool { !breadcrumb.isEmpty }
+    ///
+    /// The browser always has one, the root included — it is the banner that says
+    /// you are walking folders now, so it appears the moment `d` is pressed rather
+    /// than one level in. The file list only earns one by being narrowed; unnarrowed
+    /// it is the whole project, which the header already names.
+    var showsBreadcrumbRow: Bool { mode == .folders || !scope.isEmpty }
 
     /// How many of the `viewport` rows are left for the list itself. The drawing and
     /// the loop's scroll/click arithmetic both go through this — a breadcrumb row

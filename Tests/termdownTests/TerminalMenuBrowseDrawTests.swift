@@ -105,8 +105,32 @@ final class TerminalMenuBrowseDrawTests: XCTestCase {
         let separator = rows.firstIndex { $0.hasPrefix("\u{251C}") }
         XCTAssertNotNil(separator, rows.description)
         let crumb = separator! + 1
-        XCTAssertTrue(rows[crumb].contains("\u{276F} docs"), "no chevron breadcrumb: \(rows[crumb])")
+        XCTAssertTrue(rows[crumb].contains("\u{276F} notes \u{203A} docs"),
+                      "no chevron breadcrumb: \(rows[crumb])")
         XCTAssertTrue(rows[crumb + 1].contains("../"), "the up row is not under it: \(rows[crumb + 1])")
+    }
+
+    /// The row is the banner that says you are walking folders now, so it is there
+    /// from the first frame of the browser — not one level in. At the root it names
+    /// the opened folder, which is also what anchors the crumbs below it.
+    func testTheBrowserHasABreadcrumbFromTheRoot() {
+        let rows = browsing().draw(selected: 0, top: 0, viewport: 4, rows: 20, cols: 80,
+                                   query: "", searching: false, visible: folderRows(["docs"]),
+                                   total: 1, context: nil)
+            .map { Ansi.strip($0) }
+        let separator = rows.firstIndex { $0.hasPrefix("\u{251C}") }
+        XCTAssertEqual(rows[separator! + 1].trimmingCharacters(in: CharacterSet(charactersIn: "│ ")),
+                       "\u{276F} notes", rows.description)
+
+        // The flat file list is the whole project and keeps its first row.
+        var flat = browsing()
+        flat.list.mode = .files
+        let flatRows = flat.draw(selected: 0, top: 0, viewport: 4, rows: 20, cols: 80,
+                                 query: "", searching: false, visible: filtered(["a.md"]),
+                                 total: 1, context: nil)
+            .map { Ansi.strip($0) }
+        let flatSep = flatRows.firstIndex { $0.hasPrefix("\u{251C}") }
+        XCTAssertTrue(flatRows[flatSep! + 1].contains("a.md"), flatRows.description)
     }
 
     /// The breadcrumb sits on its own surface across the full row, a shade below the
@@ -159,10 +183,14 @@ final class TerminalMenuBrowseDrawTests: XCTestCase {
     /// fixed header — and the list gives up exactly one row for it.
     func testTheBreadcrumbCostsAListRowNotAHeaderRow() {
         let many = filtered((1...9).map { "file-\($0).md" })
-        let atRoot = browsing().draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
-                                     query: "", searching: false, visible: many,
-                                     total: 9, context: nil)
-        var inside = browsing("docs")
+        // The unnarrowed file list is the one view with no breadcrumb: it is the
+        // whole project, which the header already names.
+        var flat = browsing()
+        flat.list.mode = .files
+        let atRoot = flat.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
+                               query: "", searching: false, visible: many,
+                               total: 9, context: nil)
+        var inside = flat
         inside.list.scope = "docs"
         let deeper = inside.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
                                  query: "", searching: false, visible: many,
