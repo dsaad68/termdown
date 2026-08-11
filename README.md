@@ -473,17 +473,21 @@ termdown -r README.md --no-color > README.txt   # plain text, no escape codes
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow. In short:
 
 ```sh
-just test     # swift test
-just check    # format-check + lint (strict) + test; run before a PR
-just format   # apply SwiftFormat;  just lint runs SwiftLint --strict
+just test         # swift test
+just check        # format-check + lint (strict) + test; run before a PR
+just format       # apply SwiftFormat;  just lint runs SwiftLint --strict
+just integration  # run the built binary end to end (Tests/Integration/cli.sh)
+just linux-integration  # the same checks on Linux, in a container
 ```
 
 The project is structured as a Swift Package with a library target (`termdownCore`),
 an executable target (`termdown`), and two test targets: `termdownCoreTests` (the
 library) and `termdownTests` (the executable's UI logic, via `@testable import`).
 Source files are kept small and single-purpose (≤300 lines); larger types are split
-across `Type+Concern.swift` extensions. Linting/formatting is configured in
-`.swiftlint.yml` and `.swiftformat`, and CI runs the same checks on macOS and Linux.
+across `Type+Concern.swift` extensions. `Tests/Integration/cli.sh` adds a third kind
+of test: the built binary, run the way a shell runs it. Linting/formatting is
+configured in `.swiftlint.yml` and `.swiftformat`, and CI runs every one of these
+checks on macOS and Linux.
 
 ### Snapshot tests
 

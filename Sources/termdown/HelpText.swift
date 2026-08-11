@@ -47,7 +47,7 @@ extension Terminal {
         ("Notes", [
             "↻             Read at startup: takes effect next launch",
             "local         A ./.termdown.yaml sets this key and wins",
-            "File          ~/.config/termdown/config.yaml",
+            "File          the path shown at the top of the view",
         ]),
     ]
 
