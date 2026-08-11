@@ -94,10 +94,15 @@ struct TerminalMenu {
 
         while true {
             let size = Terminal.size()
-            // top border + 3 wordmark + subtitle + spacer + 3 search-box + separator
+            // top border + 3 wordmark + subtitle + spacer + 3 search-box + separator.
+            // Fixed: the breadcrumb is *inside* the list below, not part of this.
             let headerLines = 10
             let footerLines = 1  // bottom border
             let viewport = max(1, size.rows - headerLines - footerLines)
+            // The breadcrumb row lives inside the bordered list, above the rows, so
+            // it takes one of them — and pushes every clickable row down by one.
+            let listRows = list.listRows(in: viewport)
+            let rowsStart = headerLines + (list.showsBreadcrumbRow ? 1 : 0)
 
             if Terminal.didResize || size.rows != lastRows || size.cols != lastCols {
                 Terminal.didResize = false
@@ -118,8 +123,8 @@ struct TerminalMenu {
             }
 
             if selected < top { top = selected; needsRedraw = true }
-            if selected >= top + viewport { top = selected - viewport + 1; needsRedraw = true }
-            let maxTop = max(0, visible.count - viewport)
+            if selected >= top + listRows { top = selected - listRows + 1; needsRedraw = true }
+            let maxTop = max(0, visible.count - listRows)
             top = max(0, min(top, maxTop))
             selected = max(0, min(selected, visible.count - 1))
 
@@ -142,19 +147,20 @@ struct TerminalMenu {
             case .down:
                 selected = selected < visible.count - 1 ? selected + 1 : 0
             case .pageUp:
-                selected = max(0, selected - viewport)
+                selected = max(0, selected - listRows)
             case .pageDown:
-                selected = min(visible.count - 1, selected + viewport)
+                selected = min(visible.count - 1, selected + listRows)
             case .mouseScroll(let delta):
                 // A flick queues an event per notch and each would repaint the
                 // whole list; land on the final row and draw once.
                 let d = Terminal.coalesceScroll(delta)
                 selected = max(0, min(visible.count - 1, selected + d))
             case .mouseClick(_, let y):
-                // File rows start just below the header chrome. A click selects the
-                // row; clicking the already-selected row opens it (like Enter).
-                let offset = y - 1 - headerLines
-                if offset >= 0, offset < viewport, top + offset < visible.count {
+                // Rows start below the header chrome and the breadcrumb row, when
+                // there is one. A click selects the row; clicking the
+                // already-selected row opens it (like Enter).
+                let offset = y - 1 - rowsStart
+                if offset >= 0, offset < listRows, top + offset < visible.count {
                     let idx = top + offset
                     if idx == selected {
                         if let index = list.activate(visible[idx].row) { return .open(index) }

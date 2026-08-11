@@ -114,6 +114,17 @@ struct MenuList {
         return shown.isEmpty ? [] : shown.split(separator: "/").map(String.init)
     }
 
+    /// Whether the list area opens with a breadcrumb row. It sits above the rows,
+    /// inside the bordered list, so it costs one of them.
+    var showsBreadcrumbRow: Bool { !breadcrumb.isEmpty }
+
+    /// How many of the `viewport` rows are left for the list itself. The drawing and
+    /// the loop's scroll/click arithmetic both go through this — a breadcrumb row
+    /// counted in one and not the other puts every click one row out.
+    func listRows(in viewport: Int) -> Int {
+        max(1, viewport - (showsBreadcrumbRow ? 1 : 0))
+    }
+
     /// Plural noun for the header count and the empty-list message.
     var noun: String { mode == .folders ? "folders" : "files" }
 

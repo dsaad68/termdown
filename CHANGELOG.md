@@ -29,13 +29,14 @@ All notable changes to termdown are documented here. The format is based on
 
   Both lists remember where they were, so opening a file and coming back returns
   to the folder you were in.
-- **A breadcrumb row under the header.** The header keeps naming the folder
-  termdown was opened on — that is what says which window this is — and the row
-  beneath it says where you are *inside* it, as `docs › api`, relative to that
-  folder. Ancestors are dimmed and the folder you are standing in is picked out.
-  A path too long for the terminal loses its start, not its end: the deepest
-  component is the answer the row exists to give. The row is present either way,
-  so stepping into a folder never shifts the list below it.
+- **A breadcrumb row opening the list.** The header keeps naming the folder
+  termdown was opened on — that is what says which window this is — and a row of
+  its own, just inside the separator and directly above `../`, says where you are
+  *inside* it: `❯ docs › api`, relative to that folder. Ancestors are dimmed and
+  the folder you are standing in is picked out. A path too long for the terminal
+  loses its start, not its end: the deepest component is the answer the row
+  exists to give. It belongs to the list rather than the chrome, so it costs one
+  list row and leaves the header — and every row's click target — where it was.
 - **`file-list-view`** picks which list the picker opens on: `files` (the
   default, unchanged) or `folders`. Only an explicit `folders` switches it, so a
   misspelled value keeps the long-standing behaviour, and `d` still switches at

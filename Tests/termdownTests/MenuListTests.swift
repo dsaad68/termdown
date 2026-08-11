@@ -201,6 +201,29 @@ final class MenuListTests: XCTestCase {
 
     // MARK: - Header
 
+    /// The breadcrumb row is carved out of the list area, so the rows left for the
+    /// list are one fewer while it is showing. The drawing and the loop's
+    /// scroll/click arithmetic both read this — if only one of them counted the row,
+    /// every click in a folder would land one row off.
+    func testTheBreadcrumbRowCostsOneListRow() {
+        var l = list()
+        XCTAssertFalse(l.showsBreadcrumbRow, "nothing to say at the root")
+        XCTAssertEqual(l.listRows(in: 10), 10)
+
+        l.toggleMode()
+        l.cwd = "docs"
+        XCTAssertTrue(l.showsBreadcrumbRow)
+        XCTAssertEqual(l.listRows(in: 10), 9)
+
+        // A narrowed file list says where it is too, and pays the same row for it.
+        l.toggleMode()
+        XCTAssertTrue(l.showsBreadcrumbRow)
+        XCTAssertEqual(l.listRows(in: 10), 9)
+
+        // Never zero: a one-row viewport still has to draw something.
+        XCTAssertEqual(l.listRows(in: 1), 1)
+    }
+
     /// Narrowing to a single folder — or a folder with one file in it — is the
     /// ordinary case now, so "1 files" would be on screen constantly.
     func testTheCountIsSingularWhenThereIsOneOfThem() {

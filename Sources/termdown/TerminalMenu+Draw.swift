@@ -153,13 +153,8 @@ extension TerminalMenu {
                    + Ansi.fit(sub + String(repeating: " ", count: subGap) + subRight + " ", to: inner)
                    + bv)
 
-        // ── Breadcrumb, or breathing room when there is nothing to say ──
-        // The row exists either way, so entering a folder never shifts the rows
-        // below it — `headerLines` in the run loop counts on that.
-        let crumbs = list.breadcrumb
-        out.append(crumbs.isEmpty
-            ? bv + String(repeating: " ", count: inner) + bv
-            : bv + Ansi.fit("   " + Self.breadcrumbRow(crumbs, width: max(0, inner - 4)), to: inner) + bv)
+        // ── Breathing room ──
+        out.append(bv + String(repeating: " ", count: inner) + bv)
 
         // ── Search field — its own rounded box with a "find" legend. The frame
         // brightens and a block cursor appears only while the box is focused
@@ -243,16 +238,24 @@ extension TerminalMenu {
         // ── Separator ──
         out.append(Ansi.color("\u{251C}" + String(repeating: "\u{2500}", count: inner) + "\u{2524}", P.borderDim))
 
+        // ── Breadcrumb, directly above the rows it describes — including `../`,
+        // which is the way back *out* of the folder this row names. ──
+        let listRows = list.listRows(in: viewport)
+        if list.showsBreadcrumbRow {
+            out.append(bv + Ansi.fit(Self.breadcrumbRow(list.breadcrumb, width: max(0, inner - 3)),
+                                     to: inner) + bv)
+        }
+
         // ── File / folder rows ──
         let secW = visible.map { Ansi.width($0.row.detail) }.max() ?? 0
-        let end = min(top + viewport, visible.count)
+        let end = min(top + listRows, visible.count)
         if visible.isEmpty {
             // An empty browser is a project with no folders in it, not a filter
             // that matched nothing — saying "no matching files" there is a lie.
             let msg = query.isEmpty && list.mode == .folders
                 ? "   No folders here"
                 : "   No matching \(list.noun)"
-            for i in 0..<viewport {
+            for i in 0..<listRows {
                 if i == 1 {
                     out.append(bv + Ansi.fit(Ansi.color(msg, P.textDim), to: inner) + bv)
                 } else {
@@ -260,7 +263,7 @@ extension TerminalMenu {
                 }
             }
         } else {
-            for i in 0..<viewport {
+            for i in 0..<listRows {
                 let idx = top + i
                 if idx < end {
                     let item = visible[idx]
@@ -279,7 +282,7 @@ extension TerminalMenu {
         let pagText = " \(pagCur)\u{200A}/\u{200A}\(visible.count) "
         // The pill needs its own text plus the four glyphs around it; below that
         // there is no room for a counter and the border goes back to plain.
-        if visible.count > viewport, Ansi.width(pagText) + 4 <= cols {
+        if visible.count > listRows, Ansi.width(pagText) + 4 <= cols {
             let pag = pagText
             let pagW = Ansi.width(pag)
             // The row carries four glyphs (╰ ┤ ├ ╯), not two, so the dashes get

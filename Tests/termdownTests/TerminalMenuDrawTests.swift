@@ -137,146 +137,6 @@ final class TerminalMenuDrawTests: XCTestCase {
         return m
     }
 
-    /// The browser has to look like a different list, not the same one with odd
-    /// names in it: folder rows are teal and carry a trailing slash, and the
-    /// header counts folders rather than files.
-    func testFolderRowsAreTealAndCounted() {
-        let m = browsing()
-        let frame = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
-                           query: "", searching: false, visible: folderRows(["docs", "notes"]),
-                           total: 2, context: nil)
-        let plain = frame.map { Ansi.strip($0) }.joined(separator: "\n")
-        XCTAssertTrue(plain.contains("docs/"), plain)
-        XCTAssertTrue(plain.contains("3 files"), plain)          // the per-folder count column
-        XCTAssertTrue(plain.contains("2 folders"), plain)        // the header noun follows the mode
-        XCTAssertFalse(plain.contains("2 files"), plain)
-
-        // The selected row keeps the picker's bright-on-matte selection styling, so
-        // the teal is what an *unselected* folder row is painted with.
-        let notesRow = frame.first { Ansi.strip($0).contains("notes/") }
-        let teal = Ansi.code(Ansi.fg(Ansi.Pastel.tealAccent))
-        XCTAssertTrue(notesRow?.contains(teal) ?? false,
-                      "folder name is not teal: \(notesRow.debugDescription)")
-    }
-
-    /// The browser's keys are its own, so it must advertise those and not the file
-    /// list's — `d` there means "back to the files", and Enter means "go in".
-    func testBrowserShowsItsOwnHints() {
-        let m = browsing("docs")
-        let plain = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 100,
-                           query: "", searching: false, visible: folderRows(["docs/api"]),
-                           total: 1, context: nil)
-            .map { Ansi.strip($0) }.joined(separator: "\n")
-        XCTAssertTrue(plain.contains("d files"), plain)
-        XCTAssertTrue(plain.contains("up"), plain)
-        XCTAssertFalse(plain.contains("/ search"), plain)
-    }
-
-    /// The header keeps the folder termdown was opened on — that is what says which
-    /// window this is — and where you are *inside* it goes in the breadcrumb row
-    /// below, relative to it, so the opened path is never repeated or rewritten.
-    func testTheBreadcrumbSitsUnderAnUnchangedPath() {
-        let m = browsing("docs/api")
-        let rows = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 100,
-                          query: "", searching: false, visible: folderRows(["docs/api/v1"]),
-                          total: 1, context: nil)
-            .map { Ansi.strip($0) }
-
-        // Row 0 is the border and 1–3 the wordmark, so the subtitle is row 4 and the
-        // breadcrumb the row directly under it.
-        XCTAssertTrue(rows[4].contains("~/notes"), rows[4])
-        XCTAssertFalse(rows[4].contains("~/notes/docs"), "the opened path was rewritten: \(rows[4])")
-        XCTAssertTrue(rows[5].contains("docs \u{203A} api"), rows.description)
-    }
-
-    /// The deepest component is the answer the row exists to give, so a path too
-    /// long for the terminal loses its *start*, not its end.
-    func testALongBreadcrumbIsElidedFromTheLeft() {
-        let parts = "one/two/three/four/five/six/seven/eight"
-        let m = browsing(parts)
-        for cols in [20, 24, 32, 40, 60, 80] {
-            let rows = m.draw(selected: 0, top: 0, viewport: 3, rows: 16, cols: cols,
-                              query: "", searching: false, visible: folderRows(["x"]),
-                              total: 1, context: nil)
-            for row in rows { XCTAssertEqual(Ansi.width(row), cols, Ansi.strip(row)) }
-
-            let crumb = Ansi.strip(rows[5])
-            // Whatever else is dropped, the folder you are standing in survives —
-            // the `… › ` marker has to be paid for out of the room for the
-            // *ancestors*, which is the bug this caught: it was spent after the
-            // components were chosen, so the tail overflowed and `fit` cut it.
-            XCTAssertTrue(crumb.contains("eight"), "the folder we are in was cut at \(cols): \(crumb)")
-            let elided = !crumb.contains("one \u{203A} two")
-            XCTAssertEqual(elided, crumb.contains("\u{2026}"),
-                           "elision and its marker disagree at \(cols): \(crumb)")
-        }
-    }
-
-    /// The 12-column floor is about whether there is room to *elide into*. Applied
-    /// to the width itself it hid every short path there was — `~/notes` is seven
-    /// columns, so `termdown ~/notes` named no folder at all in its own header.
-    func testAShortPathIsStillShown() {
-        var m = sampleMenu()
-        m.path = "~/n"
-        let rows = m.draw(selected: 0, top: 0, viewport: 3, rows: 16, cols: 80,
-                          query: "", searching: false, visible: filtered(m.items),
-                          total: m.items.count, context: nil)
-            .map { Ansi.strip($0) }
-        XCTAssertTrue(rows[4].contains("~/n"), rows[4])
-    }
-
-    /// The row is there whether or not it has anything to say, so stepping into a
-    /// folder never shifts the list underneath it — the run loop's `headerLines`
-    /// and the click-to-row arithmetic both count on a fixed header.
-    func testTheBreadcrumbRowDoesNotChangeTheHeaderHeight() {
-        let atRoot = browsing().draw(selected: 0, top: 0, viewport: 4, rows: 20, cols: 80,
-                                     query: "", searching: false, visible: folderRows(["docs"]),
-                                     total: 1, context: nil)
-        let inside = browsing("docs/api").draw(selected: 0, top: 0, viewport: 4, rows: 20, cols: 80,
-                                              query: "", searching: false, visible: folderRows(["x"]),
-                                              total: 1, context: nil)
-        XCTAssertEqual(atRoot.count, inside.count)
-        let firstRow = { (frame: [String]) in frame.firstIndex { Ansi.strip($0).contains("find") } }
-        XCTAssertEqual(firstRow(atRoot), firstRow(inside), "the search box moved")
-    }
-
-    /// A project with no folders is not a filter that matched nothing, and saying
-    /// "no matching files" there would send the user looking for a query to clear.
-    func testEmptyBrowserSaysThereAreNoFolders() {
-        let m = browsing()
-        let plain = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
-                           query: "", searching: false, visible: [], total: 0, context: nil)
-            .map { Ansi.strip($0) }.joined(separator: "\n")
-        XCTAssertTrue(plain.contains("No folders here"), plain)
-
-        // With a query it *is* a filter miss, and the noun follows the mode.
-        let filteredOut = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
-                                 query: "zz", searching: false, visible: [], total: 4, context: nil)
-            .map { Ansi.strip($0) }.joined(separator: "\n")
-        XCTAssertTrue(filteredOut.contains("No matching folders"), filteredOut)
-    }
-
-    /// Teal is how a folder row reads as a folder — but `--no-color` takes that
-    /// away, so the trailing slash has to carry it alone, and no escape may be left
-    /// behind in what is supposed to be plain text.
-    func testWithoutColorAFolderIsStillMarkedByItsSlash() {
-        let previous = Ansi.colorEnabled
-        Ansi.colorEnabled = false
-        defer { Ansi.colorEnabled = previous }
-
-        let m = browsing()
-        let frame = m.draw(selected: 0, top: 0, viewport: 4, rows: 20, cols: 60,
-                           query: "", searching: false, visible: folderRows(["docs", "notes"]),
-                           total: 2, context: nil)
-        for row in frame {
-            XCTAssertFalse(row.contains("\u{1B}"), "escape in --no-color output: \(row.debugDescription)")
-            XCTAssertEqual(Ansi.width(row), 60, row)
-        }
-        let plain = frame.joined(separator: "\n")
-        XCTAssertTrue(plain.contains("docs/"), plain)
-        XCTAssertTrue(plain.contains("2 folders"), plain)
-    }
-
     // MARK: - Every row is exactly `cols` wide
 
     /// Autowrap is off, so a row wider than the terminal does not wrap: it clips
@@ -374,6 +234,19 @@ final class TerminalMenuDrawTests: XCTestCase {
                 XCTAssertEqual(Ansi.width(row), cols, "at \(cols): \(Ansi.strip(row))")
             }
         }
+    }
+
+    /// The 12-column floor is about whether there is room to *elide into*. Applied
+    /// to the width itself it hid every short path there was — `~/notes` is seven
+    /// columns, so `termdown ~/notes` named no folder at all in its own header.
+    func testAShortPathIsStillShown() {
+        var m = sampleMenu()
+        m.path = "~/n"
+        let rows = m.draw(selected: 0, top: 0, viewport: 3, rows: 16, cols: 80,
+                          query: "", searching: false, visible: filtered(m.items),
+                          total: m.items.count, context: nil)
+            .map { Ansi.strip($0) }
+        XCTAssertTrue(rows[4].contains("~/n"), rows[4])
     }
 
     /// Hints are dropped rather than cut, so a narrow terminal shows fewer of

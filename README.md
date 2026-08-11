@@ -54,9 +54,10 @@ swift run termdown ~/notes    # scan a specific directory
   narrowed to the folder you were standing in, so browsing is also how you scope
   the list; `Esc` widens it back to the whole project. Folders that lead to no
   Markdown file are never shown, and `/` searches every folder as before. The
-  header keeps naming the folder termdown was opened on, with a **breadcrumb**
-  (`docs › api`) under it for where you are inside it. Set
-  `file-list-view: folders` to open on the browser instead of the file list.
+  header keeps naming the folder termdown was opened on, and a **breadcrumb** row
+  opens the list — `❯ docs › api`, relative to that folder, directly above the
+  `../` row. Set `file-list-view: folders` to open on the browser instead of the
+  file list.
 - Full terminal rendering powered by Apple's [swift-markdown] parser:
   - Headings with colored underlines
   - **Bold**, *italic*, ~~strikethrough~~, `inline code` — bold carries a

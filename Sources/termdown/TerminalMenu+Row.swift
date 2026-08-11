@@ -9,15 +9,21 @@ extension TerminalMenu {
     /// Width of the leading marker column (accent bar / blank).
     private static let markerWidth = 2
 
-    /// The breadcrumb under the header: `docs › api`, relative to the folder
-    /// termdown was opened on. Ancestors are dimmed and the folder you are standing
-    /// in is picked out, so the row reads as one place rather than a list of names.
+    /// The row that opens the list: `❯ docs › api`, relative to the folder termdown
+    /// was opened on. Ancestors are dimmed and the folder you are standing in is
+    /// picked out, so the row reads as one place rather than a list of names.
+    ///
+    /// It sits directly above the rows it describes — `../` included, since that row
+    /// is the way back out of the folder this one names. The chevron takes the marker
+    /// column the rows below use for their selection bar, which lines the crumbs up
+    /// with the names underneath instead of floating two columns to their left.
     ///
     /// Elided from the *left* (`… › v1`) when it doesn't fit: the deepest component
     /// is where you are, and cutting the tail would remove exactly the answer the
     /// row exists to give.
     static func breadcrumbRow(_ parts: [String], width: Int) -> String {
         let P = Ansi.Pastel.self
+        let chevron = Ansi.wrap("\u{276F} ", [1] + Ansi.fg(P.accent))   // ❯
         let sep = Ansi.color(" \u{203A} ", P.borderDim)   // ›
         let sepW = 3
         let ellipsis = Ansi.color("\u{2026}", P.borderDim)
@@ -44,7 +50,7 @@ extension TerminalMenu {
         if kept.count < parts.count { kept = fitting(max(0, width - 1 - sepW)) }
         // Not even the last component fits: show its tail rather than an empty row.
         if kept.isEmpty, let last = parts.last {
-            return Ansi.color(Ansi.clip(last, to: max(0, width)), P.tealAccent)
+            return chevron + Ansi.color(Ansi.clip(last, to: max(0, width)), P.tealAccent)
         }
 
         let styled = kept.enumerated().map { index, part in
@@ -52,7 +58,7 @@ extension TerminalMenu {
                 ? Ansi.wrap(part, [1] + Ansi.fg(P.tealAccent))   // where you are
                 : Ansi.color(part, P.textDim)                    // how you got here
         }.joined(separator: sep)
-        return kept.count < parts.count ? ellipsis + sep + styled : styled
+        return chevron + (kept.count < parts.count ? ellipsis + sep + styled : styled)
     }
 
     /// Render a single file row with a matte selection surface + mauve accent bar.
