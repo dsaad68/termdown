@@ -32,9 +32,10 @@ All notable changes to termdown are documented here. The format is based on
 - **A breadcrumb row opening the list.** The header keeps naming the folder
   termdown was opened on — that is what says which window this is — and a row of
   its own, just inside the separator and directly above `../`, says where you are
-  *inside* it: `❯ termdown › docs › api`. It is there from the browser's first
-  frame, naming the opened folder at the root, since it is also the banner that
-  says which of the two lists you are looking at. Ancestors are dimmed and
+  *inside* it: `❯ .. › docs › api`. It is there from the browser's first frame —
+  `❯ ..` at the root — since it is also the banner that says which of the two
+  lists you are looking at, and its first crumb is `..` rather than the opened
+  folder's name, which the header states already. Ancestors are dimmed and
   the folder you are standing in is picked out, on a surface of its own a shade
   below the selection band so the brightest row is still the one under the
   cursor. A path too long for the terminal loses its start, not its end: the

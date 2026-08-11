@@ -16,10 +16,10 @@ level at a time:
 - `../` is the same thing for the mouse — the top row of every level but the
   first, and of a folder's file list as well.
 
-A breadcrumb row opens the list the moment you press `d`: `❯ examples` at the
-top, then `❯ examples › folders` a level in. It names the folder termdown was
-opened on first, so the crumbs after it read as a path, and it sits directly
-above `../` — the row that is the way back out of the folder it names.
+A breadcrumb row opens the list the moment you press `d`: `❯ ..` at the top, then
+`❯ .. › folders` a level in. The first crumb is `..` — everything above it is
+outside the folder termdown was opened on, which the header names — and the row
+sits directly above `../`, which is the way back out of the folder it names.
 
 Each row's right-hand column counts the Markdown files beneath that folder, at
 any depth. Only folders that lead to one are listed at all, so you can never

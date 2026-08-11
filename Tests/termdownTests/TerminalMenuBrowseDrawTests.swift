@@ -105,14 +105,15 @@ final class TerminalMenuBrowseDrawTests: XCTestCase {
         let separator = rows.firstIndex { $0.hasPrefix("\u{251C}") }
         XCTAssertNotNil(separator, rows.description)
         let crumb = separator! + 1
-        XCTAssertTrue(rows[crumb].contains("\u{276F} notes \u{203A} docs"),
+        XCTAssertTrue(rows[crumb].contains("\u{276F} .. \u{203A} docs"),
                       "no chevron breadcrumb: \(rows[crumb])")
         XCTAssertTrue(rows[crumb + 1].contains("../"), "the up row is not under it: \(rows[crumb + 1])")
     }
 
     /// The row is the banner that says you are walking folders now, so it is there
-    /// from the first frame of the browser — not one level in. At the root it names
-    /// the opened folder, which is also what anchors the crumbs below it.
+    /// from the first frame of the browser — not one level in. Its first crumb is
+    /// `..`, not the opened folder's name: the header names that folder already, and
+    /// `..` is what the row below it says too.
     func testTheBrowserHasABreadcrumbFromTheRoot() {
         let rows = browsing().draw(selected: 0, top: 0, viewport: 4, rows: 20, cols: 80,
                                    query: "", searching: false, visible: folderRows(["docs"]),
@@ -120,7 +121,9 @@ final class TerminalMenuBrowseDrawTests: XCTestCase {
             .map { Ansi.strip($0) }
         let separator = rows.firstIndex { $0.hasPrefix("\u{251C}") }
         XCTAssertEqual(rows[separator! + 1].trimmingCharacters(in: CharacterSet(charactersIn: "│ ")),
-                       "\u{276F} notes", rows.description)
+                       "\u{276F} ..", rows.description)
+        XCTAssertFalse(rows[separator! + 1].contains("notes"),
+                       "the opened folder is named in the header, not twice: \(rows[separator! + 1])")
 
         // The flat file list is the whole project and keeps its first row.
         var flat = browsing()
