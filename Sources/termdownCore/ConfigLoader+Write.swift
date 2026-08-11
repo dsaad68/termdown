@@ -13,20 +13,43 @@ extension AppConfig {
     /// `theme:` line in place (comments and other keys are preserved) or
     /// appending one if absent. Used by the in-app theme selector.
     public static func setTheme(_ name: String) {
-        writeTheme(name, to: globalConfigPath)
+        setValue(name, for: ConfigSettings.named("theme")!)
     }
 
-    /// Path-injectable core of `setTheme` so it can be tested without touching the
-    /// user's real config.
-    static func writeTheme(_ name: String, to url: URL) {
+    /// Persist one setting to the global config. Used by the settings view (`,`),
+    /// which writes each change as it is made rather than at the end.
+    public static func setValue(_ value: String, for setting: ConfigSetting) {
+        writeValue(value, for: setting, to: globalConfigPath)
+    }
+
+    /// Path-injectable core of `setValue`, so tests never touch the real config.
+    ///
+    /// The *last* active line for the key is the one rewritten, because that is the
+    /// one `parseYAML` honours — a file with the key twice would otherwise keep
+    /// showing the old value back. Aliases count as the same key for the same
+    /// reason: appending `mouse-select:` to a file that says `mouse_select:` would
+    /// leave two lines, and the new one would win by accident rather than intent.
+    public static func writeValue(_ value: String, for setting: ConfigSetting, to url: URL) {
         var lines = (try? String(contentsOf: url, encoding: .utf8))
             .map { $0.components(separatedBy: "\n") } ?? []
-        if let i = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("theme:") }) {
-            lines[i] = "theme: \(name)"
+        let names = Set([setting.key] + setting.aliases)
+        let line = "\(setting.key): \(value)"
+
+        if let i = lines.lastIndex(where: { activeKey($0).map(names.contains) ?? false }) {
+            // Keep whatever trailing comment the line carried: it is the user's note
+            // about their own setting, not ours to drop.
+            lines[i] = line + inlineComment(lines[i])
         } else {
-            lines.append("theme: \(name)")
+            if lines.last?.isEmpty == false { lines.append("") }
+            lines.append(line)
         }
         write(lines.joined(separator: "\n"), to: url)
+    }
+
+    /// The ` # …` part of a line, or "" — so rewriting a value preserves it.
+    private static func inlineComment(_ line: String) -> String {
+        guard let hash = line.firstIndex(of: "#") else { return "" }
+        return "  " + line[hash...].trimmingCharacters(in: .whitespaces)
     }
 
     // MARK: - Migration
@@ -117,7 +140,7 @@ extension AppConfig {
     /// again. Every value already in the file keeps its spelling, its comment,
     /// its position and — above all — its value.
     ///
-    /// Path-injectable for the same reason `writeTheme` is: tests must never
+    /// Path-injectable for the same reason `writeValue` is: tests must never
     /// touch the real config.
     static func migrate(_ url: URL) {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }

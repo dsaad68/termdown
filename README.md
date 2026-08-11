@@ -59,6 +59,15 @@ swift run termdown ~/notes    # scan a specific directory
   own surface directly above the `../` row (which the narrowed file list carries
   too, so a folder's files are never a dead end). Set `file-list-view: folders` to
   open on the browser instead of the file list.
+- **Settings view** (`,`, from the file list or the viewer): every scalar config
+  key on one screen — theme, width, colors, mouse, mermaid, the picker's starting
+  list — with `Space` cycling a value, `Enter` toggling or opening a list to pick
+  from, and a number typed for `width`. Each change is written to
+  `~/.config/termdown/config.yaml` as you make it, replacing that key's line and
+  leaving your comments alone, so there is no save step and nothing to lose by
+  pressing `Esc`. Rows that are only read at startup are marked `↻`, and a key
+  your project's `.termdown.yaml` also sets is marked `local`, since that file
+  wins.
 - Full terminal rendering powered by Apple's [swift-markdown] parser:
   - Headings with colored underlines
   - **Bold**, *italic*, ~~strikethrough~~, `inline code` — bold carries a
@@ -189,6 +198,7 @@ stress test for long and deeply nested content.
 | Folder browser | `Backspace` / `←` / `h`      | up one level                   |
 | Folder browser | `d`                          | back to the files, narrowed to this folder |
 | File list      | `Esc`                        | widen back to the whole project |
+| File list      | `,`                          | settings (edit the config file) |
 | File list      | `\`                          | project-wide search (live grep)|
 | File list      | `q` / `Esc`                  | quit                           |
 | Viewer (pager) | `↑`/`↓` or `k`/`j`           | scroll one line                |
@@ -228,6 +238,7 @@ stress test for long and deeply nested content.
 | Viewer (pager) | `+` / `-`                    | widen / narrow text column     |
 | Viewer (pager) | `F`                          | toggle follow mode (tail)      |
 | Viewer (pager) | `B`                          | toggle heading banners (h1–h4 as filled color blocks) |
+| Viewer (pager) | `,`                          | settings (edit the config file) |
 | Viewer (pager) | `p`                          | theme selector (live preview, `Enter` saves to config) |
 | Viewer (pager) | `q` / `Esc`                  | close sidebar, else extra tab, else back to the file list |
 | Viewer (pager) | `?`                          | show help                      |
@@ -280,6 +291,12 @@ mouse-select: true  # false to keep the terminal's own click-drag selection
 file-list-view: files   # or `folders` to open on the folder browser
 # ignore-patterns: [vendor, "*.snap", archive]   # extra paths to skip
 ```
+
+You can edit these from inside termdown with `,` (the settings view) instead of
+opening the file: it writes the same keys to the same file, one line at a time.
+
+The location follows `XDG_CONFIG_HOME` when that variable is set
+(`$XDG_CONFIG_HOME/termdown/config.yaml`); otherwise it is the path above.
 
 termdown also writes a `config-version:` line here. It uses that to add keys your
 file has never seen — once, so a setting introduced in a later release does not

@@ -26,8 +26,28 @@ extension Terminal {
             "Enter         Open selected file",
             "Click         Select; click again to open",
             "\\             Project-wide search (grep)",
+            ",             Settings (edit the config file)",
             "q             Quit",
             "?             Show this help",
+        ]),
+    ]
+
+    /// Settings view (`,`) help.
+    static let configHelpGroups: [(name: String, items: [String])] = [
+        ("Move", [
+            "↑/↓ or j/k    Move between settings",
+            "g / G         First / last",
+        ]),
+        ("Change", [
+            "Space or →    Next value (← for the previous one)",
+            "Enter         Toggle, or pick from a list",
+            "Enter (width) Type a number; empty means auto",
+            "Esc           Close (every change is already saved)",
+        ]),
+        ("Notes", [
+            "↻             Read at startup: takes effect next launch",
+            "local         A ./.termdown.yaml sets this key and wins",
+            "File          ~/.config/termdown/config.yaml",
         ]),
     ]
 
@@ -71,6 +91,7 @@ extension Terminal {
             "x                Close current tab",
         ]),
         ("View", [
+            ",                Settings (edit the config file)",
             "p                Theme selector (live preview, Enter saves)",
             "B                Heading banners (h1–h4 as filled blocks)",
             "s                Toggle outline sidebar",

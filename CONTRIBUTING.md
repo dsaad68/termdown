@@ -57,6 +57,13 @@ dedicated lint job. Please make sure `just check` is green before pushing.
   effectively untestable: `Pager.TabState` and the picker's `MenuList` (which list
   is showing, which folder it is standing in) hold that state as structs the loop
   merely drives, and the tests exercise those directly.
+- **A new config key touches five places**, and missing one leaves it half-wired:
+  the field and the `parseYAML` case in `ConfigLoader.swift`, `merge`, the shipped
+  template, a `versionNKeys` list in `ConfigLoader+Write.swift` (so existing files
+  are offered it), and — for anything editable in the `,` view — a row in
+  `ConfigSettings.editable` plus its `value(for:)` case. `ConfigSettingTests` walks
+  the table and writes/re-reads every row, so a key wired into the view but not the
+  parser fails there rather than silently doing nothing.
 - Colors go through `Ansi.Color` (256-palette or truecolor). Content colors live in
   `Theme`; TUI chrome colors live in `Ansi.Pastel`.
 
@@ -81,6 +88,25 @@ TD_UPDATE_SNAPSHOTS=1 swift test
 complements the width sweep in `PagerDrawingTests`: the sweep proves every row
 measures exactly `cols`, but it measures with `Ansi.width` itself, so it cannot
 notice a frame that is correctly sized and visually wrong.
+
+### Integration checks
+
+`Tests/Integration/cli.sh` runs the built binary the way a shell does — `--version`,
+`render`, stdin, a missing file, and the config file's whole life cycle (created on
+first run, migrated from an older version, overridden by a project-local
+`.termdown.yaml`, honoured for `width`/`no-color`/`mermaid`). It is what catches a
+break that only shows up outside the test harness.
+
+```sh
+just integration        # against a local debug build
+just linux-integration  # build the Linux image (Dockerfile) and run them inside it
+just linux-build        # the unit tests on Linux, in a container
+```
+
+It points `XDG_CONFIG_HOME` at a temporary directory, so a run never touches the
+config of the machine it runs on — `HOME` alone would not do, because
+`homeDirectoryForCurrentUser` ignores it on macOS. CI runs the script on both
+platforms after `swift test`.
 
 Two golden sets are **not** regenerable and must never be rewritten to make a
 test pass:

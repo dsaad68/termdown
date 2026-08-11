@@ -28,6 +28,10 @@ struct TerminalMenu {
     /// Whether mouse scroll events are enabled.
     var mouseEnabled: Bool = false
 
+    /// Opens the settings view (`,`), returning once the user closes it. Provided by
+    /// the app, which owns the render context a live setting has to reach.
+    var onSettings: (() -> Void)?
+
     /// Called when the watched folder changes; returns the refreshed
     /// item/detail lists, or nil if nothing actually changed (e.g. a file's
     /// mtime was touched without the file list itself differing).
@@ -201,6 +205,9 @@ struct TerminalMenu {
                 return .grep
             case .char("?") where !searching:
                 Terminal.showHelp(Terminal.menuHelpGroups)
+            case .char(",") where !searching:
+                onSettings?()
+                Terminal.clearScreen()   // the settings view drew over the whole frame
             case .char("/") where !searching:
                 // The search box searches the whole project, so it leaves the
                 // folder browser; clearing the query brings it back.

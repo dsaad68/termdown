@@ -15,8 +15,10 @@ final class RenderContext {
     private(set) var theme: Theme
     private(set) var themeName: String
     var headingBanners = false
-    let mermaidEnabled: Bool
-    let mermaidCharset: MermaidCharset
+    /// Mutable for the same reason the theme is: the settings view (`,`) changes
+    /// them mid-session, and the next render has to see it.
+    var mermaidEnabled: Bool
+    var mermaidCharset: MermaidCharset
 
     init(themeName: String?, mermaidEnabled: Bool, mermaidCharset: MermaidCharset) {
         theme = RenderContext.theme(named: themeName)
@@ -60,10 +62,29 @@ final class RenderContext {
         theme = RenderContext.theme(named: name)
     }
 
-    /// Swap the theme and write it to the global config.
-    func saveTheme(_ name: String) {
+    /// Swap the theme for good, without writing — the settings view persists its
+    /// own changes, so it needs the swap on its own.
+    func useTheme(_ name: String) {
         theme = RenderContext.theme(named: name)
         themeName = name
+    }
+
+    /// Swap the theme and write it to the global config.
+    func saveTheme(_ name: String) {
+        useTheme(name)
         AppConfig.setTheme(name)
+    }
+
+    // MARK: - Settings view
+
+    /// Apply a setting the settings view changed, for the keys a running session
+    /// can honour. The rest are read once at startup and the view says so.
+    func apply(_ setting: ConfigSetting, value: String) {
+        switch setting.key {
+        case "theme": useTheme(value)
+        case "mermaid": mermaidEnabled = value == "true"
+        case "mermaid-charset": mermaidCharset = value == "ascii" ? .ascii : .unicode
+        default: break
+        }
     }
 }

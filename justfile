@@ -50,6 +50,18 @@ lint-fix:
 # Run every check the way CI does: formatting, lint, tests
 check: format-check lint test
 
+# Run the CLI integration checks (Tests/Integration/cli.sh) against a debug build
+integration: build
+    ./Tests/Integration/cli.sh .build/debug/termdown
+
+# Build the Linux image from the Dockerfile: the toolchain plus a built termdown
+linux-image:
+    docker build -t termdown-linux .
+
+# Build that image and run the CLI integration checks inside it. Requires Docker.
+linux-integration: linux-image
+    docker run --rm termdown-linux
+
 # Build & test the Linux version in a Swift 6.2 container. The build dir lives in
 # a named volume (termdown-linux-build) so rebuilds stay incremental. Requires Docker.
 # `--parallel` (+ </dev/null) is used for the test run because the serial

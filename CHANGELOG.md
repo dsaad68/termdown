@@ -52,6 +52,33 @@ All notable changes to termdown are documented here. The format is based on
   any time. Existing configs are offered the key on next launch
   (`config-version: 4`) with `files` as its value.
 
+- **A settings view (`,`).** Every scalar key of the config file on one screen,
+  reachable from the file list and from the viewer: theme, width, no-color,
+  mouse, mouse-select, mermaid and its charset, wide-emoji, file-list-view,
+  bare-render. `Space` (or `←`/`→`) cycles a value, `Enter` toggles one or opens a
+  list to pick from — 27 themes are a list, not something to cycle — and `width`
+  takes a typed number, where an empty entry means `auto`.
+
+  Each change is written as it is made, to `~/.config/termdown/config.yaml`,
+  replacing that key's line in place and keeping the comment beside it — the same
+  writer the theme picker has always used, generalised. There is no save step, so
+  `Esc` cannot lose anything, and the header names the file being edited.
+
+  Rows the app can honour immediately (theme, colors, mermaid, emoji width) apply
+  as you change them. The rest are read once at startup and are marked `↻`, and a
+  key your project's `.termdown.yaml` also sets is marked `local` — writing the
+  global file for that key would otherwise look like it had done nothing.
+
+- **`XDG_CONFIG_HOME` is honoured** for the config file's location
+  (`$XDG_CONFIG_HOME/termdown/config.yaml`), falling back to
+  `~/.config/termdown/config.yaml` — which is the XDG default anyway, so this only
+  changes anything for someone who set the variable deliberately.
+- **CLI integration checks** (`Tests/Integration/cli.sh`, `just integration`) and a
+  `Dockerfile` for running them on Linux (`just linux-integration`). They exercise
+  the built binary end to end: rendering, stdin, exit codes, and the config file
+  being created, migrated, overridden by a project-local file and honoured for
+  `width`/`no-color`/`mermaid`. CI runs them on macOS and Linux.
+
 ### Fixed
 - **Stepping into a folder no longer lands on `../`.** The cursor went to the
   first row, which is the way back out, so a second `Enter` undid the first. It

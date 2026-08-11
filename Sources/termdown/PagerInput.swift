@@ -255,26 +255,14 @@ extension Pager {
         case .backspace:
             goBack()
         case .char("T"):
-            // Open the file finder and load the picked document in a new tab.
-            if let onNewTab = onNewTab {
-                if let url = onNewTab() { openInNewTab(url) }
-                // The finder showed the cursor and drew its own box; a full pager
-                // redraw overwrites every row (render clears below), so no flashy
-                // screen-clear is needed on the way back.
-                Terminal.hideCursor()
-                needsRedraw = true
-            }
+            openNewTabFromFinder()
         case .char(let d) where d >= "1" && d <= "9":
             let idx = Int(String(d))! - 1
             if idx < tabs.count, idx != activeTab, guardDirty(.switchTab(idx)) { snapshot(); activate(idx) }
         case .char("}"):
-            if tabs.count > 1, guardDirty(.switchTab((activeTab + 1) % tabs.count)) {
-                snapshot(); activate((activeTab + 1) % tabs.count)
-            }
+            cycleTab(by: 1)
         case .char("{"):
-            if tabs.count > 1, guardDirty(.switchTab((activeTab - 1 + tabs.count) % tabs.count)) {
-                snapshot(); activate((activeTab - 1 + tabs.count) % tabs.count)
-            }
+            cycleTab(by: -1)
         case .char("x"):
             if guardDirty(.closeTab) { _ = closeActiveTab() }
         case .char("s"), .char("S"):
@@ -309,6 +297,8 @@ extension Pager {
             currentRenderWidth = -1
         case .char(":"):
             gotoMode = true; gotoInput = ""
+        case .char(","):
+            openSettings()
         case .char("p"):
             // Open the theme selector (live preview + save). Needs the app hooks.
             if onPreviewTheme != nil {

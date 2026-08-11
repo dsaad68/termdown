@@ -1,0 +1,7 @@
+# Build products and the self-hosted runner: gigabytes that the image builds
+# fresh anyway, and would otherwise be sent to the daemon as build context.
+.build/
+Release/
+local-runner/
+.git/
+*.tar.gz

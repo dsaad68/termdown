@@ -18,7 +18,7 @@ final class ConfigWriteTests: XCTestCase {
         mouse: true
         """.write(to: url, atomically: true, encoding: .utf8)
 
-        AppConfig.writeTheme("dracula", to: url)
+        AppConfig.writeValue("dracula", for: ConfigSettings.named("theme")!, to: url)
 
         let written = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(written.contains("theme: dracula"), written)
@@ -36,7 +36,7 @@ final class ConfigWriteTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
         try "mouse: false\n".write(to: url, atomically: true, encoding: .utf8)
 
-        AppConfig.writeTheme("nord", to: url)
+        AppConfig.writeValue("nord", for: ConfigSettings.named("theme")!, to: url)
 
         let cfg = AppConfig.parseYAML(Data(try String(contentsOf: url, encoding: .utf8).utf8))
         XCTAssertEqual(cfg?.theme, "nord")
@@ -154,7 +154,7 @@ final class ConfigWriteTests: XCTestCase {
         XCTAssertTrue(written.contains("mouse: false"), written)
     }
 
-    /// `writeTheme` writes the same file from the theme picker, so it has to
+    /// `writeValue` writes the same file from the theme picker, so it has to
     /// follow a symlink for the same reason.
     func testWriteThemeWritesThroughASymlink() throws {
         let fm = FileManager.default
@@ -167,7 +167,7 @@ final class ConfigWriteTests: XCTestCase {
         try "theme: dark\n".write(to: real, atomically: true, encoding: .utf8)
         try fm.createSymbolicLink(at: link, withDestinationURL: real)
 
-        AppConfig.writeTheme("nord", to: link)
+        AppConfig.writeValue("nord", for: ConfigSettings.named("theme")!, to: link)
 
         let type = try fm.attributesOfItem(atPath: link.path)[.type] as? FileAttributeType
         XCTAssertEqual(type, .typeSymbolicLink, "the symlink was replaced by a regular file")

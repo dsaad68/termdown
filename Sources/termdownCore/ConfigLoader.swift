@@ -39,10 +39,26 @@ public struct AppConfig: Codable {
 
     // MARK: - Default config file content
 
-    static let globalConfigPath: URL = {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/termdown/config.yaml")
-    }()
+    /// The global config file every write lands in — and the path the settings view
+    /// shows, so the user can see which file they are editing.
+    public static let globalConfigPath: URL = configPath(
+        env: ProcessInfo.processInfo.environment,
+        home: FileManager.default.homeDirectoryForCurrentUser)
+
+    /// `$XDG_CONFIG_HOME/termdown/config.yaml` when that variable is set, else
+    /// `~/.config/termdown/config.yaml`. The default *is* the XDG default, so
+    /// honouring the variable only surprises someone who set it on purpose.
+    ///
+    /// Pure and injectable because the alternative is untestable: `HOME` is ignored
+    /// by `homeDirectoryForCurrentUser` on Darwin, so without this there is no way to
+    /// exercise the config on a machine without editing the config of that machine —
+    /// which is exactly what the integration script must not do.
+    static func configPath(env: [String: String], home: URL) -> URL {
+        if let xdg = env["XDG_CONFIG_HOME"], !xdg.trimmingCharacters(in: .whitespaces).isEmpty {
+            return URL(fileURLWithPath: xdg).appendingPathComponent("termdown/config.yaml")
+        }
+        return home.appendingPathComponent(".config/termdown/config.yaml")
+    }
 
     /// Bumped whenever a shipped default changes in a way existing configs should
     /// pick up. `migrate` compares it against the `config-version:` line in the
@@ -153,9 +169,7 @@ public struct AppConfig: Codable {
         }
 
         // 2. Look for a project-local override, merge on top.
-        let projectLocal = URL(fileURLWithPath: fm.currentDirectoryPath)
-            .appendingPathComponent(".termdown.yaml")
-        if let local = loadFile(projectLocal) {
+        if let local = projectLocal() {
             base.merge(local)
         }
 
@@ -184,9 +198,18 @@ public struct AppConfig: Codable {
         }
     }
 
-    private static func loadFile(_ url: URL) -> AppConfig? {
+    /// Parse one config file, or nil if it is missing or unreadable.
+    public static func loadFile(_ url: URL) -> AppConfig? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return parseYAML(data)
+    }
+
+    /// The project-local `./.termdown.yaml`, if this folder has one. Its keys win
+    /// over the global file, which is why the settings view marks them: writing the
+    /// global file for a key set here would look like it did nothing.
+    public static func projectLocal() -> AppConfig? {
+        loadFile(URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(".termdown.yaml"))
     }
 
     private static func loadLegacyJSON(_ url: URL) -> AppConfig? {
