@@ -80,6 +80,22 @@ All notable changes to termdown are documented here. The format is based on
   `width`/`no-color`/`mermaid`. CI runs them on macOS and Linux.
 
 ### Fixed
+- **`termdown notes/ | cat` no longer hangs.** A directory argument opens the
+  keyboard-driven file list, which needs a terminal to draw on *and* one to read
+  keys from — but only the viewer checked. Through a pipe, termdown painted a
+  frame into it and then blocked on a key that could never arrive. It now lists
+  the Markdown files it found and exits, the way a redirected `view` renders
+  instead of paging.
+
+  This is also why `swift test` appeared to be *slow* on Linux: the suite runs the
+  built binary with pipes, so one test blocked forever, the parallel runner stopped
+  draining its other workers, and the whole run sat at 0% CPU looking busy. The
+  integration checks now run the binary under a deadline, so a regression fails
+  instead of hanging.
+- **The CLI tests no longer deadlock on their own pipes.** They read the child's
+  stdout to EOF while holding the write end open themselves — `Process` closes that
+  copy for you on Darwin but not in swift-corelibs-foundation — and drained stderr
+  only afterwards, which deadlocks on its own once a child outgrows a pipe buffer.
 - **Stepping into a folder no longer lands on `../`.** The cursor went to the
   first row, which is the way back out, so a second `Enter` undid the first. It
   lands on the first real entry now; coming *up* still lands on the folder you

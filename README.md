@@ -45,7 +45,9 @@ swift run termdown ~/notes    # scan a specific directory
 ## Features
 
 - Recursively finds `.md` / `.markdown` / `.mdx` … files in the current folder
-  (skips `.git`, `node_modules`, `.build`, etc.).
+  (skips `.git`, `node_modules`, `.build`, etc.). With stdout or stdin redirected
+  there is no keyboard UI to run, so `termdown notes/ | grep …` prints the list of
+  files it found instead.
 - **Fuzzy file finder** with real-time filtering and match highlighting.
 - **Folder browsing** (`d`): swap the flat list of every file for the folders one
   level at a time — `Enter` steps into the selected folder and shows *its*

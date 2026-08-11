@@ -64,10 +64,16 @@ linux-integration: linux-image
 
 # Build & test the Linux version in a Swift 6.2 container. The build dir lives in
 # a named volume (termdown-linux-build) so rebuilds stay incremental. Requires Docker.
-# `--parallel` (+ </dev/null) is used for the test run because the serial
-# swift-corelibs-xctest runner hangs on a blocking ppoll when stdin isn't a TTY
-# (as in a non-interactive container); the parallel runner spawns per-test and
-# is unaffected.
+#
+# The *build* is reliable and worth running. The test run is not, on an aarch64 host
+# (Apple Silicon + Docker Desktop): the XCTest process blocks in poll partway through
+# even a suite of pure string tests, whichever way it is launched — the serial runner
+# hangs before the first test, the parallel runner's workers wedge at 0% CPU once a
+# few have accumulated, and running the .xctest bundle directly hangs too. It is the
+# environment, not the suite: the same commit runs green on the x86_64 Linux CI job.
+#
+# So: trust CI for Linux unit tests, and use `just linux-integration` locally — those
+# checks drive the built binary instead of XCTest, and they do complete here.
 linux-build:
     docker run --rm -v "$PWD":/src -w /src -v termdown-linux-build:/build \
       swift:6.2 bash -c "swift build --build-path /build && swift test --parallel --build-path /build </dev/null"

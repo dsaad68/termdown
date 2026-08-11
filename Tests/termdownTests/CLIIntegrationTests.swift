@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import termdown
 
@@ -11,6 +12,11 @@ import XCTest
 /// Every run gets an empty working directory so the repository's own
 /// `.termdown.yaml` cannot change the output.
 final class CLIIntegrationTests: XCTestCase {
+
+    /// Somewhere for the draining thread to put what it read.
+    private final class DataBox {
+        var value = Data()
+    }
 
     private struct Run {
         let out: String
@@ -63,13 +69,34 @@ final class CLIIntegrationTests: XCTestCase {
         process.standardError = err
         process.standardInput = input
         try process.run()
+
+        // Close this process's own copies of the child's ends. Darwin's `Process`
+        // does it for you; swift-corelibs-foundation does not, and a reader that
+        // holds the write end open can never see EOF — so `readDataToEndOfFile`
+        // below waited forever on Linux, after the child had already exited. Under
+        // `swift test --parallel` that stalled the whole run at 0% CPU, which reads
+        // as "Linux is slow" rather than as the deadlock it is.
+        try? out.fileHandleForWriting.close()
+        try? err.fileHandleForWriting.close()
+        try? input.fileHandleForReading.close()
+
         input.fileHandleForWriting.write(Data((stdin ?? "").utf8))
         try? input.fileHandleForWriting.close()
+
+        // Drain both pipes at once. Reading one to EOF and then the other deadlocks
+        // just as surely once a child writes more than a pipe buffer holds to the
+        // stream nobody is reading yet.
+        let stderrData = DataBox()
+        let drained = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            stderrData.value = err.fileHandleForReading.readDataToEndOfFile()
+            drained.signal()
+        }
         let outData = out.fileHandleForReading.readDataToEndOfFile()
-        let errData = err.fileHandleForReading.readDataToEndOfFile()
+        drained.wait()
         process.waitUntilExit()
         return Run(out: String(bytes: outData, encoding: .utf8) ?? "",
-                   err: String(bytes: errData, encoding: .utf8) ?? "",
+                   err: String(bytes: stderrData.value, encoding: .utf8) ?? "",
                    code: process.terminationStatus)
     }
 
@@ -196,6 +223,33 @@ final class CLIIntegrationTests: XCTestCase {
     }
 
     // MARK: - Help and version
+
+    // MARK: - The file list without a terminal
+
+    /// A directory argument opens the keyboard-driven file list, which needs a
+    /// terminal on both ends. Run with pipes — as this suite runs everything, and as
+    /// `termdown notes/ | cat` does — it used to paint a frame into the pipe and then
+    /// block forever on a key that could never arrive. It lists what it found now.
+    func testADirectoryWithoutATerminalListsInsteadOfHanging() throws {
+        _ = try file("one.md", "# One\n")
+        _ = try file("two.md", "# Two\n")
+        let result = try run(["."])
+        XCTAssertEqual(result.code, 0, result.err)
+        XCTAssertTrue(result.out.contains("one.md"), result.out)
+        XCTAssertTrue(result.out.contains("two.md"), result.out)
+        // A listing, not a drawn frame: no alternate screen, no raw-mode chrome.
+        for escape in ["\u{1B}[?1049h", "\u{1B}[?1000h"] {
+            XCTAssertFalse(result.out.contains(escape), "the picker was drawn into a pipe")
+        }
+    }
+
+    /// An empty directory still says so and exits 0 — the case that always worked,
+    /// asserted so the new guard cannot swallow it.
+    func testAnEmptyDirectorySaysSo() throws {
+        let result = try run(["."])
+        XCTAssertEqual(result.code, 0, result.err)
+        XCTAssertTrue(result.out.contains("No markdown files found"), result.out)
+    }
 
     func testVersionMatchesTheSource() throws {
         let result = try run(["--version"])

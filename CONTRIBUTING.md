@@ -108,6 +108,15 @@ config of the machine it runs on — `HOME` alone would not do, because
 `homeDirectoryForCurrentUser` ignores it on macOS. CI runs the script on both
 platforms after `swift test`.
 
+> **Linux unit tests on Apple Silicon.** `just linux-build` builds fine, but the
+> XCTest *run* hangs on an aarch64 host under Docker Desktop — the process blocks in
+> `poll` partway through even a suite of pure string tests, whether launched through
+> the serial runner (which hangs before the first test), the parallel one (whose
+> workers wedge at 0% CPU), or the `.xctest` bundle directly. It is the environment,
+> not the suite: the same commit is green on the x86_64 Linux CI job. Locally, use
+> `just linux-integration` — it drives the built binary rather than XCTest, and it
+> completes.
+
 Two golden sets are **not** regenerable and must never be rewritten to make a
 test pass:
 

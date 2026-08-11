@@ -50,6 +50,27 @@ check() {
   fi
 }
 
+# Run a command with a deadline. Without one, the bug this guards against — the
+# interactive file list entered with pipes — hangs the whole run instead of failing
+# it, which is exactly how it went unnoticed.
+with_timeout() {
+  local seconds="$1"
+  shift
+  "$@" &
+  local pid=$!
+  local waited=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$waited" -ge "$seconds" ]; then
+      kill -9 "$pid" 2>/dev/null
+      wait "$pid" 2>/dev/null
+      return 124
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  wait "$pid"
+}
+
 contains() { grep -qF -- "$2" <<<"$1"; }
 lacks() { ! grep -qF -- "$2" <<<"$1"; }
 
@@ -117,6 +138,19 @@ check "--no-color emits no escapes" test -z "$(tr -dc $'\x1B' <<<"$plain_output"
 
 piped="$(printf '# Piped\n\nText.\n' | "$BIN" - 2>&1)"
 check "stdin renders when stdout is not a terminal" contains "$(plain <<<"$piped")" "Piped"
+
+# ── The file list without a terminal ───────────────────────────────────────
+#
+# A directory argument opens the keyboard UI, which needs a terminal on both ends.
+# Through a pipe it used to draw a frame and then block on a key forever.
+
+mkdir -p "$WORK/listing"
+cp "$DOC" "$WORK/listing/doc.md"
+listing="$(cd "$WORK/listing" && with_timeout 10 "$BIN" . 2>&1)"
+status=$?
+check "a directory through a pipe does not hang" test $status -ne 124
+check "a directory through a pipe lists what it found" contains "$listing" "doc.md"
+check "a directory through a pipe draws no frame" lacks "$listing" $'\x1B[?1049h'
 
 # ── The config file ─────────────────────────────────────────────────────────
 
