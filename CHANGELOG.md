@@ -87,11 +87,11 @@ All notable changes to termdown are documented here. The format is based on
   the Markdown files it found and exits, the way a redirected `view` renders
   instead of paging.
 
-  This is also why `swift test` appeared to be *slow* on Linux: the suite runs the
-  built binary with pipes, so one test blocked forever, the parallel runner stopped
-  draining its other workers, and the whole run sat at 0% CPU looking busy. The
-  integration checks now run the binary under a deadline, so a regression fails
-  instead of hanging.
+  The integration checks now run the binary under a deadline, so a regression fails
+  instead of hanging rather than being mistaken for slowness — which is how this one
+  hid: a hung run pins the parallel test runner at 0% CPU, which reads as "Linux is
+  slow". (The rest of that slowness is Docker Desktop's Linux VM, not termdown; see
+  `just linux-build`'s note.)
 - **The CLI tests no longer deadlock on their own pipes.** They read the child's
   stdout to EOF while holding the write end open themselves — `Process` closes that
   copy for you on Darwin but not in swift-corelibs-foundation — and drained stderr

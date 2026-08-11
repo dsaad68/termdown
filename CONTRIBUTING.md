@@ -108,14 +108,19 @@ config of the machine it runs on — `HOME` alone would not do, because
 `homeDirectoryForCurrentUser` ignores it on macOS. CI runs the script on both
 platforms after `swift test`.
 
-> **Linux unit tests on Apple Silicon.** `just linux-build` builds fine, but the
-> XCTest *run* hangs on an aarch64 host under Docker Desktop — the process blocks in
-> `poll` partway through even a suite of pure string tests, whether launched through
-> the serial runner (which hangs before the first test), the parallel one (whose
-> workers wedge at 0% CPU), or the `.xctest` bundle directly. It is the environment,
-> not the suite: the same commit is green on the x86_64 Linux CI job. Locally, use
-> `just linux-integration` — it drives the built binary rather than XCTest, and it
-> completes.
+> **Linux unit tests do not run under Docker Desktop.** `just linux-build` compiles
+> for Linux — worth running, it catches `#if canImport` and corelibs gaps — but the
+> test *process* cannot finish there. Two separate hangs, both environmental: a suite
+> runs its cases and then hangs on exit (line-buffer the `.xctest` bundle and you see
+> `Executed 13 tests, with 0 failures` followed by silence), and every test that
+> spawns the binary through Foundation's `Process` hangs outright — even the one that
+> only runs `--version`. The serial and parallel SwiftPM runners both inherit these,
+> which is why the run looks *slow* (workers wedged at 0% CPU) rather than stuck.
+>
+> The same commits are green on the x86_64 Linux CI job running this image's
+> `swift test`, so Linux units come from CI. Locally, `just linux-integration` is the
+> Linux check that works: it drives the built binary from bash, touching neither
+> XCTest nor `Process`.
 
 Two golden sets are **not** regenerable and must never be rewritten to make a
 test pass:
