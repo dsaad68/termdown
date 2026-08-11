@@ -28,6 +28,12 @@ final class MenuListTests: XCTestCase {
         l.rows(labels: paths ?? self.paths, details: []).map(\.label)
     }
 
+    /// Labels with the `../` row dropped — what the list is *of*, as opposed to the
+    /// way back out of it.
+    private func entries(_ l: MenuList, _ paths: [String]? = nil) -> [String] {
+        l.rows(labels: paths ?? self.paths, details: []).filter { !$0.isUp }.map(\.label)
+    }
+
     // MARK: - The file list
 
     func testFilesModeListsEveryFileByDefault() {
@@ -44,8 +50,67 @@ final class MenuListTests: XCTestCase {
     func testRowsCarryTheEntryIndexEvenWhenNarrowed() {
         var l = list()
         l.scope = "docs/api"
-        let rows = l.rows(labels: paths, details: [])
+        let rows = l.rows(labels: paths, details: []).filter { !$0.isUp }
         XCTAssertEqual(rows.map(\.kind), [.file(2), .file(3)])
+    }
+
+    /// A narrowed list is standing inside a folder just as the browser is, so it
+    /// needs the same way out. Without it, the files of a leaf folder were a room
+    /// with no door for anyone using the mouse.
+    func testANarrowedListLeadsWithTheUpRow() {
+        var l = list()
+        l.scope = "docs/api"
+        let rows = l.rows(labels: paths, details: [])
+        XCTAssertEqual(rows.first?.label, "../")
+        XCTAssertEqual(rows.first?.detail, "up")
+        XCTAssertEqual(rows.first?.isUp, true)
+        XCTAssertEqual(rows.first?.kind, .folder("docs"), "up goes to the level above")
+        XCTAssertFalse(rows.dropFirst().contains { $0.isUp }, "more than one way out")
+
+        // The un-narrowed list is not inside anything, so it has none.
+        l.scope = ""
+        XCTAssertFalse(l.rows(labels: paths, details: []).contains { $0.isUp })
+    }
+
+    /// Its `../` has to change *lists* as well as folders — activating it while the
+    /// file list is showing would otherwise move `cwd` and leave the same files on
+    /// screen.
+    func testTheUpRowOfANarrowedListOpensTheBrowser() {
+        var l = list()
+        l.scope = "docs/api"
+        let up = l.rows(labels: paths, details: [])[0]
+        XCTAssertNil(l.activate(up))
+        XCTAssertEqual(l.mode, .folders)
+        XCTAssertEqual(l.cwd, "docs")
+        XCTAssertEqual(entries(l), ["api/"])
+    }
+
+    /// Backspace works there too, and means the same thing the row does.
+    func testUpFromANarrowedListReturnsToTheBrowser() {
+        var l = list()
+        l.scope = "docs/api"
+        XCTAssertTrue(l.up())
+        XCTAssertEqual(l.mode, .folders)
+        XCTAssertEqual(l.cwd, "docs")
+
+        // An un-narrowed file list is not inside anything: Esc/quit must still get
+        // the key rather than having it swallowed.
+        var flat = list()
+        XCTAssertFalse(flat.up())
+    }
+
+    /// Stepping *into* something lands on the first real row: selecting `../` would
+    /// point the cursor back the way you came, so a second Enter undid the first.
+    func testSteppingInLandsBelowTheUpRow() {
+        var l = list()
+        l.toggleMode()
+        _ = l.activate(l.rows(labels: paths, details: [])[0])   // into docs
+        let rows = l.rows(labels: paths, details: [])
+        XCTAssertEqual(rows[l.firstEntry(in: rows)].label, "api/")
+
+        // A level with nothing but the way out still has to resolve to something.
+        XCTAssertEqual(l.firstEntry(in: [MenuList.Row(kind: .folder(""), label: "../",
+                                                     detail: "up", isUp: true)]), 0)
     }
 
     /// Labels are relative to the folder you chose: repeating `docs/api/` on every
@@ -53,7 +118,7 @@ final class MenuListTests: XCTestCase {
     func testNarrowedLabelsAreRelativeToTheFolder() {
         var l = list()
         l.scope = "docs"
-        XCTAssertEqual(labels(l), ["index.md", "api/v1.md", "api/v2.md"])
+        XCTAssertEqual(entries(l), ["index.md", "api/v1.md", "api/v2.md"])
     }
 
     // MARK: - The folder browser
@@ -100,7 +165,7 @@ final class MenuListTests: XCTestCase {
         XCTAssertNil(l.activate(notes))
         XCTAssertEqual(l.mode, .files)
         XCTAssertEqual(l.scope, "notes")
-        XCTAssertEqual(labels(l), ["today.md"])
+        XCTAssertEqual(entries(l), ["today.md"])
     }
 
     /// Enter on a file is the one case that opens something, and it reports the
@@ -132,7 +197,7 @@ final class MenuListTests: XCTestCase {
         l.toggleMode()
         XCTAssertEqual(l.mode, .files)
         XCTAssertEqual(l.scope, "docs")
-        XCTAssertEqual(labels(l), ["index.md", "api/v1.md", "api/v2.md"])
+        XCTAssertEqual(entries(l), ["index.md", "api/v1.md", "api/v2.md"])
 
         l.toggleMode()
         XCTAssertEqual(l.mode, .folders)
@@ -302,7 +367,7 @@ final class MenuListTests: XCTestCase {
     func testRowsSurviveAShrunkenFileList() {
         var l = list()
         l.scope = "docs/api"
-        XCTAssertEqual(l.rows(labels: ["README.md"], details: []).count, 0)
+        XCTAssertEqual(entries(l, ["README.md"]), [], "read past the end of the shrunken list")
     }
 
     /// The detail column is a second array that can run short of the first; a row

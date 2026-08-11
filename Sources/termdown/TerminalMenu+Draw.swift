@@ -99,7 +99,8 @@ extension TerminalMenu {
         // The path stays the folder termdown was opened on, whatever the browser is
         // showing — it is what says which termdown window this is. Where you are
         // *inside* it goes in the breadcrumb row below.
-        let countText = list.countText(shown: visible.count, total: total)
+        // `../` is a way out, not one of the things being counted.
+        let countText = list.countText(shown: visible.count { !$0.row.isUp }, total: total)
         // The right side is a fixed ~26 columns and the path on the left is
         // unbounded, so this used to run past the border on anything under about
         // 52 columns — and on a deep folder path at any width. Drop the tagline
@@ -214,8 +215,10 @@ extension TerminalMenu {
             hintSegments = [Ansi.color("\u{21B5} enter", P.textDim), Ansi.color("\u{232B} up", P.textDim),
                             Ansi.color("d files", P.textDim), Ansi.color("? help", P.textDim)]
         } else {
-            hintSegments = [Ansi.color("/ search", P.textDim), Ansi.color("d folders", P.textDim),
-                            Ansi.color("\u{21B5} open", P.textDim), Ansi.color("? help", P.textDim)]
+            // A narrowed list can be left the same way a folder can, so it says so.
+            hintSegments = [Ansi.color("/ search", P.textDim), Ansi.color("d folders", P.textDim)]
+                + (list.showsBreadcrumbRow ? [Ansi.color("\u{232B} up", P.textDim)] : [])
+                + [Ansi.color("\u{21B5} open", P.textDim), Ansi.color("? help", P.textDim)]
         }
         // What is left once the query and a one-column gap are paid for.
         let hintRoom = innerSearch - Ansi.width(leftPart) - 2
@@ -242,8 +245,8 @@ extension TerminalMenu {
         // which is the way back *out* of the folder this row names. ──
         let listRows = list.listRows(in: viewport)
         if list.showsBreadcrumbRow {
-            out.append(bv + Ansi.fit(Self.breadcrumbRow(list.breadcrumb, width: max(0, inner - 3)),
-                                     to: inner) + bv)
+            out.append(bv + Self.breadcrumbRow(list.breadcrumb, width: max(0, inner - 3),
+                                               cols: inner) + bv)
         }
 
         // ── File / folder rows ──

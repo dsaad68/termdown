@@ -14,7 +14,7 @@ level at a time:
 - `Backspace` (or `←` / `h`) comes back out, landing on the folder you just
   left rather than at the top of the list.
 - `../` is the same thing for the mouse — the top row of every level but the
-  first.
+  first, and of a folder's file list as well.
 
 A breadcrumb row opens the list once you are inside something — `❯ folders`, and
 `❯ folders › nested` a level down — relative to the folder termdown was opened
@@ -33,7 +33,8 @@ widens it back to the whole tour.
 
 A folder with nothing inside it has nothing to show you, so `Enter` on one hands
 over its files directly instead of an empty level. `nested/` is such a folder:
-step into `folders/`, then press `Enter` on `nested/`.
+step into `folders/`, then press `Enter` on `nested/`. Those files keep a `../`
+row of their own, so the way back is where you left it.
 
 ## Searching
 

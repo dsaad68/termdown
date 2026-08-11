@@ -33,10 +33,16 @@ All notable changes to termdown are documented here. The format is based on
   termdown was opened on — that is what says which window this is — and a row of
   its own, just inside the separator and directly above `../`, says where you are
   *inside* it: `❯ docs › api`, relative to that folder. Ancestors are dimmed and
-  the folder you are standing in is picked out. A path too long for the terminal
-  loses its start, not its end: the deepest component is the answer the row
-  exists to give. It belongs to the list rather than the chrome, so it costs one
-  list row and leaves the header — and every row's click target — where it was.
+  the folder you are standing in is picked out, on a surface of its own a shade
+  below the selection band so the brightest row is still the one under the
+  cursor. A path too long for the terminal loses its start, not its end: the
+  deepest component is the answer the row exists to give. It belongs to the list
+  rather than the chrome, so it costs one list row and leaves the header — and
+  every row's click target — where it was.
+- **`../` in the narrowed file list too.** The files of a folder are "inside" it
+  just as its subfolders are, so they get the same way out — as a row, and on
+  `Backspace`/`←`/`h`, both landing in the browser at the level you chose the
+  folder from. A leaf folder's files had no way back for anyone using the mouse.
 - **`file-list-view`** picks which list the picker opens on: `files` (the
   default, unchanged) or `folders`. Only an explicit `folders` switches it, so a
   misspelled value keeps the long-standing behaviour, and `d` still switches at
@@ -44,6 +50,12 @@ All notable changes to termdown are documented here. The format is based on
   (`config-version: 4`) with `files` as its value.
 
 ### Fixed
+- **Stepping into a folder no longer lands on `../`.** The cursor went to the
+  first row, which is the way back out, so a second `Enter` undid the first. It
+  lands on the first real entry now; coming *up* still lands on the folder you
+  just left.
+- **`../` is no longer counted as a folder.** A level holding one subfolder read
+  "2 folders" in the header, counting the row that leads out of it.
 - **A short folder path is shown in the picker header again.** The header drops
   the path when there is no room to elide it into, but the 12-column floor for
   that was applied to the path's own width — so `termdown ~/notes` named no

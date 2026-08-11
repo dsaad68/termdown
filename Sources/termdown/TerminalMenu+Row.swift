@@ -21,7 +21,7 @@ extension TerminalMenu {
     /// Elided from the *left* (`… › v1`) when it doesn't fit: the deepest component
     /// is where you are, and cutting the tail would remove exactly the answer the
     /// row exists to give.
-    static func breadcrumbRow(_ parts: [String], width: Int) -> String {
+    static func breadcrumbRow(_ parts: [String], width: Int, cols: Int) -> String {
         let P = Ansi.Pastel.self
         let chevron = Ansi.wrap("\u{276F} ", [1] + Ansi.fg(P.accent))   // ❯
         let sep = Ansi.color(" \u{203A} ", P.borderDim)   // ›
@@ -50,7 +50,8 @@ extension TerminalMenu {
         if kept.count < parts.count { kept = fitting(max(0, width - 1 - sepW)) }
         // Not even the last component fits: show its tail rather than an empty row.
         if kept.isEmpty, let last = parts.last {
-            return chevron + Ansi.color(Ansi.clip(last, to: max(0, width)), P.tealAccent)
+            return band(chevron + Ansi.color(Ansi.clip(last, to: max(0, width)), P.tealAccent),
+                        cols: cols)
         }
 
         let styled = kept.enumerated().map { index, part in
@@ -58,7 +59,14 @@ extension TerminalMenu {
                 ? Ansi.wrap(part, [1] + Ansi.fg(P.tealAccent))   // where you are
                 : Ansi.color(part, P.textDim)                    // how you got here
         }.joined(separator: sep)
-        return chevron + (kept.count < parts.count ? ellipsis + sep + styled : styled)
+        return band(chevron + (kept.count < parts.count ? ellipsis + sep + styled : styled), cols: cols)
+    }
+
+    /// Lay the breadcrumb on its own surface across the full row. A shade *below*
+    /// the selection surface, so the brightest band in the list is still the row
+    /// under the cursor — the two are a column apart and must not compete.
+    private static func band(_ text: String, cols: Int) -> String {
+        Ansi.bgRow(Ansi.fit(text, to: cols), bg: Ansi.Pastel.panelBg, cols: cols)
     }
 
     /// Render a single file row with a matte selection surface + mauve accent bar.

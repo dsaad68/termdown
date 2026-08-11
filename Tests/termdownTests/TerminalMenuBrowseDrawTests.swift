@@ -109,6 +109,51 @@ final class TerminalMenuBrowseDrawTests: XCTestCase {
         XCTAssertTrue(rows[crumb + 1].contains("../"), "the up row is not under it: \(rows[crumb + 1])")
     }
 
+    /// The breadcrumb sits on its own surface across the full row, a shade below the
+    /// selection surface: the brightest band in the list has to stay the row under
+    /// the cursor, since the two are a single column apart.
+    func testTheBreadcrumbHasItsOwnSurface() {
+        let frame = browsing("docs").draw(selected: 0, top: 0, viewport: 4, rows: 20, cols: 80,
+                                          query: "", searching: false,
+                                          visible: folderRows(["docs/api"]),
+                                          total: 1, context: nil)
+        let separator = frame.firstIndex { Ansi.strip($0).hasPrefix("\u{251C}") }
+        let crumb = frame[separator! + 1]
+        XCTAssertTrue(crumb.contains(Ansi.code(Ansi.bg(Ansi.Pastel.panelBg))),
+                      "no background band: \(crumb.debugDescription)")
+        XCTAssertNotEqual(Ansi.Pastel.panelBg, Ansi.Pastel.selectBg,
+                          "the breadcrumb and the cursor would share a surface")
+        XCTAssertEqual(Ansi.width(crumb), 80, Ansi.strip(crumb))
+    }
+
+    /// `../` is a way out, not one of the things being counted: a level holding one
+    /// folder read "2 folders" once the row was in the list.
+    func testTheUpRowIsNotCounted() {
+        let upRow = MenuList.Visible(row: MenuList.Row(kind: .folder(""), label: "../",
+                                                      detail: "up", isUp: true),
+                                     indices: [])
+        let plain = browsing("docs")
+            .draw(selected: 0, top: 0, viewport: 4, rows: 20, cols: 80, query: "", searching: false,
+                  visible: [upRow] + folderRows(["docs/api"]), total: 1, context: nil)
+            .map { Ansi.strip($0) }.joined(separator: "\n")
+        XCTAssertTrue(plain.contains("1 folder"), plain)
+        XCTAssertFalse(plain.contains("2 folder"), plain)
+    }
+
+    /// A narrowed file list can be left the same way a folder can, so its legend has
+    /// to say so — `d` there means "back to the folders", not "back out".
+    func testANarrowedFileListOffersTheUpHint() {
+        var m = browsing()
+        m.list.mode = .files
+        m.list.scope = "docs"
+        let plain = m.draw(selected: 0, top: 0, viewport: 4, rows: 20, cols: 100,
+                           query: "", searching: false, visible: filtered(["index.md"]),
+                           total: 1, context: nil)
+            .map { Ansi.strip($0) }.joined(separator: "\n")
+        XCTAssertTrue(plain.contains("\u{232B} up"), plain)
+        XCTAssertTrue(plain.contains("d folders"), plain)
+    }
+
     /// The row is carved out of the list, not the chrome, so the header above it
     /// never moves — `headerLines` and the click-to-row arithmetic both assume a
     /// fixed header — and the list gives up exactly one row for it.

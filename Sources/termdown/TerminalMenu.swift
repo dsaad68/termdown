@@ -73,8 +73,20 @@ struct TerminalMenu {
             if let keep, let at = visible.firstIndex(where: { $0.row.kind == keep }) { selected = at }
         }
 
+        /// Step into whatever the cursor is on. Nothing to open means the list moved,
+        /// so it is rebuilt — landing on the first row that is not `../`, since
+        /// selecting the way back out would make a second Enter undo the first.
+        func stepInto(_ row: MenuList.Row) -> Int? {
+            if let index = list.activate(row) { return index }
+            query = ""
+            searching = false
+            rebuild()
+            selected = list.firstEntry(in: visible.map(\.row))
+            return nil
+        }
+
         /// Leave the folder we are in for its parent, selecting the folder we came
-        /// out of. A no-op in the file list and at the root.
+        /// out of. A no-op in an un-narrowed file list and at the root.
         func upOneLevel() {
             let leaving = list.cwd
             guard list.up() else { return }
@@ -131,7 +143,8 @@ struct TerminalMenu {
             if needsRedraw {
                 let frame = draw(selected: selected, top: top, viewport: viewport, rows: size.rows,
                                  cols: size.cols, query: query, searching: searching,
-                                 visible: visible, total: rows.count, context: context)
+                                 visible: visible, total: rows.count { !$0.isUp },
+                                 context: context)
                 Terminal.render(frame)
                 needsRedraw = false
             }
@@ -163,19 +176,14 @@ struct TerminalMenu {
                 if offset >= 0, offset < listRows, top + offset < visible.count {
                     let idx = top + offset
                     if idx == selected {
-                        if let index = list.activate(visible[idx].row) { return .open(index) }
-                        query = ""
-                        rebuild()
+                        if let index = stepInto(visible[idx].row) { return .open(index) }
                     } else {
                         selected = idx
                     }
                 }
             case .enter:
                 guard !visible.isEmpty else { return .quit }
-                if let index = list.activate(visible[selected].row) { return .open(index) }
-                query = ""       // the list underneath it is a different one now
-                searching = false
-                rebuild()
+                if let index = stepInto(visible[selected].row) { return .open(index) }
 
             // ── Navigation-mode keys (ignored while the search box is focused, so
             // those letters can be typed into a query instead). ──

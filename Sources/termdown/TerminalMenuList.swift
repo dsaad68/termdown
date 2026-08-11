@@ -41,8 +41,18 @@ struct MenuList {
         let label: String
         /// Dimmed secondary column: an mtime for a file, a file count for a folder.
         let detail: String
+        /// The `../` row. It is navigation rather than content, so it is left out
+        /// of the header's count and never lands under the cursor on the way in.
+        let isUp: Bool
 
         var isFolder: Bool { if case .folder = kind { return true }; return false }
+
+        init(kind: RowKind, label: String, detail: String, isUp: Bool = false) {
+            self.kind = kind
+            self.label = label
+            self.detail = detail
+            self.isUp = isUp
+        }
     }
 
     /// A row as the picker shows it: the row itself plus the character positions
@@ -77,7 +87,14 @@ struct MenuList {
     func rows(labels: [String], details: [String]) -> [Row] {
         switch mode {
         case .files:
-            return tree.fileIndices(under: scope).compactMap { index in
+            // A narrowed list is standing inside a folder just as the browser is, so
+            // it needs the same way back out — without this, the files of a leaf
+            // folder were a room with no door for anyone using the mouse.
+            var out: [Row] = []
+            if !scope.isEmpty, let parent = FolderTree.parent(of: scope) {
+                out.append(Row(kind: .folder(parent), label: "../", detail: "up", isUp: true))
+            }
+            return out + tree.fileIndices(under: scope).compactMap { index in
                 guard index < labels.count else { return nil }
                 // Shown relative to the folder we are narrowed to: repeating
                 // `projects/notes/` on every row of a folder you just chose is
@@ -93,7 +110,7 @@ struct MenuList {
             if let parent = FolderTree.parent(of: cwd) {
                 // A row for "up", so the way back is visible and clickable — the
                 // keys for it (Backspace / ← / h) are not.
-                out.append(Row(kind: .folder(parent), label: "../", detail: "up"))
+                out.append(Row(kind: .folder(parent), label: "../", detail: "up", isUp: true))
             }
             out += tree.children(of: cwd).map { folder in
                 Row(kind: .folder(folder.path), label: folder.name + "/",
@@ -128,6 +145,13 @@ struct MenuList {
     /// Plural noun for the header count and the empty-list message.
     var noun: String { mode == .folders ? "folders" : "files" }
 
+    /// Where the cursor should land after stepping *into* a folder: the first row
+    /// that is not `../`. Landing on the up row pointed the cursor back the way you
+    /// came, so Enter twice stepped in and straight back out again.
+    func firstEntry(in rows: [Row]) -> Int {
+        rows.firstIndex { !$0.isUp } ?? 0
+    }
+
     /// The header's count: `8 files`, `3/8 files`, `1 folder`. Singular matters
     /// here because narrowing to one folder — or to one file — is the ordinary
     /// case now, not a rarity.
@@ -152,6 +176,10 @@ struct MenuList {
             resumeFolders = nil
             if path.isEmpty || !tree.children(of: path).isEmpty {
                 cwd = path
+                // A folder row reached from the *file* list — its `../` — has to
+                // switch lists as well as folders, or the click would change `cwd`
+                // and leave the same files on screen.
+                mode = .folders
             } else {
                 cwd = path
                 scope = path
@@ -176,11 +204,23 @@ struct MenuList {
         }
     }
 
-    /// Up one level. False at the root, where there is nowhere to go — the caller
-    /// leaves the selection where it is rather than flashing the same frame.
+    /// Up one level. False when there is nowhere to go — at the root, or in a file
+    /// list that is not narrowed — so the caller leaves the selection where it is
+    /// rather than flashing the same frame.
+    ///
+    /// From a narrowed file list, up means the browser at the level you chose the
+    /// folder from: those files are "inside" that folder, and leaving them is the
+    /// same gesture as leaving a folder in the browser.
     mutating func up() -> Bool {
-        guard mode == .folders, let parent = FolderTree.parent(of: cwd) else { return false }
-        cwd = parent
+        switch mode {
+        case .folders:
+            guard let parent = FolderTree.parent(of: cwd) else { return false }
+            cwd = parent
+        case .files:
+            guard !scope.isEmpty, let parent = FolderTree.parent(of: scope) else { return false }
+            cwd = parent
+            mode = .folders
+        }
         return true
     }
 
