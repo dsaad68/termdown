@@ -6,6 +6,8 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-12
+
 ### Added
 - **Folder browsing in the file list (`d`).** The picker has only ever shown one
   thing: every Markdown file in the project, flat, however deep the folders go.
@@ -537,7 +539,8 @@ Initial release.
 - Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
   updates the Homebrew tap.
 
-[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/dsaad68/termdown/releases/tag/v0.2.0
 [0.1.10]: https://github.com/dsaad68/termdown/releases/tag/v0.1.10
 [0.1.9]: https://github.com/dsaad68/termdown/releases/tag/v0.1.9
 [0.1.8]: https://github.com/dsaad68/termdown/releases/tag/v0.1.8
