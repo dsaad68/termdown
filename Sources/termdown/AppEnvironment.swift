@@ -14,6 +14,9 @@ struct AppEnvironment {
     var mouseSelectEnabled: Bool
     var keyTranslation: [Character: Character]
     var ignorePatterns: [String]
+    /// Which list the picker opens on (config `file-list-view`). `d` switches at
+    /// any time, so this is only the starting point.
+    var fileListView: MenuList.Mode = .files
     let render: RenderContext
 }
 
@@ -56,6 +59,13 @@ func runStdin(env: AppEnvironment) {
         pager.renderSource = { env.render.render(source, width: $0) }
         pager.keyTranslation = env.keyTranslation
         pager.onToggleHeadingBanners = { env.render.headingBanners = $0 }
+        // A piped document has no folder session, but the settings view needs
+        // nothing from one — only the render context a live change lands on.
+        pager.onSettings = {
+            var settings = ConfigMenu(hooks: ConfigMenu.Hooks(
+                applyRenderSetting: { env.render.apply($0, value: $1) }))
+            settings.run()
+        }
         pager.run()
     }
 }

@@ -9,8 +9,15 @@ extension Terminal {
             "g / G         Jump to first / last",
             "PgUp / PgDn   Move by a page",
         ]),
+        ("Folders", [
+            "d             Show the folders instead of the files",
+            "Enter         Step into it (its files, if none inside)",
+            "Backspace     Up one level (also ← or h)",
+            "d (again)     Back to the files, just this folder's",
+            "Esc           Widen back to the whole project",
+        ]),
         ("Filter", [
-            "/             Search files (focus the box)",
+            "/             Search all files, in every folder",
             "Type          Filter by fuzzy match (any letter, in the box)",
             "Backspace     Delete a character / leave the box",
             "Esc           Leave box, then clear filter, then quit",
@@ -19,8 +26,28 @@ extension Terminal {
             "Enter         Open selected file",
             "Click         Select; click again to open",
             "\\             Project-wide search (grep)",
+            ",             Settings (edit the config file)",
             "q             Quit",
             "?             Show this help",
+        ]),
+    ]
+
+    /// Settings view (`,`) help.
+    static let configHelpGroups: [(name: String, items: [String])] = [
+        ("Move", [
+            "↑/↓ or j/k    Move between settings",
+            "g / G         First / last",
+        ]),
+        ("Change", [
+            "Space or →    Next value (← for the previous one)",
+            "Enter         Toggle, or pick from a list",
+            "Enter (width) Type a number; empty means auto",
+            "Esc           Close (every change is already saved)",
+        ]),
+        ("Notes", [
+            "↻             Read at startup: takes effect next launch",
+            "local         A ./.termdown.yaml sets this key and wins",
+            "File          the path shown at the top of the view",
         ]),
     ]
 
@@ -64,6 +91,7 @@ extension Terminal {
             "x                Close current tab",
         ]),
         ("View", [
+            ",                Settings (edit the config file)",
             "p                Theme selector (live preview, Enter saves)",
             "B                Heading banners (h1–h4 as filled blocks)",
             "s                Toggle outline sidebar",

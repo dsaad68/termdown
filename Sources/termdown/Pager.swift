@@ -41,6 +41,10 @@ struct Pager {
     /// `onSaveTheme` additionally persists the choice to the config file.
     var onPreviewTheme: ((String) -> Void)?
     var onSaveTheme: ((String) -> Void)?
+
+    /// Opens the settings view (`,`). The app supplies it, since a live setting has
+    /// to reach the render context the pager only sees through closures.
+    var onSettings: (() -> Void)?
     /// Toggle heading banners (`B`): the app flips the renderer flag so the next
     /// reflow re-renders headings as filled blocks.
     var onToggleHeadingBanners: ((Bool) -> Void)?

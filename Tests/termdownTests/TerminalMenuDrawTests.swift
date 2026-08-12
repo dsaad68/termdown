@@ -3,7 +3,8 @@ import XCTest
 @testable import termdownCore
 
 /// Tests for the file picker's chrome: the launch wordmark vs. the slim
-/// contextual header used when the finder is opened for a new tab.
+/// contextual header used when the finder is opened for a new tab, and the
+/// folder browser's rows.
 final class TerminalMenuDrawTests: XCTestCase {
 
     private func sampleMenu() -> TerminalMenu {
@@ -11,19 +12,38 @@ final class TerminalMenuDrawTests: XCTestCase {
                              items: ["a.md", "docs/b.md"],
                              details: ["1d", "2h"])
         m.path = "~/notes"
+        m.list.tree = FolderTree(entries: entries(m.items))
         return m
     }
 
-    private func filtered(_ items: [String]) -> [(item: String, indices: [Int])] {
-        items.map { ($0, []) }
+    private func entries(_ paths: [String]) -> [FileScanner.Entry] {
+        paths.map { FileScanner.Entry(url: URL(fileURLWithPath: "/tmp/" + $0), relativePath: $0) }
+    }
+
+    /// File rows as the picker shows them, with nothing fuzzy-matched.
+    private func filtered(_ items: [String], details: [String: String] = [:]) -> [MenuList.Visible] {
+        items.enumerated().map { index, label in
+            MenuList.Visible(row: MenuList.Row(kind: .file(index), label: label,
+                                               detail: details[label] ?? ""),
+                             indices: [])
+        }
+    }
+
+    /// Folder rows, as the browser shows them.
+    private func folderRows(_ names: [String]) -> [MenuList.Visible] {
+        names.map { name in
+            MenuList.Visible(row: MenuList.Row(kind: .folder(name), label: name + "/", detail: "3 files"),
+                             indices: [])
+        }
     }
 
     /// At launch the picker shows the "markdown viewer" tagline and no tab context.
     func testLaunchHeaderShowsTagline() {
         let m = sampleMenu()
         let frame = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
-                           query: "", searching: false, filteredItems: filtered(m.items),
-                           detailFor: ["a.md": "1d", "docs/b.md": "2h"], context: nil)
+                           query: "", searching: false,
+                           visible: filtered(m.items, details: ["a.md": "1d", "docs/b.md": "2h"]),
+                           total: m.items.count, context: nil)
         let plain = frame.map { Ansi.strip($0) }.joined(separator: "\n")
         XCTAssertTrue(plain.contains("markdown viewer"), plain)   // launch tagline
         XCTAssertTrue(plain.contains("v" + appVersion), plain)    // release version in the header
@@ -36,8 +56,9 @@ final class TerminalMenuDrawTests: XCTestCase {
     func testContextHeaderReplacesLaunchChrome() {
         let m = sampleMenu()
         let frame = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
-                           query: "", searching: false, filteredItems: filtered(m.items),
-                           detailFor: ["a.md": "1d", "docs/b.md": "2h"], context: "New tab")
+                           query: "", searching: false,
+                           visible: filtered(m.items, details: ["a.md": "1d", "docs/b.md": "2h"]),
+                           total: m.items.count, context: "New tab")
         let plain = frame.map { Ansi.strip($0) }.joined(separator: "\n")
         XCTAssertTrue(plain.contains("New tab"), plain)           // slim contextual title
         XCTAssertTrue(plain.contains("pick a file"), plain)       // contextual hint
@@ -54,8 +75,8 @@ final class TerminalMenuDrawTests: XCTestCase {
     func testContextLegendIsGradient() {
         let m = sampleMenu()
         let frame = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
-                           query: "", searching: false, filteredItems: filtered(m.items),
-                           detailFor: [:], context: "New tab")
+                           query: "", searching: false, visible: filtered(m.items),
+                           total: m.items.count, context: "New tab")
         let topBorder = frame[0]   // the legend lives on the top border row
         // The blue→mauve ramp's first and last stops must both appear (a gradient,
         // not a single flat color).
@@ -69,8 +90,8 @@ final class TerminalMenuDrawTests: XCTestCase {
     func testLaunchViewShowsNameOnce() {
         let m = sampleMenu()
         let frame = m.draw(selected: 0, top: 0, viewport: 3, rows: 16, cols: 30,
-                           query: "", searching: false, filteredItems: filtered(m.items),
-                           detailFor: [:], context: nil)
+                           query: "", searching: false, visible: filtered(m.items),
+                           total: m.items.count, context: nil)
         let plain = frame.map { Ansi.strip($0) }.joined(separator: "\n")
         let occurrences = plain.lowercased().components(separatedBy: "termdown").count - 1
         XCTAssertEqual(occurrences, 1, plain)
@@ -82,15 +103,15 @@ final class TerminalMenuDrawTests: XCTestCase {
     func testSearchBoxReflectsFocus() {
         let m = sampleMenu()
         let unfocused = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
-                               query: "", searching: false, filteredItems: filtered(m.items),
-                               detailFor: [:], context: nil)
+                               query: "", searching: false, visible: filtered(m.items),
+                               total: m.items.count, context: nil)
             .map { Ansi.strip($0) }.joined(separator: "\n")
         XCTAssertTrue(unfocused.contains("/ search"), unfocused)
         XCTAssertFalse(unfocused.contains("Esc done"), unfocused)
 
         let focused = m.draw(selected: 0, top: 0, viewport: 5, rows: 20, cols: 80,
-                             query: "cfg", searching: true, filteredItems: filtered(["config.md"]),
-                             detailFor: [:], context: nil)
+                             query: "cfg", searching: true, visible: filtered(["config.md"]),
+                             total: m.items.count, context: nil)
             .map { Ansi.strip($0) }.joined(separator: "\n")
         XCTAssertTrue(focused.contains("cfg"), focused)        // the typed query is shown
         XCTAssertTrue(focused.contains("Esc done"), focused)   // focused-mode hint
@@ -102,9 +123,18 @@ final class TerminalMenuDrawTests: XCTestCase {
         let m = sampleMenu()
         let rows = 24
         let frame = m.draw(selected: 0, top: 0, viewport: rows - 11, rows: rows, cols: 80,
-                           query: "", searching: false, filteredItems: filtered(m.items),
-                           detailFor: [:], context: nil)
+                           query: "", searching: false, visible: filtered(m.items),
+                           total: m.items.count, context: nil)
         XCTAssertEqual(frame.count, rows)
+    }
+
+    // MARK: - Folder browser
+
+    private func browsing(_ cwd: String = "") -> TerminalMenu {
+        var m = sampleMenu()
+        m.list.mode = .folders
+        m.list.cwd = cwd
+        return m
     }
 
     // MARK: - Every row is exactly `cols` wide
@@ -121,21 +151,28 @@ final class TerminalMenuDrawTests: XCTestCase {
         // a query long enough to outgrow the search field.
         let m = sampleMenu()
         let many = (1...9).map { "file-\($0).md" }
-        let corpus: [(String, [(item: String, indices: [Int])], Int)] = [
+        let corpus: [(String, [MenuList.Visible], Int)] = [
             ("two items", filtered(m.items), 3),
             ("paginated", filtered(many), 2),          // count > viewport
             ("empty filter", [], 3),                   // "No matching files"
+            // The browser: a deep path in the header, long folder names, and the
+            // per-folder count column all have to fit the same frame.
+            ("folders", folderRows(["notes", "a-folder-with-a-very-long-name"]), 2),
         ]
         for cols in [4, 6, 10, 14, 18, 20, 24, 30, 40, 52, 60, 78, 80, 120] {
             for searching in [false, true] {
                 for context in [nil, "New tab"] as [String?] {
                     for query in ["", "read", "a-fairly-long-search-query-typed-in-full"] {
                         for (label, items, viewport) in corpus {
-                        let frame = m.draw(selected: 0, top: 0, viewport: viewport, rows: 14, cols: cols,
-                                           query: query, searching: searching,
-                                           filteredItems: items,
-                                           detailFor: ["a.md": "1d", "docs/b.md": "2h"],
-                                           context: context)
+                        var menu = m
+                        if label == "folders" {
+                            menu.list.mode = .folders
+                            menu.list.cwd = "deeply/nested/folder/path"
+                        }
+                        let frame = menu.draw(selected: 0, top: 0, viewport: viewport, rows: 14,
+                                              cols: cols, query: query, searching: searching,
+                                              visible: items, total: max(items.count, 4),
+                                              context: context)
                         for (index, row) in frame.enumerated() {
                             XCTAssertEqual(
                                 Ansi.width(row), cols,
@@ -162,8 +199,8 @@ final class TerminalMenuDrawTests: XCTestCase {
             for length in [5, 20, 40, 80] {
                 let query = String(repeating: "x", count: length)
                 let frame = m.draw(selected: 0, top: 0, viewport: 3, rows: 14, cols: cols,
-                                   query: query, searching: true, filteredItems: filtered(m.items),
-                                   detailFor: [:], context: nil)
+                                   query: query, searching: true, visible: filtered(m.items),
+                                   total: m.items.count, context: nil)
                 let field = frame.map { Ansi.strip($0) }.first { $0.contains("\u{276F}") }
                 XCTAssertNotNil(field, "no search field at cols \(cols)")
                 XCTAssertTrue(field?.contains("\u{2588}") ?? false,
@@ -178,8 +215,8 @@ final class TerminalMenuDrawTests: XCTestCase {
         var m = sampleMenu()
         m.path = "~/projects/termdown"
         let frame = m.draw(selected: 0, top: 0, viewport: 3, rows: 14, cols: 48,
-                           query: "", searching: false, filteredItems: filtered(m.items),
-                           detailFor: [:], context: nil)
+                           query: "", searching: false, visible: filtered(m.items),
+                           total: m.items.count, context: nil)
         let plain = frame.map { Ansi.strip($0) }.joined(separator: "\n")
         XCTAssertTrue(plain.contains("termdown"), "the path was dropped:\n\(plain)")
     }
@@ -191,12 +228,25 @@ final class TerminalMenuDrawTests: XCTestCase {
         m.path = "~/very/deeply/nested/project/with/an/extremely/long/folder/path/indeed/notes"
         for cols in [30, 60, 80, 120] {
             let frame = m.draw(selected: 0, top: 0, viewport: 3, rows: 14, cols: cols,
-                               query: "", searching: false, filteredItems: filtered(m.items),
-                               detailFor: [:], context: nil)
+                               query: "", searching: false, visible: filtered(m.items),
+                               total: m.items.count, context: nil)
             for row in frame {
                 XCTAssertEqual(Ansi.width(row), cols, "at \(cols): \(Ansi.strip(row))")
             }
         }
+    }
+
+    /// The 12-column floor is about whether there is room to *elide into*. Applied
+    /// to the width itself it hid every short path there was — `~/notes` is seven
+    /// columns, so `termdown ~/notes` named no folder at all in its own header.
+    func testAShortPathIsStillShown() {
+        var m = sampleMenu()
+        m.path = "~/n"
+        let rows = m.draw(selected: 0, top: 0, viewport: 3, rows: 16, cols: 80,
+                          query: "", searching: false, visible: filtered(m.items),
+                          total: m.items.count, context: nil)
+            .map { Ansi.strip($0) }
+        XCTAssertTrue(rows[4].contains("~/n"), rows[4])
     }
 
     /// Hints are dropped rather than cut, so a narrow terminal shows fewer of
@@ -204,15 +254,15 @@ final class TerminalMenuDrawTests: XCTestCase {
     func testHintsAreDroppedNotTruncated() {
         let m = sampleMenu()
         let narrow = m.draw(selected: 0, top: 0, viewport: 3, rows: 14, cols: 40,
-                            query: "", searching: false, filteredItems: filtered(m.items),
-                            detailFor: [:], context: nil)
+                            query: "", searching: false, visible: filtered(m.items),
+                            total: m.items.count, context: nil)
             .map { Ansi.strip($0) }.joined(separator: "\n")
         XCTAssertFalse(narrow.contains("? he\u{2026}"), narrow)
         XCTAssertFalse(narrow.contains("sear\u{2026}"), narrow)
 
         let wide = m.draw(selected: 0, top: 0, viewport: 3, rows: 14, cols: 100,
-                          query: "", searching: false, filteredItems: filtered(m.items),
-                          detailFor: [:], context: nil)
+                          query: "", searching: false, visible: filtered(m.items),
+                          total: m.items.count, context: nil)
             .map { Ansi.strip($0) }.joined(separator: "\n")
         XCTAssertTrue(wide.contains("? help"), "the full legend should survive at 100: \(wide)")
     }

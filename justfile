@@ -50,15 +50,37 @@ lint-fix:
 # Run every check the way CI does: formatting, lint, tests
 check: format-check lint test
 
-# Build & test the Linux version in a Swift 6.2 container. The build dir lives in
-# a named volume (termdown-linux-build) so rebuilds stay incremental. Requires Docker.
-# `--parallel` (+ </dev/null) is used for the test run because the serial
-# swift-corelibs-xctest runner hangs on a blocking ppoll when stdin isn't a TTY
-# (as in a non-interactive container); the parallel runner spawns per-test and
-# is unaffected.
+# Run the CLI integration checks (Tests/Integration/cli.sh) against a debug build
+integration: build
+    ./Tests/Integration/cli.sh .build/debug/termdown
+
+# Build the Linux image from the Dockerfile: the toolchain plus a built termdown
+linux-image:
+    docker build -t termdown-linux .
+
+# Build that image and run the CLI integration checks inside it. Requires Docker.
+linux-integration: linux-image
+    docker run --rm termdown-linux
+
+# Build the Linux version in a Swift 6.2 container: catches Linux-only compile
+# errors (#if canImport, Glibc, corelibs API gaps) without leaving macOS. The build
+# dir lives in a named volume (termdown-linux-build) so rebuilds stay incremental.
+# Requires Docker.
+#
+# It builds, and deliberately does not run `swift test`. Under Docker Desktop's Linux
+# VM the test *process* cannot finish: a suite completes its cases and then hangs on
+# exit (proved by running the .xctest bundle line-buffered — "Executed 13 tests, with
+# 0 failures", then nothing), and every test that spawns the binary through
+# Foundation's `Process` hangs outright, including the one that only asks for
+# `--version`. Both the serial and parallel SwiftPM runners inherit those hangs.
+#
+# The code is fine: the same commits are green on the x86_64 Linux CI job, which runs
+# this image's `swift test` on GitHub's runners. So Linux unit tests come from CI, and
+# locally the Linux check that does work is `just linux-integration` — it drives the
+# built binary from bash, touching neither XCTest nor Foundation's `Process`.
 linux-build:
     docker run --rm -v "$PWD":/src -w /src -v termdown-linux-build:/build \
-      swift:6.2 bash -c "swift build --build-path /build && swift test --parallel --build-path /build </dev/null"
+      swift:6.2 bash -c "swift build --build-tests --build-path /build"
 
 # Clean build artifacts
 clean:

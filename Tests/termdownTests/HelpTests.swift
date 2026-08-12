@@ -48,4 +48,31 @@ final class HelpTests: XCTestCase {
         XCTAssertTrue(all.contains("fuzzy"), all)
         XCTAssertTrue(all.contains("Open selected file"), all)
     }
+
+    /// `d` is the only way to find the folder browser — nothing on the launch
+    /// screen spells it out beyond a four-word hint — so the help pane is the
+    /// documentation, and every key it needs has to be in it.
+    func testMenuHelpDocumentsTheFolderKeys() {
+        let folders = Terminal.menuHelpGroups.first { $0.name == "Folders" }
+        let items = folders?.items ?? []
+        XCTAssertFalse(items.isEmpty, "no Folders pane in the file-list help")
+        XCTAssertTrue(items.contains { $0.hasPrefix("d ") }, items.description)
+        XCTAssertTrue(items.contains { $0.hasPrefix("Enter") }, items.description)
+        XCTAssertTrue(items.contains { $0.hasPrefix("Backspace") && $0.contains("Up one level") },
+                      items.description)
+        XCTAssertTrue(items.contains { $0.hasPrefix("Esc") }, items.description)
+    }
+
+    /// Every pane is drawn in one box sized to its widest line, and the help lines
+    /// hand-align their description column. A line that outgrew the others would
+    /// widen the box for all of them and get elided first on a narrow terminal.
+    func testHelpLinesShareTheirColumnAndLength() {
+        for (name, items) in Terminal.menuHelpGroups {
+            for item in items {
+                XCTAssertLessThanOrEqual(item.count, 62, "\(name): too wide for the box — \(item)")
+                // Two runs of text separated by the aligned gap, not a ragged one.
+                XCTAssertTrue(item.contains("  "), "\(name): no key column — \(item)")
+            }
+        }
+    }
 }

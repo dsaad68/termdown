@@ -91,6 +91,47 @@ final class RenderContextTests: XCTestCase {
         XCTAssertTrue(banner.contains("48;5;") || banner.contains("48;2;"), banner)
     }
 
+    // MARK: - Settings view (`,`)
+
+    /// The settings view hands its live-applicable changes here by key. A key that
+    /// fell through this switch would be written to the file and do nothing until the
+    /// next launch, while the view claimed it had applied.
+    func testSettingsAreAppliedByKeyAndSeenByTheNextRender() {
+        let ctx = context()
+        let doc = "```mermaid\ngraph LR\nA --> B\n```\n"
+
+        ctx.apply(ConfigSettings.named("theme")!, value: "nord")
+        XCTAssertEqual(ctx.themeName, "nord")
+        XCTAssertEqual(ctx.theme.link, Theme.nord.link, "the theme itself did not change")
+
+        ctx.apply(ConfigSettings.named("mermaid-charset")!, value: "ascii")
+        XCTAssertTrue(text(ctx.render(doc, width: 60)).contains("+---+"))
+
+        ctx.apply(ConfigSettings.named("mermaid")!, value: "false")
+        XCTAssertTrue(text(ctx.render(doc, width: 60)).contains("graph LR"),
+                      "switching mermaid off should fall back to the source")
+    }
+
+    /// A key the context does not own is ignored rather than misapplied — the view
+    /// only routes theme and the mermaid pair here, and the rest are startup-only.
+    func testApplyingAKeyTheContextDoesNotOwnChangesNothing() {
+        let ctx = context(theme: "nord")
+        ctx.apply(ConfigSettings.named("width")!, value: "40")
+        ctx.apply(ConfigSettings.named("file-list-view")!, value: "folders")
+        XCTAssertEqual(ctx.themeName, "nord")
+        XCTAssertEqual(ctx.mermaidEnabled, true)
+        XCTAssertEqual(ctx.mermaidCharset, .unicode)
+    }
+
+    /// The view persists its own changes, so the swap it asks for must not write to
+    /// the config a second time — `useTheme` is `saveTheme` without the write.
+    func testUseThemeSwapsWithoutWriting() {
+        let ctx = context(theme: "dark")
+        ctx.useTheme("gruvbox")
+        XCTAssertEqual(ctx.themeName, "gruvbox")
+        XCTAssertEqual(ctx.theme.link, Theme.gruvbox.link)
+    }
+
     // MARK: - renderFile
 
     func testRenderFileReadsTheFile() throws {

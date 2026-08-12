@@ -18,7 +18,7 @@ final class ConfigWriteTests: XCTestCase {
         mouse: true
         """.write(to: url, atomically: true, encoding: .utf8)
 
-        AppConfig.writeTheme("dracula", to: url)
+        AppConfig.writeValue("dracula", for: ConfigSettings.named("theme")!, to: url)
 
         let written = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(written.contains("theme: dracula"), written)
@@ -36,7 +36,7 @@ final class ConfigWriteTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
         try "mouse: false\n".write(to: url, atomically: true, encoding: .utf8)
 
-        AppConfig.writeTheme("nord", to: url)
+        AppConfig.writeValue("nord", for: ConfigSettings.named("theme")!, to: url)
 
         let cfg = AppConfig.parseYAML(Data(try String(contentsOf: url, encoding: .utf8).utf8))
         XCTAssertEqual(cfg?.theme, "nord")
@@ -154,7 +154,7 @@ final class ConfigWriteTests: XCTestCase {
         XCTAssertTrue(written.contains("mouse: false"), written)
     }
 
-    /// `writeTheme` writes the same file from the theme picker, so it has to
+    /// `writeValue` writes the same file from the theme picker, so it has to
     /// follow a symlink for the same reason.
     func testWriteThemeWritesThroughASymlink() throws {
         let fm = FileManager.default
@@ -167,7 +167,7 @@ final class ConfigWriteTests: XCTestCase {
         try "theme: dark\n".write(to: real, atomically: true, encoding: .utf8)
         try fm.createSymbolicLink(at: link, withDestinationURL: real)
 
-        AppConfig.writeTheme("nord", to: link)
+        AppConfig.writeValue("nord", for: ConfigSettings.named("theme")!, to: link)
 
         let type = try fm.attributesOfItem(atPath: link.path)[.type] as? FileAttributeType
         XCTAssertEqual(type, .typeSymbolicLink, "the symlink was replaced by a regular file")
@@ -311,6 +311,42 @@ final class ConfigWriteTests: XCTestCase {
             let written = try String(contentsOf: url, encoding: .utf8)
             XCTAssertEqual(try parse(url)?.bareRender, true, written)
             XCTAssertFalse(written.contains("bare-render: false"),
+                           "appended a contradicting duplicate for \(spelling):\n\(written)")
+        }
+    }
+
+    // MARK: - Migration to config-version 4 (file-list-view)
+
+    /// The picker's starting list is a new key, so an existing config has to be
+    /// offered it — with the long-standing behaviour as its value, not the new mode.
+    func testFileListViewReachesAnExistingConfig() throws {
+        let url = tempConfig()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try "config-version: 3\nmouse: true\nbare-render: false\n"
+            .write(to: url, atomically: true, encoding: .utf8)
+
+        AppConfig.migrate(url)
+
+        let written = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertEqual(try parse(url)?.fileListView, "files", written)
+        let settingLines = written.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#") && $0.contains("file-list-view:") }
+        XCTAssertEqual(settingLines.count, 1, "appended more than once:\n\(written)")
+    }
+
+    /// Someone who has already chosen the folder browser keeps it, whichever
+    /// spelling they wrote.
+    func testAnExistingFileListViewChoiceSurvives() throws {
+        for spelling in ["file-list-view", "file_list_view", "filelistview"] {
+            let url = tempConfig()
+            defer { try? FileManager.default.removeItem(at: url) }
+            try "config-version: 3\n\(spelling): folders\n".write(to: url, atomically: true, encoding: .utf8)
+
+            AppConfig.migrate(url)
+
+            let written = try String(contentsOf: url, encoding: .utf8)
+            XCTAssertEqual(try parse(url)?.fileListView, "folders", written)
+            XCTAssertFalse(written.contains("file-list-view: files"),
                            "appended a contradicting duplicate for \(spelling):\n\(written)")
         }
     }

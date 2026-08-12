@@ -58,11 +58,19 @@ final class FolderSession {
                             details: details)
         menu.path = displayPath
         menu.mouseEnabled = env.mouseEnabled
+        // The folder browser's hierarchy comes from the paths the scan already
+        // walked, so `d` costs nothing extra and inherits every skip rule.
+        menu.list.tree = FolderTree(entries: entries)
+        menu.list.mode = env.fileListView
+        menu.onSettings = { [unowned self] in showSettings() }
         // `unowned` breaks the cycle: this closure is stored on `menu`, which is
         // a property of `self`. The process is short-lived so a leak would never
         // be noticed, which is exactly why it is worth spelling out.
         menu.onFolderChanged = { [unowned self] in
-            refresh() ? (items: entries.map(\.relativePath), details: details) : nil
+            refresh()
+                ? (items: entries.map(\.relativePath), details: details,
+                   tree: FolderTree(entries: entries))
+                : nil
         }
 
         grep = LiveGrep(entries: entries.map { ($0.url, $0.relativePath) })
@@ -143,6 +151,7 @@ final class FolderSession {
         pager.onSaveTheme = { [env] in env.render.saveTheme($0) }
         pager.bannerOn = env.render.headingBanners
         pager.onToggleHeadingBanners = { [env] in env.render.headingBanners = $0 }
+        pager.onSettings = { [unowned self] in showSettings() }
         pager.run()
     }
 
@@ -161,6 +170,15 @@ final class FolderSession {
         case .quit:
             return nil
         }
+    }
+
+    /// Open the settings view. Changes are written by the view itself; the hooks
+    /// exist for the keys a running session can honour, which all live on the render
+    /// context — the theme it draws with and the mermaid options it renders under.
+    private func showSettings() {
+        var settings = ConfigMenu(hooks: ConfigMenu.Hooks(
+            applyRenderSetting: { [env] in env.render.apply($0, value: $1) }))
+        settings.run()
     }
 
     // MARK: - Picker loop

@@ -52,6 +52,18 @@ dedicated lint job. Please make sure `just check` is green before pushing.
 - Platform-specific code uses `#if canImport(Darwin) … #elseif canImport(Glibc) …`
   so the executable builds on both macOS and Linux. Terminal-only features (e.g. the
   `pbcopy` clipboard fallback) stay guarded by `#if canImport(Darwin)`.
+- **UI state lives in a plain value, apart from the loop that reads keys.** A
+  `run()` loop needs a TTY and a key stream, so anything decided inside one is
+  effectively untestable: `Pager.TabState` and the picker's `MenuList` (which list
+  is showing, which folder it is standing in) hold that state as structs the loop
+  merely drives, and the tests exercise those directly.
+- **A new config key touches five places**, and missing one leaves it half-wired:
+  the field and the `parseYAML` case in `ConfigLoader.swift`, `merge`, the shipped
+  template, a `versionNKeys` list in `ConfigLoader+Write.swift` (so existing files
+  are offered it), and — for anything editable in the `,` view — a row in
+  `ConfigSettings.editable` plus its `value(for:)` case. `ConfigSettingTests` walks
+  the table and writes/re-reads every row, so a key wired into the view but not the
+  parser fails there rather than silently doing nothing.
 - Colors go through `Ansi.Color` (256-palette or truecolor). Content colors live in
   `Theme`; TUI chrome colors live in `Ansi.Pastel`.
 
@@ -76,6 +88,39 @@ TD_UPDATE_SNAPSHOTS=1 swift test
 complements the width sweep in `PagerDrawingTests`: the sweep proves every row
 measures exactly `cols`, but it measures with `Ansi.width` itself, so it cannot
 notice a frame that is correctly sized and visually wrong.
+
+### Integration checks
+
+`Tests/Integration/cli.sh` runs the built binary the way a shell does — `--version`,
+`render`, stdin, a missing file, and the config file's whole life cycle (created on
+first run, migrated from an older version, overridden by a project-local
+`.termdown.yaml`, honoured for `width`/`no-color`/`mermaid`). It is what catches a
+break that only shows up outside the test harness.
+
+```sh
+just integration        # against a local debug build
+just linux-integration  # build the Linux image (Dockerfile) and run them inside it
+just linux-build        # the unit tests on Linux, in a container
+```
+
+It points `XDG_CONFIG_HOME` at a temporary directory, so a run never touches the
+config of the machine it runs on — `HOME` alone would not do, because
+`homeDirectoryForCurrentUser` ignores it on macOS. CI runs the script on both
+platforms after `swift test`.
+
+> **Linux unit tests do not run under Docker Desktop.** `just linux-build` compiles
+> for Linux — worth running, it catches `#if canImport` and corelibs gaps — but the
+> test *process* cannot finish there. Two separate hangs, both environmental: a suite
+> runs its cases and then hangs on exit (line-buffer the `.xctest` bundle and you see
+> `Executed 13 tests, with 0 failures` followed by silence), and every test that
+> spawns the binary through Foundation's `Process` hangs outright — even the one that
+> only runs `--version`. The serial and parallel SwiftPM runners both inherit these,
+> which is why the run looks *slow* (workers wedged at 0% CPU) rather than stuck.
+>
+> The same commits are green on the x86_64 Linux CI job running this image's
+> `swift test`, so Linux units come from CI. Locally, `just linux-integration` is the
+> Linux check that works: it drives the built binary from bash, touching neither
+> XCTest nor `Process`.
 
 Two golden sets are **not** regenerable and must never be rewritten to make a
 test pass:

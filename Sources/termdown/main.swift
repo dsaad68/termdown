@@ -92,6 +92,7 @@ let env = AppEnvironment(
     mouseSelectEnabled: mouseSelectEnabled,
     keyTranslation: keyTranslation,
     ignorePatterns: appConfig.ignorePatterns ?? [],
+    fileListView: MenuList.Mode(configValue: appConfig.fileListView),
     render: renderContext
 )
 
@@ -148,6 +149,16 @@ case .picker(let directory):
     // normal one.
     guard !session.isEmpty else {
         print("No markdown files found under \(root.path)")
+        exit(0)
+    }
+    // The file list is a keyboard UI: it needs a terminal to draw on *and* one to
+    // read keys from. With either end redirected, entering raw mode painted a frame
+    // into the pipe and then blocked on a key that could never arrive — `termdown
+    // notes/ | cat` hung, and so did any test suite that runs this binary with pipes.
+    // List what was found instead, which is the useful non-interactive answer, the
+    // way a redirected `view` renders instead of paging.
+    guard isatty(STDOUT_FILENO) != 0, isatty(STDIN_FILENO) != 0 else {
+        for entry in session.scan() { print(entry.relativePath) }
         exit(0)
     }
     withTerminalUI { session.runPicker() }

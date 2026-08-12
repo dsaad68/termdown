@@ -6,6 +6,110 @@ All notable changes to termdown are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-12
+
+### Added
+- **Folder browsing in the file list (`d`).** The picker has only ever shown one
+  thing: every Markdown file in the project, flat, however deep the folders go.
+  On a large vault that is a wall of `notes/2026/07/…` prefixes with no way to
+  look at the shape of it. `d` now swaps that list for the folders, one level at
+  a time — `Enter` steps into the selected folder and shows *its* folders,
+  `Backspace` (or `←`/`h`) comes back out, and coming back out lands on the
+  folder you just left rather than at the top.
+
+  Each row carries the number of Markdown files beneath it, and only folders
+  that lead to one are listed at all — the hierarchy is derived from the paths
+  the scan already walked, so browsing costs no extra work and inherits every
+  skip rule (`.git`, `node_modules`, your `ignore-patterns`).
+
+  Browsing is also how the file list gets narrowed: `d` from inside a folder
+  leaves the browser with the list showing just that folder's files, named
+  relative to it. `Esc` widens it back to the whole project. A folder with
+  nothing inside it hands over its files on `Enter` rather than opening an empty
+  list, and `/` still searches every folder — clearing the query puts the
+  browser back where it was.
+
+  Both lists remember where they were, so opening a file and coming back returns
+  to the folder you were in.
+- **A breadcrumb row opening the list.** The header keeps naming the folder
+  termdown was opened on — that is what says which window this is — and a row of
+  its own, just inside the separator and directly above `../`, says where you are
+  *inside* it: `❯ .. › docs › api`. It is there from the browser's first frame —
+  `❯ ..` at the root — since it is also the banner that says which of the two
+  lists you are looking at, and its first crumb is `..` rather than the opened
+  folder's name, which the header states already. Ancestors are dimmed and
+  the folder you are standing in is picked out, on a surface of its own a shade
+  below the selection band so the brightest row is still the one under the
+  cursor. A path too long for the terminal loses its start, not its end: the
+  deepest component is the answer the row exists to give. It belongs to the list
+  rather than the chrome, so it costs one list row and leaves the header — and
+  every row's click target — where it was.
+- **`../` in the narrowed file list too.** The files of a folder are "inside" it
+  just as its subfolders are, so they get the same way out — as a row, and on
+  `Backspace`/`←`/`h`, both landing in the browser at the level you chose the
+  folder from. A leaf folder's files had no way back for anyone using the mouse.
+- **`file-list-view`** picks which list the picker opens on: `files` (the
+  default, unchanged) or `folders`. Only an explicit `folders` switches it, so a
+  misspelled value keeps the long-standing behaviour, and `d` still switches at
+  any time. Existing configs are offered the key on next launch
+  (`config-version: 4`) with `files` as its value.
+
+- **A settings view (`,`).** Every scalar key of the config file on one screen,
+  reachable from the file list and from the viewer: theme, width, no-color,
+  mouse, mouse-select, mermaid and its charset, wide-emoji, file-list-view,
+  bare-render. `Space` (or `←`/`→`) cycles a value, `Enter` toggles one or opens a
+  list to pick from — 27 themes are a list, not something to cycle — and `width`
+  takes a typed number, where an empty entry means `auto`.
+
+  Each change is written as it is made, to `~/.config/termdown/config.yaml`,
+  replacing that key's line in place and keeping the comment beside it — the same
+  writer the theme picker has always used, generalised. There is no save step, so
+  `Esc` cannot lose anything, and the header names the file being edited.
+
+  Rows the app can honour immediately (theme, colors, mermaid, emoji width) apply
+  as you change them. The rest are read once at startup and are marked `↻`, and a
+  key your project's `.termdown.yaml` also sets is marked `local` — writing the
+  global file for that key would otherwise look like it had done nothing.
+
+- **`XDG_CONFIG_HOME` is honoured** for the config file's location
+  (`$XDG_CONFIG_HOME/termdown/config.yaml`), falling back to
+  `~/.config/termdown/config.yaml` — which is the XDG default anyway, so this only
+  changes anything for someone who set the variable deliberately.
+- **CLI integration checks** (`Tests/Integration/cli.sh`, `just integration`) and a
+  `Dockerfile` for running them on Linux (`just linux-integration`). They exercise
+  the built binary end to end: rendering, stdin, exit codes, and the config file
+  being created, migrated, overridden by a project-local file and honoured for
+  `width`/`no-color`/`mermaid`. CI runs them on macOS and Linux.
+
+### Fixed
+- **`termdown notes/ | cat` no longer hangs.** A directory argument opens the
+  keyboard-driven file list, which needs a terminal to draw on *and* one to read
+  keys from — but only the viewer checked. Through a pipe, termdown painted a
+  frame into it and then blocked on a key that could never arrive. It now lists
+  the Markdown files it found and exits, the way a redirected `view` renders
+  instead of paging.
+
+  The integration checks now run the binary under a deadline, so a regression fails
+  instead of hanging rather than being mistaken for slowness — which is how this one
+  hid: a hung run pins the parallel test runner at 0% CPU, which reads as "Linux is
+  slow". (The rest of that slowness is Docker Desktop's Linux VM, not termdown; see
+  `just linux-build`'s note.)
+- **The CLI tests no longer deadlock on their own pipes.** They read the child's
+  stdout to EOF while holding the write end open themselves — `Process` closes that
+  copy for you on Darwin but not in swift-corelibs-foundation — and drained stderr
+  only afterwards, which deadlocks on its own once a child outgrows a pipe buffer.
+- **Stepping into a folder no longer lands on `../`.** The cursor went to the
+  first row, which is the way back out, so a second `Enter` undid the first. It
+  lands on the first real entry now; coming *up* still lands on the folder you
+  just left.
+- **`../` is no longer counted as a folder.** A level holding one subfolder read
+  "2 folders" in the header, counting the row that leads out of it.
+- **A short folder path is shown in the picker header again.** The header drops
+  the path when there is no room to elide it into, but the 12-column floor for
+  that was applied to the path's own width — so `termdown ~/notes` named no
+  folder at all, at any terminal size. A path that fits is now shown whatever its
+  length; the floor applies only when it has to be cut.
+
 ## [0.1.10] - 2026-08-09
 
 ### Added
@@ -435,7 +539,8 @@ Initial release.
 - Release workflow that publishes prebuilt macOS + Linux binaries on a `v*` tag and
   updates the Homebrew tap.
 
-[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/dsaad68/termdown/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/dsaad68/termdown/releases/tag/v0.2.0
 [0.1.10]: https://github.com/dsaad68/termdown/releases/tag/v0.1.10
 [0.1.9]: https://github.com/dsaad68/termdown/releases/tag/v0.1.9
 [0.1.8]: https://github.com/dsaad68/termdown/releases/tag/v0.1.8

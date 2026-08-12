@@ -45,8 +45,31 @@ swift run termdown ~/notes    # scan a specific directory
 ## Features
 
 - Recursively finds `.md` / `.markdown` / `.mdx` … files in the current folder
-  (skips `.git`, `node_modules`, `.build`, etc.).
+  (skips `.git`, `node_modules`, `.build`, etc.). With stdout or stdin redirected
+  there is no keyboard UI to run, so `termdown notes/ | grep …` prints the list of
+  files it found instead.
 - **Fuzzy file finder** with real-time filtering and match highlighting.
+- **Folder browsing** (`d`): swap the flat list of every file for the folders one
+  level at a time — `Enter` steps into the selected folder and shows *its*
+  folders, `Backspace` (or `←`/`h`) comes back out, and each row carries how many
+  Markdown files are beneath it. `d` again leaves the browser with the file list
+  narrowed to the folder you were standing in, so browsing is also how you scope
+  the list; `Esc` widens it back to the whole project. Folders that lead to no
+  Markdown file are never shown, and `/` searches every folder as before. The
+  header keeps naming the folder termdown was opened on, and a **breadcrumb** row
+  opens the list from the moment you press `d` — `❯ .. › docs › api`, on its
+  own surface directly above the `../` row (which the narrowed file list carries
+  too, so a folder's files are never a dead end). Set `file-list-view: folders` to
+  open on the browser instead of the file list.
+- **Settings view** (`,`, from the file list or the viewer): every scalar config
+  key on one screen — theme, width, colors, mouse, mermaid, the picker's starting
+  list — with `Space` cycling a value, `Enter` toggling or opening a list to pick
+  from, and a number typed for `width`. Each change is written to
+  `~/.config/termdown/config.yaml` as you make it, replacing that key's line and
+  leaving your comments alone, so there is no save step and nothing to lose by
+  pressing `Esc`. Rows that are only read at startup are marked `↻`, and a key
+  your project's `.termdown.yaml` also sets is marked `local`, since that file
+  wins.
 - Full terminal rendering powered by Apple's [swift-markdown] parser:
   - Headings with colored underlines
   - **Bold**, *italic*, ~~strikethrough~~, `inline code` — bold carries a
@@ -172,6 +195,12 @@ stress test for long and deeply nested content.
 | File list      | `↑`/`↓` or `k`/`j`           | move selection                 |
 | File list      | `g` / `G`                    | jump to first / last           |
 | File list      | `Enter`                      | open the selected file         |
+| File list      | `d`                          | switch between files and folders |
+| Folder browser | `Enter`                      | step into the folder (its files, if it has none inside) |
+| Folder browser | `Backspace` / `←` / `h`      | up one level                   |
+| Folder browser | `d`                          | back to the files, narrowed to this folder |
+| File list      | `Esc`                        | widen back to the whole project |
+| File list      | `,`                          | settings (edit the config file) |
 | File list      | `\`                          | project-wide search (live grep)|
 | File list      | `q` / `Esc`                  | quit                           |
 | Viewer (pager) | `↑`/`↓` or `k`/`j`           | scroll one line                |
@@ -211,6 +240,7 @@ stress test for long and deeply nested content.
 | Viewer (pager) | `+` / `-`                    | widen / narrow text column     |
 | Viewer (pager) | `F`                          | toggle follow mode (tail)      |
 | Viewer (pager) | `B`                          | toggle heading banners (h1–h4 as filled color blocks) |
+| Viewer (pager) | `,`                          | settings (edit the config file) |
 | Viewer (pager) | `p`                          | theme selector (live preview, `Enter` saves to config) |
 | Viewer (pager) | `q` / `Esc`                  | close sidebar, else extra tab, else back to the file list |
 | Viewer (pager) | `?`                          | show help                      |
@@ -260,8 +290,15 @@ theme: dark       # see the full theme list below
 no-color: false
 mouse: true         # false to hand the mouse back to the terminal
 mouse-select: true  # false to keep the terminal's own click-drag selection
+file-list-view: files   # or `folders` to open on the folder browser
 # ignore-patterns: [vendor, "*.snap", archive]   # extra paths to skip
 ```
+
+You can edit these from inside termdown with `,` (the settings view) instead of
+opening the file: it writes the same keys to the same file, one line at a time.
+
+The location follows `XDG_CONFIG_HOME` when that variable is set
+(`$XDG_CONFIG_HOME/termdown/config.yaml`); otherwise it is the path above.
 
 termdown also writes a `config-version:` line here. It uses that to add keys your
 file has never seen — once, so a setting introduced in a later release does not
@@ -286,6 +323,7 @@ yourself.
 | `ignore-patterns` | list | `[a, b, c]` | Extra path patterns to skip during file discovery (beyond the built-in `.git`/`node_modules`/`.build` skips) |
 | `mermaid` | bool | `true`/`false` | Render ` ```mermaid ` blocks as diagrams (default `true`; falls back to a code block on parse failure) |
 | `mermaid-charset` | string | `unicode`/`ascii` | Box-drawing character set for diagrams (default `unicode`) |
+| `file-list-view` | string | `files`/`folders` | Which list the file picker opens on: `files` (default, every Markdown file in the project) or `folders` (the folder browser). `d` switches between them while running either way |
 | `bare-render` | bool | `true`/`false` | What a bare file path does: `false` (default) opens `termdown notes.md` in the viewer, `true` renders it to stdout and exits. `-o`/`-r` override it either way; a bare directory opens the picker regardless |
 
 **Themes:** `dark`, `light`, `mono`; ports: `catppuccin`, `rose-pine`, `nord`,
@@ -437,17 +475,21 @@ termdown -r README.md --no-color > README.txt   # plain text, no escape codes
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow. In short:
 
 ```sh
-just test     # swift test
-just check    # format-check + lint (strict) + test; run before a PR
-just format   # apply SwiftFormat;  just lint runs SwiftLint --strict
+just test         # swift test
+just check        # format-check + lint (strict) + test; run before a PR
+just format       # apply SwiftFormat;  just lint runs SwiftLint --strict
+just integration  # run the built binary end to end (Tests/Integration/cli.sh)
+just linux-integration  # the same checks on Linux, in a container
 ```
 
 The project is structured as a Swift Package with a library target (`termdownCore`),
 an executable target (`termdown`), and two test targets: `termdownCoreTests` (the
 library) and `termdownTests` (the executable's UI logic, via `@testable import`).
 Source files are kept small and single-purpose (≤300 lines); larger types are split
-across `Type+Concern.swift` extensions. Linting/formatting is configured in
-`.swiftlint.yml` and `.swiftformat`, and CI runs the same checks on macOS and Linux.
+across `Type+Concern.swift` extensions. `Tests/Integration/cli.sh` adds a third kind
+of test: the built binary, run the way a shell runs it. Linting/formatting is
+configured in `.swiftlint.yml` and `.swiftformat`, and CI runs every one of these
+checks on macOS and Linux.
 
 ### Snapshot tests
 

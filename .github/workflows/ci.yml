@@ -51,6 +51,12 @@ jobs:
       - name: Run tests
         run: swift test
 
+      # End-to-end: run the built binary the way a shell does — rendering, the
+      # config file, first-run creation, migration, a project-local override. It
+      # points XDG_CONFIG_HOME at a temp dir, so it never touches the runner's own.
+      - name: Integration checks (CLI)
+        run: ./Tests/Integration/cli.sh .build/debug/termdown
+
   lint:
     name: Lint & Format
     runs-on: [self-hosted, macOS, ARM64, macos-arm64]

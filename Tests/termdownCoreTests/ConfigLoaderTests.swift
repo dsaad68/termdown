@@ -113,6 +113,55 @@ final class ConfigLoaderTests: XCTestCase {
         XCTAssertEqual(base.bareRender, true)
     }
 
+    func testFileListViewAliasesAndCase() {
+        XCTAssertEqual(parse("file-list-view: folders")?.fileListView, "folders")
+        XCTAssertEqual(parse("filelistview: folders")?.fileListView, "folders")
+        XCTAssertEqual(parse("file_list_view: FOLDERS")?.fileListView, "folders")
+        XCTAssertEqual(parse("file-list-view: files")?.fileListView, "files")
+        XCTAssertNil(parse("theme: dark")?.fileListView)
+    }
+
+    func testFileListViewMerges() {
+        var base = AppConfig()
+        base.fileListView = "files"
+        var override = AppConfig()
+        override.fileListView = "folders"
+        base.merge(override)
+        XCTAssertEqual(base.fileListView, "folders")
+    }
+
+    /// The shipped template documents the key and states the default, so a fresh
+    /// install opens on the file list without the user choosing anything.
+    func testTheTemplateShipsTheFileListViewDefault() {
+        let template = AppConfig.defaultConfigContent
+        XCTAssertTrue(template.contains("file-list-view: files"), template)
+        XCTAssertTrue(template.contains("config-version: \(AppConfig.currentConfigVersion)"), template)
+    }
+
+    // MARK: - Where the config lives
+
+    /// The default is the XDG default, so honouring `XDG_CONFIG_HOME` only changes
+    /// anything for someone who set it deliberately — and it is what lets the
+    /// integration checks exercise the config without editing the machine's own.
+    func testConfigPathFollowsXDGConfigHome() {
+        let home = URL(fileURLWithPath: "/home/dev")
+        XCTAssertEqual(AppConfig.configPath(env: [:], home: home).path,
+                       "/home/dev/.config/termdown/config.yaml")
+        XCTAssertEqual(AppConfig.configPath(env: ["XDG_CONFIG_HOME": "/tmp/cfg"], home: home).path,
+                       "/tmp/cfg/termdown/config.yaml")
+    }
+
+    /// An empty or blank variable is not a path. Treating it as one would put the
+    /// config at `/termdown/config.yaml`, which is unwritable and silently loses
+    /// every setting.
+    func testABlankXDGConfigHomeFallsBackToTheHomeDirectory() {
+        let home = URL(fileURLWithPath: "/home/dev")
+        for blank in ["", " ", "\t"] {
+            XCTAssertEqual(AppConfig.configPath(env: ["XDG_CONFIG_HOME": blank], home: home).path,
+                           "/home/dev/.config/termdown/config.yaml", blank.debugDescription)
+        }
+    }
+
     func testConfigVersionParses() {
         XCTAssertEqual(parse("config-version: 2")?.configVersion, 2)
         XCTAssertEqual(parse("config_version: 7")?.configVersion, 7)
